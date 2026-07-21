@@ -1,36 +1,65 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UsersModule } from './users/users.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { PostsModule } from './posts/posts.module';
-import { OrdersModule } from './orders/orders.module';
-import { UserMiddleware } from './middleware/user.middleware'; 
+
+import { UserModule } from './users/users.module';
+import { RoleModule } from './roles/roles.module';
+import { PermissionsModule } from './permissions/permissions.module';
+import { DepartmentsModule } from './department/department.module';
+import { RolePermissionsModule } from './role-permissions/role-permissions.module';
+
+import { UserMiddleware } from './middleware/user.middleware';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
+
       type: 'postgres',
+
       host: 'localhost',
+
       port: 5432,
+
       username: 'postgres',
+
       password: '123454321',
-      database: 'bu',
+
+      database: 'HR',
+
       autoLoadEntities: true,
+
       synchronize: false,
-      migrationsRun: true,
+
+      migrationsRun: false,
+
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
+
     }),
-    UsersModule,
-    PostsModule,
-    OrdersModule,
+
+    UserModule,
+
+    RoleModule,
+
+    PermissionsModule,
+
+    DepartmentsModule,
+
+    RolePermissionsModule,
+
   ],
+
   controllers: [AppController],
+
   providers: [AppService],
 })
 export class AppModule implements NestModule {
+
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(UserMiddleware).forRoutes('*'); 
-   
+
+    consumer.apply(UserMiddleware).forRoutes('*');
+
   }
+
 }

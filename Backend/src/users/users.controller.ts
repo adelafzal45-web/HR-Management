@@ -1,48 +1,40 @@
-import { 
-  Controller, Get, Post, Delete, Param, Body, UseInterceptors, UseFilters 
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { LoggingInterceptor } from '../interceptor/login-interceptor';
-import { IdExceptionFilter } from '../exception/id-exception.filter';
-import { UserIdValidationPipe } from '../pipes/validation';
-import { ApiTags, ApiOperation, ApiCreatedResponse, ApiOkResponse, ApiParam, ApiBadRequestResponse } from '@nestjs/swagger';
 
-@ApiTags('users')
-@UseFilters(IdExceptionFilter) 
+import { UserService } from './users.service';
+
+import { User } from './user.entity';
+
 @Controller('users')
-export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+export class UserController {
+
+  constructor(
+    private readonly userService: UserService,
+  ) {}
 
   @Post()
-  @UseInterceptors(LoggingInterceptor)
-  @ApiOperation({ summary: 'Create a new user' })
-  @ApiCreatedResponse({ description: 'User created successfully' })
-  @ApiBadRequestResponse({ description: 'Invalid input data' })
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.create(dto);
+  create(@Body() user: Partial<User>) {
+    return this.userService.create(user);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all users' })
-  @ApiOkResponse({ description: 'List of users returned successfully' })
   findAll() {
-    return this.usersService.findAll();
+    return this.userService.findAll();
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get user by ID' })
-  @ApiParam({ name: 'id', type: Number, description: 'User ID' })
-  @ApiOkResponse({ description: 'User returned successfully' })
-  findOne(@Param('id', UserIdValidationPipe) id: number) {
-    return this.usersService.findOne(id);
+  findOne(@Param('id') id: string) {
+    return this.userService.findOne(id);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a user' })
-  @ApiParam({ name: 'id', type: Number, description: 'User ID' })
-  @ApiOkResponse({ description: 'User deleted successfully' })
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
+  delete(@Param('id') id: string) {
+    return this.userService.delete(id);
   }
 }
