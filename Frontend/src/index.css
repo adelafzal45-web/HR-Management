@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  "Mont" is a commercial font (Fontfabric) — it isn't on Google Fonts, so it can't be
+  auto-fetched. Drop the licensed files into src/assets/fonts/ and this @font-face will
+  pick them up automatically. Until then, the app falls back to Poppins, which sits in the
+  same geometric-sans family.
+*/
+@font-face {
+  font-family: "Mont";
+  src: url("./assets/fonts/Mont-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Mont";
+  src: url("./assets/fonts/Mont-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Mont";
+  src: url("./assets/fonts/Mont-Heavy.woff2") format("woff2");
+  font-weight: 800;
+  font-display: swap;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: "Mont", "Poppins", system-ui, sans-serif;
+  background: #ffffff;
+}
+
+input::placeholder {
+  color: #b7bcc3;
+}
