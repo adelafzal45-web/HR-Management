@@ -10,13 +10,9 @@ import {
   Matches,
 } from 'class-validator';
 
-import {
-  ApiProperty,
-  ApiPropertyOptional,
-} from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAttendanceDto {
-
   @ApiProperty({
     example: '2026-07-22',
     description: 'Attendance date',

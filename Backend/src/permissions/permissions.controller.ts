@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Param,
-  Body,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
 
 import {
   ApiTags,
@@ -21,9 +14,7 @@ import { CreatePermissionDto } from './dto/create-permission.dto';
 @ApiTags('Permissions')
 @Controller('permissions')
 export class PermissionsController {
-  constructor(
-    private readonly permissionService: PermissionsService,
-  ) {}
+  constructor(private readonly permissionService: PermissionsService) {}
 
   @Post()
   @ApiOperation({

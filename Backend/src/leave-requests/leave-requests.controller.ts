@@ -23,9 +23,7 @@ import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
 @ApiTags('Leave Requests')
 @Controller('leave-requests')
 export class LeaveRequestsController {
-  constructor(
-    private readonly leaveRequestsService: LeaveRequestsService,
-  ) {}
+  constructor(private readonly leaveRequestsService: LeaveRequestsService) {}
 
   @Post()
   @ApiOperation({

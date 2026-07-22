@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateRolePermissionDto {
-
   @ApiProperty({
     example: '2b75d68c-b8d4-4cb7-b5dc-c03d66b8b2d7',
     description: 'UUID of the role',

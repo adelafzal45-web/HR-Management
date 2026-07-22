@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Body,
-  Param,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
 
 import {
   ApiTags,
@@ -21,15 +14,12 @@ import { CreateRolePermissionDto } from './dto/create-role-permission.dto';
 @ApiTags('Role Permissions')
 @Controller('role-permissions')
 export class RolePermissionsController {
-  constructor(
-    private readonly rolePermissionService: RolePermissionsService,
-  ) {}
+  constructor(private readonly rolePermissionService: RolePermissionsService) {}
 
   @Post()
   @ApiOperation({
     summary: 'Assign a permission to a role',
-    description:
-      'Creates a new relationship between a role and a permission.',
+    description: 'Creates a new relationship between a role and a permission.',
   })
   @ApiBody({
     type: CreateRolePermissionDto,

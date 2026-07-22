@@ -10,7 +10,6 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateLeaveRequestDto {
-
   @ApiProperty({
     example: 'Annual Leave',
     description: 'Type of leave requested.',

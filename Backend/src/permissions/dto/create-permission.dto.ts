@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePermissionDto {
-
   @ApiProperty({
     example: 'CREATE_USER',
     description: 'Unique permission name',

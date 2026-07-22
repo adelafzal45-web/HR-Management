@@ -11,9 +11,9 @@ export class DepartmentsService {
     private readonly departmentRepository: Repository<Department>,
   ) {}
 
-create(createDepartmentDto: CreateDepartmentDto) {
+  create(createDepartmentDto: CreateDepartmentDto) {
     return this.departmentRepository.save(createDepartmentDto);
-}
+  }
 
   findAll() {
     return this.departmentRepository.find();

@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Param,
-  Body,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
 
 import {
   ApiTags,
@@ -21,9 +14,7 @@ import { CreateDepartmentDto } from './dto/create-department.dto';
 @ApiTags('Departments')
 @Controller('departments')
 export class DepartmentsController {
-  constructor(
-    private readonly departmentService: DepartmentsService,
-  ) {}
+  constructor(private readonly departmentService: DepartmentsService) {}
 
   @Post()
   @ApiOperation({

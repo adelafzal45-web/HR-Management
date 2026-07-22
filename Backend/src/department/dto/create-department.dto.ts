@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateDepartmentDto {
-
   @ApiProperty({
     example: 'Software Engineering',
     description: 'Name of the department',

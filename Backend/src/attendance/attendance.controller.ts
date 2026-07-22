@@ -23,9 +23,7 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 @ApiTags('Attendance')
 @Controller('attendance')
 export class AttendanceController {
-  constructor(
-    private readonly attendanceService: AttendanceService,
-  ) {}
+  constructor(private readonly attendanceService: AttendanceService) {}
 
   @Post()
   @ApiOperation({
