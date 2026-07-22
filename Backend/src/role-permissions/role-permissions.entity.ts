@@ -11,7 +11,6 @@ import { Permission } from '../permissions/permission.entity';
 
 @Entity('role_permissions')
 export class RolePermission {
-
   @PrimaryGeneratedColumn('uuid')
   role_permission_id!: string;
 

@@ -11,7 +11,6 @@ import { CreateRolePermissionDto } from './dto/create-role-permission.dto';
 
 @Injectable()
 export class RolePermissionsService {
-
   constructor(
     @InjectRepository(RolePermission)
     private readonly rolePermissionRepository: Repository<RolePermission>,
@@ -24,7 +23,6 @@ export class RolePermissionsService {
   ) {}
 
   async create(dto: CreateRolePermissionDto) {
-
     const role = await this.roleRepository.findOne({
       where: { role_id: dto.roleId },
     });
@@ -41,11 +39,10 @@ export class RolePermissionsService {
       throw new NotFoundException('Permission not found');
     }
 
-    const rolePermission =
-      this.rolePermissionRepository.create({
-        role,
-        permission,
-      });
+    const rolePermission = this.rolePermissionRepository.create({
+      role,
+      permission,
+    });
 
     return this.rolePermissionRepository.save(rolePermission);
   }

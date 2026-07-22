@@ -1,15 +1,9 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  OneToMany,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 
 import { User } from '../users/user.entity';
 
 @Entity('departments')
 export class Department {
-
   @PrimaryGeneratedColumn('uuid')
   department_id!: string;
 

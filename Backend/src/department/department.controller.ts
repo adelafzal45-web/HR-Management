@@ -1,21 +1,11 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Param,
-  Body,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
 
 import { DepartmentsService } from './department.service';
 import { Department } from './department.entity';
 
 @Controller('departments')
 export class DepartmentsController {
-
-  constructor(
-    private readonly departmentService: DepartmentsService,
-  ) {}
+  constructor(private readonly departmentService: DepartmentsService) {}
 
   @Post()
   create(@Body() department: Partial<Department>) {

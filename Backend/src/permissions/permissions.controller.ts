@@ -1,21 +1,11 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Param,
-  Body,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
 
 import { PermissionsService } from './permissions.service';
 import { Permission } from './permission.entity';
 
 @Controller('permissions')
 export class PermissionsController {
-
-  constructor(
-    private readonly permissionService: PermissionsService,
-  ) {}
+  constructor(private readonly permissionService: PermissionsService) {}
 
   @Post()
   create(@Body() permission: Partial<Permission>) {

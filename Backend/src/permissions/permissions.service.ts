@@ -7,16 +7,13 @@ import { Permission } from './permission.entity';
 
 @Injectable()
 export class PermissionsService {
-
   constructor(
     @InjectRepository(Permission)
     private readonly permissionRepository: Repository<Permission>,
   ) {}
 
   create(permission: Partial<Permission>) {
-
-    const newPermission =
-      this.permissionRepository.create(permission);
+    const newPermission = this.permissionRepository.create(permission);
 
     return this.permissionRepository.save(newPermission);
   }
@@ -34,7 +31,6 @@ export class PermissionsService {
   }
 
   async delete(id: string) {
-
     await this.permissionRepository.delete(id);
 
     return {

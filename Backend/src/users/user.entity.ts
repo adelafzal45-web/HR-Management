@@ -3,16 +3,18 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 import { Role } from '../roles/roles.entity';
 import { Department } from '../department/department.entity';
+import { Attendance } from '../attendance/attendance.entity';
+import { LeaveRequest } from '../leave-requests/leave-requests.entity';
 
 @Entity('users')
 export class User {
-
   @PrimaryGeneratedColumn('uuid')
   user_id!: string;
 
@@ -78,6 +80,15 @@ export class User {
 
   @ManyToOne(() => Department, (department) => department.users)
   department!: Department;
+
+  @OneToMany(() => Attendance, (attendance) => attendance.user)
+  attendance!: Attendance[];
+
+  @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.user)
+  leaveRequests!: LeaveRequest[];
+
+  @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.approved_by)
+  approvedLeaveRequests!: LeaveRequest[];
 
   @CreateDateColumn()
   created_at!: Date;

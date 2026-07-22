@@ -11,11 +11,12 @@ import { DepartmentsModule } from './department/department.module';
 import { RolePermissionsModule } from './role-permissions/role-permissions.module';
 
 import { UserMiddleware } from './middleware/user.middleware';
+import { AttendanceModule } from './attendance/attendance.module';
+import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
-
       type: 'postgres',
 
       host: 'localhost',
@@ -35,7 +36,6 @@ import { UserMiddleware } from './middleware/user.middleware';
       migrationsRun: false,
 
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
-
     }),
 
     UserModule,
@@ -48,6 +48,9 @@ import { UserMiddleware } from './middleware/user.middleware';
 
     RolePermissionsModule,
 
+    AttendanceModule,
+
+    LeaveRequestsModule,
   ],
 
   controllers: [AppController],
@@ -55,11 +58,7 @@ import { UserMiddleware } from './middleware/user.middleware';
   providers: [AppService],
 })
 export class AppModule implements NestModule {
-
   configure(consumer: MiddlewareConsumer) {
-
     consumer.apply(UserMiddleware).forRoutes('*');
-
   }
-
 }

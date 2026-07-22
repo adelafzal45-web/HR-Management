@@ -9,7 +9,6 @@ import { CreateRoleDto } from './dto/create-role.dto';
 
 @Injectable()
 export class RoleService {
-
   constructor(
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,

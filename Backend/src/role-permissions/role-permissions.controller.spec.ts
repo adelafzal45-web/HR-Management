@@ -9,7 +9,9 @@ describe('RolePermissionsController', () => {
       controllers: [RolePermissionsController],
     }).compile();
 
-    controller = module.get<RolePermissionsController>(RolePermissionsController);
+    controller = module.get<RolePermissionsController>(
+      RolePermissionsController,
+    );
   });
 
   it('should be defined', () => {
