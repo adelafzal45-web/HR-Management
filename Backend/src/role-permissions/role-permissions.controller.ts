@@ -1,24 +1,80 @@
-import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+} from '@nestjs/common';
+
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBody,
+} from '@nestjs/swagger';
 
 import { RolePermissionsService } from './role-permissions.service';
-
 import { CreateRolePermissionDto } from './dto/create-role-permission.dto';
 
+@ApiTags('Role Permissions')
 @Controller('role-permissions')
 export class RolePermissionsController {
-  constructor(private readonly rolePermissionService: RolePermissionsService) {}
+  constructor(
+    private readonly rolePermissionService: RolePermissionsService,
+  ) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'Assign a permission to a role',
+    description:
+      'Creates a new relationship between a role and a permission.',
+  })
+  @ApiBody({
+    type: CreateRolePermissionDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Permission assigned to role successfully.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request body.',
+  })
   create(@Body() dto: CreateRolePermissionDto) {
     return this.rolePermissionService.create(dto);
   }
 
   @Get()
+  @ApiOperation({
+    summary: 'Get all role-permission mappings',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all role-permission mappings.',
+  })
   findAll() {
     return this.rolePermissionService.findAll();
   }
 
   @Delete(':id')
+  @ApiOperation({
+    summary: 'Remove a role-permission mapping',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Role Permission UUID',
+    example: '3a8d91d2-3b61-4d3c-b5e2-c7d1a2b8c123',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Role permission removed successfully.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Role permission not found.',
+  })
   remove(@Param('id') id: string) {
     return this.rolePermissionService.remove(id);
   }

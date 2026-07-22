@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-
+import { CreateDepartmentDto } from './dto/create-department.dto';
 import { Department } from './department.entity';
 
 @Injectable()
@@ -11,10 +11,9 @@ export class DepartmentsService {
     private readonly departmentRepository: Repository<Department>,
   ) {}
 
-  create(department: Partial<Department>) {
-    const newDepartment = this.departmentRepository.create(department);
-    return this.departmentRepository.save(newDepartment);
-  }
+create(createDepartmentDto: CreateDepartmentDto) {
+    return this.departmentRepository.save(createDepartmentDto);
+}
 
   findAll() {
     return this.departmentRepository.find();

@@ -1,32 +1,73 @@
-import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateUserDto {
-  @ApiProperty({ example: 'Taha Tayyab', description: 'Full name of the user' })
-  @IsString()
-  name!: string;
 
   @ApiProperty({
-    example: 'abc@gmail.com',
-    description: 'Unique email of the user',
+    example: 'Ali',
+    description: 'First name of the employee',
   })
-  @IsEmail()
+  first_name!: string;
+
+  @ApiProperty({
+    example: 'Khan',
+    description: 'Last name of the employee',
+  })
+  last_name!: string;
+
+  @ApiProperty({
+    example: 'ali@gmail.com',
+  })
   email!: string;
 
   @ApiProperty({
-    example: 'mypassword',
-    minLength: 6,
-    description: 'Password with at least 6 characters',
+    example: 'Ali@123',
   })
-  @IsString()
-  @MinLength(6)
   password!: string;
 
-  @ApiPropertyOptional({
-    example: 'admin',
-    description: 'Role of the user (optional)',
+  @ApiProperty({
+    example: '03001234567',
+    required: false,
   })
-  @IsOptional()
-  @IsString()
-  role?: string;
+  phone?: string;
+
+  @ApiProperty({
+    example: 'Permanent',
+    required: false,
+  })
+  employee_type?: string;
+
+  @ApiProperty({
+    example: 'Software Engineer',
+    required: false,
+  })
+  designation?: string;
+
+  @ApiProperty({
+    example: '2026-07-21',
+  })
+  joining_date?: Date;
+
+  @ApiProperty({
+    example: 85000,
+    required: false,
+  })
+  salary?: number;
+
+  @ApiProperty({
+    example: true,
+    required: false,
+  })
+  status?: boolean;
+
+  @ApiProperty({
+    example: 'role-uuid',
+    description: 'Role UUID',
+  })
+  roleId!: string;
+
+  @ApiProperty({
+    example: 'department-uuid',
+    description: 'Department UUID',
+  })
+  departmentId!: string;
 }
