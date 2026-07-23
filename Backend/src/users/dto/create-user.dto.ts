@@ -36,15 +36,15 @@ export class CreateUserDto {
   employee_type?: string;
 
   @ApiProperty({
-    example: 'Software Engineer',
-    required: false,
+    example: 'designation-uuid',
+    description: 'Designation UUID',
   })
-  designation?: string;
+  designationId!: string;
 
   @ApiProperty({
     example: '2026-07-21',
   })
-  joining_date?: Date;
+  joining_date!: Date;
 
   @ApiProperty({
     example: 85000,

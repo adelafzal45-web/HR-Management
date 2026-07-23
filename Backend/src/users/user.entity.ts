@@ -6,12 +6,14 @@ import {
   OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
+  JoinColumn,
 } from 'typeorm';
 
 import { Role } from '../roles/roles.entity';
 import { Department } from '../department/department.entity';
 import { Attendance } from '../attendance/attendance.entity';
 import { LeaveRequest } from '../leave-requests/leave-requests.entity';
+import { Designation } from '../designation/designation.entity';
 
 @Entity('users')
 export class User {
@@ -51,11 +53,9 @@ export class User {
   })
   employee_type?: string;
 
-  @Column({
-    nullable: true,
-    length: 100,
-  })
-  designation?: string;
+  @ManyToOne(() => Designation, (designation) => designation.users)
+  @JoinColumn({ name: 'designation_id' })
+  designation!: Designation;
 
   @Column({
     type: 'date',
@@ -76,9 +76,11 @@ export class User {
   status!: boolean;
 
   @ManyToOne(() => Role, (role) => role.users)
+  @JoinColumn({ name: 'role_id' })
   role!: Role;
 
   @ManyToOne(() => Department, (department) => department.users)
+  @JoinColumn({ name: 'department_id' })
   department!: Department;
 
   @OneToMany(() => Attendance, (attendance) => attendance.user)

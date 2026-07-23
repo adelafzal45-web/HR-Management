@@ -13,6 +13,7 @@ import { RolePermissionsModule } from './role-permissions/role-permissions.modul
 import { UserMiddleware } from './middleware/user.middleware';
 import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
+import { DesignationModule } from './designation/designation.module';
 
 @Module({
   imports: [
@@ -51,6 +52,8 @@ import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
     AttendanceModule,
 
     LeaveRequestsModule,
+
+    DesignationModule,
   ],
 
   controllers: [AppController],

@@ -4,9 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  // Allow the frontend (running on a different origin) to actually receive responses
-  app.enableCors({ origin: true }); // Every controller route now lives under /api/*, matching what the frontend expects
-
+  app.enableCors({ origin: true });
   app.setGlobalPrefix('api');
   const config = new DocumentBuilder()
     .setTitle('My Project API')
@@ -20,4 +18,4 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
-bootstrap();
+void bootstrap();
