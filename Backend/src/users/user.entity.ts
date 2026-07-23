@@ -14,6 +14,8 @@ import { Department } from '../department/department.entity';
 import { Attendance } from '../attendance/attendance.entity';
 import { LeaveRequest } from '../leave-requests/leave-requests.entity';
 import { Designation } from '../designation/designation.entity';
+import { Shift } from '../shifts/shifts.entity';
+import { JobCategory } from '../job-categories/job-category.entity';
 
 @Entity('users')
 export class User {
@@ -75,6 +77,32 @@ export class User {
   })
   status!: boolean;
 
+  @Column({
+  type: 'decimal',
+  precision: 5,
+  scale: 2,
+  nullable: true,
+})
+working_hours?: number;
+
+@Column({
+  type: 'decimal',
+  precision: 5,
+  scale: 2,
+  nullable: true,
+})
+overtime_hours?: number;
+
+@Column({
+  default: false,
+})
+is_overtime!: boolean;
+
+@Column({
+  length: 20,
+})
+attendance_status!: string;
+
   @ManyToOne(() => Role, (role) => role.users)
   @JoinColumn({ name: 'role_id' })
   role!: Role;
@@ -91,6 +119,19 @@ export class User {
 
   @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.approved_by)
   approvedLeaveRequests!: LeaveRequest[];
+  @ManyToOne(() => Shift, (shift) => shift.users)
+@JoinColumn({
+  name: 'shift_id',
+})
+shift!: Shift;
+@ManyToOne(
+  () => JobCategory,
+  (jobCategory) => jobCategory.users,
+)
+@JoinColumn({
+  name: 'job_category_id',
+})
+jobCategory!: JobCategory;
 
   @CreateDateColumn()
   created_at!: Date;

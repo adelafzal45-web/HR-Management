@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 
 import { User } from '../users/user.entity';
-
+import { Shift } from '../shifts/shifts.entity';
 @Entity('attendance')
 export class Attendance {
   @PrimaryGeneratedColumn('uuid')
@@ -42,6 +42,19 @@ export class Attendance {
   })
   attendance_status!: string;
 
+  @Column({
+  type: 'decimal',
+  precision: 5,
+  scale: 2,
+  nullable: true,
+})
+overtime_hours?: number;
+
+@Column({
+  default: false,
+})
+is_overtime!: boolean;
+
   @ManyToOne(() => User, (user) => user.attendance, {
     nullable: false,
     eager: true,
@@ -50,5 +63,13 @@ export class Attendance {
   @JoinColumn({
     name: 'user_id',
   })
+
+  @ManyToOne(() => Shift, (shift) => shift.attendance, {
+  eager: true,
+})
+@JoinColumn({
+  name: 'shift_id',
+})
+shift!: Shift;
   user!: User;
 }

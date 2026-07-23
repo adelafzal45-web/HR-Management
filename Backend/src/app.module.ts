@@ -14,6 +14,8 @@ import { UserMiddleware } from './middleware/user.middleware';
 import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
 import { DesignationModule } from './designation/designation.module';
+import { ShiftsModule } from './shifts/shifts.module';
+import { JobCategoriesModule } from './job-categories/job-categories.module';
 
 @Module({
   imports: [
@@ -54,6 +56,10 @@ import { DesignationModule } from './designation/designation.module';
     LeaveRequestsModule,
 
     DesignationModule,
+
+    ShiftsModule,
+
+    JobCategoriesModule,
   ],
 
   controllers: [AppController],
