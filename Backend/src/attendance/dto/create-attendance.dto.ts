@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsNotEmpty,
   IsNumber,
@@ -51,6 +52,23 @@ export class CreateAttendanceDto {
   @Min(0)
   working_hours?: number;
 
+  @ApiPropertyOptional({
+    example: 2,
+    description: 'Overtime hours worked',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  overtime_hours?: number;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Whether the employee worked overtime',
+  })
+  @IsOptional()
+  @IsBoolean()
+  is_overtime?: boolean;
+
   @ApiProperty({
     example: 'Present',
     description: 'Attendance status',
@@ -66,4 +84,11 @@ export class CreateAttendanceDto {
   })
   @IsUUID()
   user_id!: string;
+
+  @ApiProperty({
+    example: '4d5fa8c1-6fd4-4e17-b9df-2b1c5a2d5b65',
+    description: 'UUID of the assigned shift',
+  })
+  @IsUUID()
+  shiftId!: string;
 }

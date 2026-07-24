@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Patch } from '@nestjs/common';
 
 import {
   ApiTags,
@@ -11,6 +11,7 @@ import {
 import { UserService } from './users.service';
 import { User } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiTags('Users')
 @Controller('users')
@@ -69,6 +70,29 @@ export class UserController {
   findOne(@Param('id') id: string) {
     return this.userService.findOne(id);
   }
+
+@Patch(':id')
+@ApiOperation({
+  summary: 'Update a user',
+})
+@ApiParam({
+  name: 'id',
+  description: 'User UUID',
+})
+@ApiResponse({
+  status: 200,
+  description: 'User updated successfully.',
+})
+@ApiResponse({
+  status: 404,
+  description: 'User not found.',
+})
+update(
+  @Param('id') id: string,
+  @Body() updateUserDto: UpdateUserDto,
+) {
+  return this.userService.update(id, updateUserDto);
+}
 
   @Delete(':id')
   @ApiOperation({

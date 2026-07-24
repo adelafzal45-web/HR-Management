@@ -2,14 +2,17 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateUserDto {
   @ApiProperty({
+    example: 'EMP-001',
+  })
+  employee_code!: string;
+
+  @ApiProperty({
     example: 'Ali',
-    description: 'First name of the employee',
   })
   first_name!: string;
 
   @ApiProperty({
     example: 'Khan',
-    description: 'Last name of the employee',
   })
   last_name!: string;
 
@@ -30,16 +33,33 @@ export class CreateUserDto {
   phone?: string;
 
   @ApiProperty({
-    example: 'Permanent',
+    example: 'https://abc.com/profile.jpg',
     required: false,
   })
-  employee_type?: string;
+  profile_image?: string;
 
   @ApiProperty({
-    example: 'designation-uuid',
-    description: 'Designation UUID',
+    example: '1999-08-14',
+    required: false,
   })
-  designationId!: string;
+  date_of_birth?: Date;
+
+  @ApiProperty({
+    example: 'Male',
+    required: false,
+  })
+  gender?: string;
+
+  @ApiProperty({
+    example: 'Lahore, Pakistan',
+    required: false,
+  })
+  address?: string;
+
+  @ApiProperty({
+    example: 'Permanent',
+  })
+  employee_type!: string;
 
   @ApiProperty({
     example: '2026-07-21',
@@ -60,13 +80,28 @@ export class CreateUserDto {
 
   @ApiProperty({
     example: 'role-uuid',
-    description: 'Role UUID',
   })
   roleId!: string;
 
   @ApiProperty({
     example: 'department-uuid',
-    description: 'Department UUID',
   })
   departmentId!: string;
+
+  @ApiProperty({
+    example: 'designation-uuid',
+  })
+  designationId!: string;
+
+  @ApiProperty({
+    example: 'job-category-uuid',
+  })
+  jobCategoryId!: string;
+
+  @ApiProperty({
+    example: 'shift-uuid',
+  })
+  shiftId!: string;
+
+  
 }

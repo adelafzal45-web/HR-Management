@@ -1,6 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany,ManyToOne, JoinColumn } from 'typeorm';
 import { User } from '../users/user.entity';
-
+import { Department } from '../department/department.entity';
 @Entity('designations')
 export class Designation {
   @PrimaryGeneratedColumn('uuid')
@@ -11,6 +11,19 @@ export class Designation {
     unique: true,
   })
   title!: string;
+
+
+  @ManyToOne(
+    () => Department,
+    (department) => department.designations,
+    {
+      nullable: false,
+    },
+  )
+  @JoinColumn({
+    name: 'department_id',
+  })
+  department!: Department;
 
   @OneToMany(() => User, (user) => user.designation)
   users!: User[];

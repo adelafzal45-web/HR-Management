@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Patch } from '@nestjs/common';
 
 import {
   ApiTags,
@@ -10,7 +10,7 @@ import {
 
 import { RolePermissionsService } from './role-permissions.service';
 import { CreateRolePermissionDto } from './dto/create-role-permission.dto';
-
+import { UpdateRolePermissionDto } from './dto/update-role.dto';
 @ApiTags('Role Permissions')
 @Controller('role-permissions')
 export class RolePermissionsController {
@@ -47,6 +47,29 @@ export class RolePermissionsController {
   findAll() {
     return this.rolePermissionService.findAll();
   }
+
+  @Patch(':id')
+@ApiOperation({
+  summary: 'Update a role-permission mapping',
+})
+@ApiParam({
+  name: 'id',
+  description: 'Role Permission UUID',
+})
+@ApiResponse({
+  status: 200,
+  description: 'Role permission updated successfully.',
+})
+@ApiResponse({
+  status: 404,
+  description: 'Role or Permission not found.',
+})
+update(
+  @Param('id') id: string,
+  @Body() dto: UpdateRolePermissionDto,
+) {
+  return this.rolePermissionService.update(id, dto);
+}
 
   @Delete(':id')
   @ApiOperation({

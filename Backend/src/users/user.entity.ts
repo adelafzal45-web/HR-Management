@@ -14,16 +14,30 @@ import { Department } from '../department/department.entity';
 import { Attendance } from '../attendance/attendance.entity';
 import { LeaveRequest } from '../leave-requests/leave-requests.entity';
 import { Designation } from '../designation/designation.entity';
+import { Shift } from '../shifts/shifts.entity';
+import { JobCategory } from '../job-categories/job-category.entity';
+import { Payroll } from '../payroll/payroll.entity';
+import { Notification } from '../notifications/notifications.entity';
 
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   user_id!: string;
 
-  @Column({ length: 100 })
+  @Column({
+    unique: true,
+    length: 20,
+  })
+  employee_code!: string;
+
+  @Column({
+    length: 100,
+  })
   first_name!: string;
 
-  @Column({ length: 100 })
+  @Column({
+    length: 100,
+  })
   last_name!: string;
 
   @Column({
@@ -48,13 +62,32 @@ export class User {
   profile_image?: string;
 
   @Column({
+    type: 'date',
     nullable: true,
+  })
+  date_of_birth?: Date;
+
+  @Column({
+    length: 10,
+    nullable: true,
+  })
+  gender?: string;
+
+  @Column({
+    type: 'text',
+    nullable: true,
+  })
+  address?: string;
+
+  @Column({
     length: 30,
   })
-  employee_type?: string;
+  employee_type!: string;
 
   @ManyToOne(() => Designation, (designation) => designation.users)
-  @JoinColumn({ name: 'designation_id' })
+  @JoinColumn({
+    name: 'designation_id',
+  })
   designation!: Designation;
 
   @Column({
@@ -75,13 +108,62 @@ export class User {
   })
   status!: boolean;
 
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
+  working_hours?: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
+  overtime_hours?: number;
+
+  @Column({
+    default: false,
+  })
+  is_overtime!: boolean;
+
+  @Column({
+    length: 20,
+    default: 'Absent',
+  })
+  attendance_status!: string;
+
+  // ==========================
+  // Relationships
+  // ==========================
+
   @ManyToOne(() => Role, (role) => role.users)
-  @JoinColumn({ name: 'role_id' })
+  @JoinColumn({
+    name: 'role_id',
+  })
   role!: Role;
 
   @ManyToOne(() => Department, (department) => department.users)
-  @JoinColumn({ name: 'department_id' })
+  @JoinColumn({
+    name: 'department_id',
+  })
   department!: Department;
+
+  
+
+  @ManyToOne(() => Shift, (shift) => shift.users)
+  @JoinColumn({
+    name: 'shift_id',
+  })
+  shift!: Shift;
+
+  @ManyToOne(() => JobCategory, (jobCategory) => jobCategory.users)
+  @JoinColumn({
+    name: 'job_category_id',
+  })
+  jobCategory!: JobCategory;
 
   @OneToMany(() => Attendance, (attendance) => attendance.user)
   attendance!: Attendance[];
@@ -89,8 +171,20 @@ export class User {
   @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.user)
   leaveRequests!: LeaveRequest[];
 
-  @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.approved_by)
+  @OneToMany(
+    () => LeaveRequest,
+    (leaveRequest) => leaveRequest.approved_by,
+  )
   approvedLeaveRequests!: LeaveRequest[];
+
+  @OneToMany(() => Payroll, (payroll) => payroll.user)
+  payrolls!: Payroll[];
+
+  @OneToMany(
+    () => Notification,
+    (notification) => notification.createdBy,
+  )
+  notifications!: Notification[];
 
   @CreateDateColumn()
   created_at!: Date;

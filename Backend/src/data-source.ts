@@ -8,7 +8,10 @@ import { RolePermission } from './role-permissions/role-permissions.entity';
 import { LeaveRequest } from './leave-requests/leave-requests.entity';
 import { Attendance } from './attendance/attendance.entity';
 import { Designation } from './designation/designation.entity';
-
+import { Shift } from './shifts/shifts.entity';
+import { JobCategory } from './job-categories/job-category.entity';
+import { Notification} from './notifications/notifications.entity';
+import { Payroll } from './payroll/payroll.entity';
 export const AppDataSource = new DataSource({
   type: 'postgres',
 
@@ -33,6 +36,10 @@ export const AppDataSource = new DataSource({
     Attendance,
     LeaveRequest,
     Designation,
+    Shift,
+    JobCategory,
+    Notification,
+    Payroll
   ],
 
   migrations: ['src/migrations/*.ts'],
