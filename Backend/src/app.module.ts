@@ -16,6 +16,8 @@ import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
 import { DesignationModule } from './designation/designation.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { JobCategoriesModule } from './job-categories/job-categories.module';
+import { AppraisalQuestionModule } from './appraisal-question/appraisal-question.module';
+import { PerformanceReviewModule } from './performance-review/performance-review.module';
 
 @Module({
   imports: [
@@ -60,6 +62,10 @@ import { JobCategoriesModule } from './job-categories/job-categories.module';
     ShiftsModule,
 
     JobCategoriesModule,
+
+    AppraisalQuestionModule,
+
+    PerformanceReviewModule,
   ],
 
   controllers: [AppController],

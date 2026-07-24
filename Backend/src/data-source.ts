@@ -10,6 +10,8 @@ import { Attendance } from './attendance/attendance.entity';
 import { Designation } from './designation/designation.entity';
 import { Shift } from './shifts/shifts.entity';
 import { JobCategory } from './job-categories/job-category.entity';
+import { AppraisalQuestion } from './appraisal-question/appraisal-question.entity';
+import { PerformanceReview } from './performance-review/performance-review.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -37,6 +39,8 @@ export const AppDataSource = new DataSource({
     Designation,
     Shift,
     JobCategory,
+    AppraisalQuestion,
+    PerformanceReview,
   ],
 
   migrations: ['src/migrations/*.ts'],

@@ -16,16 +16,22 @@ import { LeaveRequest } from '../leave-requests/leave-requests.entity';
 import { Designation } from '../designation/designation.entity';
 import { Shift } from '../shifts/shifts.entity';
 import { JobCategory } from '../job-categories/job-category.entity';
+import { AppraisalQuestion } from '../appraisal-question/appraisal-question.entity';
+import { PerformanceReview } from '../performance-review/performance-review.entity';
 
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   user_id!: string;
 
-  @Column({ length: 100 })
+  @Column({
+    length: 100,
+  })
   first_name!: string;
 
-  @Column({ length: 100 })
+  @Column({
+    length: 100,
+  })
   last_name!: string;
 
   @Column({
@@ -55,8 +61,11 @@ export class User {
   })
   employee_type?: string;
 
+  // Designation Relation
   @ManyToOne(() => Designation, (designation) => designation.users)
-  @JoinColumn({ name: 'designation_id' })
+  @JoinColumn({
+    name: 'designation_id',
+  })
   designation!: Designation;
 
   @Column({
@@ -77,61 +86,59 @@ export class User {
   })
   status!: boolean;
 
-  @Column({
-  type: 'decimal',
-  precision: 5,
-  scale: 2,
-  nullable: true,
-})
-working_hours?: number;
-
-@Column({
-  type: 'decimal',
-  precision: 5,
-  scale: 2,
-  nullable: true,
-})
-overtime_hours?: number;
-
-@Column({
-  default: false,
-})
-is_overtime!: boolean;
-
-@Column({
-  length: 20,
-})
-attendance_status!: string;
-
+  // Role Relation
   @ManyToOne(() => Role, (role) => role.users)
-  @JoinColumn({ name: 'role_id' })
+  @JoinColumn({
+    name: 'role_id',
+  })
   role!: Role;
 
+  // Department Relation
   @ManyToOne(() => Department, (department) => department.users)
-  @JoinColumn({ name: 'department_id' })
+  @JoinColumn({
+    name: 'department_id',
+  })
   department!: Department;
 
+  // Shift Relation
+  @ManyToOne(() => Shift, (shift) => shift.users)
+  @JoinColumn({
+    name: 'shift_id',
+  })
+  shift!: Shift;
+
+  // Job Category Relation
+  @ManyToOne(() => JobCategory, (jobCategory) => jobCategory.users)
+  @JoinColumn({
+    name: 'job_category_id',
+  })
+  jobCategory!: JobCategory;
+
+  // Attendance Relation
   @OneToMany(() => Attendance, (attendance) => attendance.user)
   attendance!: Attendance[];
 
+  // Leave Requests Created By User
   @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.user)
   leaveRequests!: LeaveRequest[];
 
+  // Leave Requests Approved By User
   @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.approved_by)
   approvedLeaveRequests!: LeaveRequest[];
-  @ManyToOne(() => Shift, (shift) => shift.users)
-@JoinColumn({
-  name: 'shift_id',
-})
-shift!: Shift;
-@ManyToOne(
-  () => JobCategory,
-  (jobCategory) => jobCategory.users,
-)
-@JoinColumn({
-  name: 'job_category_id',
-})
-jobCategory!: JobCategory;
+
+  // Appraisal Questions Created By User
+  @OneToMany(
+    () => AppraisalQuestion,
+    (appraisalQuestion) => appraisalQuestion.user,
+  )
+  appraisalQuestions!: AppraisalQuestion[];
+
+  // Performance Reviews
+  @OneToMany(
+    () => PerformanceReview,
+    (performanceReview) => performanceReview.user,
+  )
+  performanceReviews!: PerformanceReview[];
 
   @CreateDateColumn()
   created_at!: Date;
