@@ -24,9 +24,7 @@ import { UpdatePayrollDto } from './dto/update-payroll.dto';
 @ApiTags('Payroll')
 @Controller('payroll')
 export class PayrollController {
-  constructor(
-    private readonly payrollService: PayrollService,
-  ) {}
+  constructor(private readonly payrollService: PayrollService) {}
 
   @Post()
   @ApiOperation({
@@ -53,10 +51,7 @@ export class PayrollController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdatePayrollDto,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdatePayrollDto) {
     return this.payrollService.update(id, dto);
   }
 

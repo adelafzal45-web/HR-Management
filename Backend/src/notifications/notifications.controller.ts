@@ -8,12 +8,7 @@ import {
   Delete,
 } from '@nestjs/common';
 
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
@@ -22,9 +17,7 @@ import { UpdateNotificationDto } from './dto/update-notification.dto';
 @ApiTags('Notifications')
 @Controller('notifications')
 export class NotificationsController {
-  constructor(
-    private readonly notificationsService: NotificationsService,
-  ) {}
+  constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post()
   @ApiOperation({
@@ -93,10 +86,7 @@ export class NotificationsController {
     status: 404,
     description: 'Notification not found.',
   })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateNotificationDto,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateNotificationDto) {
     return this.notificationsService.update(id, dto);
   }
 

@@ -34,20 +34,20 @@ export class RoleService {
   }
 
   async update(id: string, updateRoleDto: UpdateRoleDto) {
-  const role = await this.roleRepository.findOne({
-    where: {
-      role_id: id,
-    },
-  });
+    const role = await this.roleRepository.findOne({
+      where: {
+        role_id: id,
+      },
+    });
 
-  if (!role) {
-    throw new NotFoundException('Role not found');
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    Object.assign(role, updateRoleDto);
+
+    return this.roleRepository.save(role);
   }
-
-  Object.assign(role, updateRoleDto);
-
-  return this.roleRepository.save(role);
-}
 
   async remove(id: string) {
     await this.roleRepository.delete(id);

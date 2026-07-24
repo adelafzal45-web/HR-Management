@@ -1,15 +1,8 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
-import {
-  InjectRepository,
-} from '@nestjs/typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 
-import {
-  Repository,
-} from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { Payroll } from './payroll.entity';
 import { User } from '../users/user.entity';
@@ -71,10 +64,7 @@ export class PayrollService {
     return payroll;
   }
 
-  async update(
-    id: string,
-    dto: UpdatePayrollDto,
-  ) {
+  async update(id: string, dto: UpdatePayrollDto) {
     const payroll = await this.findOne(id);
 
     if (dto.user_id) {

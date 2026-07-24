@@ -19,13 +19,7 @@ export class UserService {
 
   findAll() {
     return this.userRepository.find({
-      relations: [
-        'role',
-        'department',
-        'designation',
-        'shift',
-        'jobCategory',
-      ],
+      relations: ['role', 'department', 'designation', 'shift', 'jobCategory'],
     });
   }
 
@@ -34,13 +28,7 @@ export class UserService {
       where: {
         user_id: id,
       },
-      relations: [
-        'role',
-        'department',
-        'designation',
-        'shift',
-        'jobCategory',
-      ],
+      relations: ['role', 'department', 'designation', 'shift', 'jobCategory'],
     });
   }
 

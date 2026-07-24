@@ -1,13 +1,6 @@
-import {
-  IsDateString,
-  IsNumber,
-  IsUUID,
-  Min,
-} from 'class-validator';
+import { IsDateString, IsNumber, IsUUID, Min } from 'class-validator';
 
-import {
-  ApiProperty,
-} from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePayrollDto {
   @ApiProperty({

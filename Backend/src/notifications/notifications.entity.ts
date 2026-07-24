@@ -30,13 +30,12 @@ export class Notification {
   })
   created_at!: Date;
 
- @ManyToOne(() => User, {
-  nullable: false,
-  eager: true,
-})
-@JoinColumn({
-  name: 'created_by',
-})
-createdBy!: User;
- 
+  @ManyToOne(() => User, {
+    nullable: false,
+    eager: true,
+  })
+  @JoinColumn({
+    name: 'created_by',
+  })
+  createdBy!: User;
 }

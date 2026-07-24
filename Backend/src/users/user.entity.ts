@@ -151,8 +151,6 @@ export class User {
   })
   department!: Department;
 
-  
-
   @ManyToOne(() => Shift, (shift) => shift.users)
   @JoinColumn({
     name: 'shift_id',
@@ -171,19 +169,13 @@ export class User {
   @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.user)
   leaveRequests!: LeaveRequest[];
 
-  @OneToMany(
-    () => LeaveRequest,
-    (leaveRequest) => leaveRequest.approved_by,
-  )
+  @OneToMany(() => LeaveRequest, (leaveRequest) => leaveRequest.approved_by)
   approvedLeaveRequests!: LeaveRequest[];
 
   @OneToMany(() => Payroll, (payroll) => payroll.user)
   payrolls!: Payroll[];
 
-  @OneToMany(
-    () => Notification,
-    (notification) => notification.createdBy,
-  )
+  @OneToMany(() => Notification, (notification) => notification.createdBy)
   notifications!: Notification[];
 
   @CreateDateColumn()

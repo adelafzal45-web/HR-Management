@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -49,27 +46,21 @@ export class NotificationsService {
   }
 
   async findOne(id: string) {
-    const notification =
-      await this.notificationRepository.findOne({
-        where: {
-          notification_id: id,
-        },
-        relations: ['createdBy'],
-      });
+    const notification = await this.notificationRepository.findOne({
+      where: {
+        notification_id: id,
+      },
+      relations: ['createdBy'],
+    });
 
     if (!notification) {
-      throw new NotFoundException(
-        'Notification not found',
-      );
+      throw new NotFoundException('Notification not found');
     }
 
     return notification;
   }
 
-  async update(
-    id: string,
-    dto: UpdateNotificationDto,
-  ) {
+  async update(id: string, dto: UpdateNotificationDto) {
     const notification = await this.findOne(id);
 
     if (dto.createdBy) {
@@ -94,16 +85,12 @@ export class NotificationsService {
       notification.message = dto.message;
     }
 
-    return await this.notificationRepository.save(
-      notification,
-    );
+    return await this.notificationRepository.save(notification);
   }
 
   async remove(id: string) {
     const notification = await this.findOne(id);
 
-    return await this.notificationRepository.remove(
-      notification,
-    );
+    return await this.notificationRepository.remove(notification);
   }
 }

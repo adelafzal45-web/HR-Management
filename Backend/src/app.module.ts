@@ -32,7 +32,7 @@ import { PayrollModule } from './payroll/payroll.module';
 
       password: '123454321',
 
-      database: 'HR',
+      database: 'HR2',
 
       autoLoadEntities: true,
 

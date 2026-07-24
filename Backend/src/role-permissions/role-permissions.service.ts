@@ -54,47 +54,47 @@ export class RolePermissionsService {
   }
 
   async update(id: string, dto: UpdateRolePermissionDto) {
-  const rolePermission = await this.rolePermissionRepository.findOne({
-    where: {
-      role_permission_id: id,
-    },
-    relations: ['role', 'permission'],
-  });
-
-  if (!rolePermission) {
-    throw new NotFoundException('Role Permission not found');
-  }
-
-  if (dto.roleId) {
-    const role = await this.roleRepository.findOne({
+    const rolePermission = await this.rolePermissionRepository.findOne({
       where: {
-        role_id: dto.roleId,
+        role_permission_id: id,
       },
+      relations: ['role', 'permission'],
     });
 
-    if (!role) {
-      throw new NotFoundException('Role not found');
+    if (!rolePermission) {
+      throw new NotFoundException('Role Permission not found');
     }
 
-    rolePermission.role = role;
-  }
+    if (dto.roleId) {
+      const role = await this.roleRepository.findOne({
+        where: {
+          role_id: dto.roleId,
+        },
+      });
 
-  if (dto.permissionId) {
-    const permission = await this.permissionRepository.findOne({
-      where: {
-        permission_id: dto.permissionId,
-      },
-    });
+      if (!role) {
+        throw new NotFoundException('Role not found');
+      }
 
-    if (!permission) {
-      throw new NotFoundException('Permission not found');
+      rolePermission.role = role;
     }
 
-    rolePermission.permission = permission;
-  }
+    if (dto.permissionId) {
+      const permission = await this.permissionRepository.findOne({
+        where: {
+          permission_id: dto.permissionId,
+        },
+      });
 
-  return this.rolePermissionRepository.save(rolePermission);
-}
+      if (!permission) {
+        throw new NotFoundException('Permission not found');
+      }
+
+      rolePermission.permission = permission;
+    }
+
+    return this.rolePermissionRepository.save(rolePermission);
+  }
 
   async remove(id: string) {
     await this.rolePermissionRepository.delete(id);

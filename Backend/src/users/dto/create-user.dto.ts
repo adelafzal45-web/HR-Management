@@ -102,6 +102,4 @@ export class CreateUserDto {
     example: 'shift-uuid',
   })
   shiftId!: string;
-
-  
 }

@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany,ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { User } from '../users/user.entity';
 import { Department } from '../department/department.entity';
 @Entity('designations')
@@ -12,14 +19,9 @@ export class Designation {
   })
   title!: string;
 
-
-  @ManyToOne(
-    () => Department,
-    (department) => department.designations,
-    {
-      nullable: false,
-    },
-  )
+  @ManyToOne(() => Department, (department) => department.designations, {
+    nullable: false,
+  })
   @JoinColumn({
     name: 'department_id',
   })

@@ -43,33 +43,33 @@ export class Attendance {
   attendance_status!: string;
 
   @Column({
-  type: 'decimal',
-  precision: 5,
-  scale: 2,
-  nullable: true,
-})
-overtime_hours?: number;
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
+  overtime_hours?: number;
 
-@Column({
-  default: false,
-})
-is_overtime!: boolean;
+  @Column({
+    default: false,
+  })
+  is_overtime!: boolean;
 
- @ManyToOne(() => User, (user) => user.attendance, {
-  nullable: false,
-  eager: true,
-  onDelete: 'CASCADE',
-})
-@JoinColumn({
-  name: 'user_id',
-})
-user!: User;
+  @ManyToOne(() => User, (user) => user.attendance, {
+    nullable: false,
+    eager: true,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({
+    name: 'user_id',
+  })
+  user!: User;
 
-@ManyToOne(() => Shift, (shift) => shift.attendance, {
-  eager: true,
-})
-@JoinColumn({
-  name: 'shift_id',
-})
-shift!: Shift;
+  @ManyToOne(() => Shift, (shift) => shift.attendance, {
+    eager: true,
+  })
+  @JoinColumn({
+    name: 'shift_id',
+  })
+  shift!: Shift;
 }

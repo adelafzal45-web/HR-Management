@@ -28,24 +28,21 @@ export class DepartmentsService {
       },
     });
   }
-async update(
-  id: string,
-  updateDepartmentDto: UpdateDepartmentDto,
-) {
-  const department = await this.departmentRepository.findOne({
-    where: {
-      department_id: id,
-    },
-  });
+  async update(id: string, updateDepartmentDto: UpdateDepartmentDto) {
+    const department = await this.departmentRepository.findOne({
+      where: {
+        department_id: id,
+      },
+    });
 
-  if (!department) {
-    throw new NotFoundException('Department not found');
+    if (!department) {
+      throw new NotFoundException('Department not found');
+    }
+
+    Object.assign(department, updateDepartmentDto);
+
+    return this.departmentRepository.save(department);
   }
-
-  Object.assign(department, updateDepartmentDto);
-
-  return this.departmentRepository.save(department);
-}
   async delete(id: string) {
     await this.departmentRepository.delete(id);
 

@@ -24,9 +24,7 @@ import { UpdateJobCategoryDto } from './dto/update-job-category.dto';
 @ApiTags('Job Categories')
 @Controller('job-categories')
 export class JobCategoriesController {
-  constructor(
-    private readonly jobCategoryService: JobCategoriesService,
-  ) {}
+  constructor(private readonly jobCategoryService: JobCategoriesService) {}
 
   @Post()
   @ApiOperation({
@@ -39,9 +37,7 @@ export class JobCategoriesController {
     status: 201,
     description: 'Job Category created successfully.',
   })
-  create(
-    @Body() dto: CreateJobCategoryDto,
-  ) {
+  create(@Body() dto: CreateJobCategoryDto) {
     return this.jobCategoryService.create(dto);
   }
 
@@ -79,10 +75,7 @@ export class JobCategoriesController {
   @ApiBody({
     type: UpdateJobCategoryDto,
   })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateJobCategoryDto,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateJobCategoryDto) {
     return this.jobCategoryService.update(id, dto);
   }
 

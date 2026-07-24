@@ -2,7 +2,7 @@ import {
   Controller,
   Get,
   Post,
- Patch,
+  Patch,
   Delete,
   Param,
   Body,
@@ -71,10 +71,7 @@ export class ShiftsController {
   @ApiBody({
     type: UpdateShiftDto,
   })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateShiftDto,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateShiftDto) {
     return this.shiftsService.update(id, dto);
   }
 

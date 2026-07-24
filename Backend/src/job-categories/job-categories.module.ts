@@ -6,9 +6,7 @@ import { JobCategoriesController } from './job-categories.controller';
 import { JobCategoriesService } from './job-categories.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([JobCategory]),
-  ],
+  imports: [TypeOrmModule.forFeature([JobCategory])],
   controllers: [JobCategoriesController],
   providers: [JobCategoriesService],
   exports: [JobCategoriesService, TypeOrmModule],

@@ -1,7 +1,7 @@
 import {
   Controller,
   Get,
- Post,
+  Post,
   Patch,
   Delete,
   Param,
@@ -79,27 +79,24 @@ export class RoleController {
     return this.roleService.findOne(id);
   }
   @Patch(':id')
-@ApiOperation({
-  summary: 'Update a role',
-})
-@ApiParam({
-  name: 'id',
-  description: 'Role UUID',
-})
-@ApiResponse({
-  status: 200,
-  description: 'Role updated successfully.',
-})
-@ApiResponse({
-  status: 404,
-  description: 'Role not found.',
-})
-update(
-  @Param('id') id: string,
-  @Body() updateRoleDto: UpdateRoleDto,
-) {
-  return this.roleService.update(id, updateRoleDto);
-}
+  @ApiOperation({
+    summary: 'Update a role',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Role UUID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Role updated successfully.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Role not found.',
+  })
+  update(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
+    return this.roleService.update(id, updateRoleDto);
+  }
 
   @Delete(':id')
   @ApiOperation({
