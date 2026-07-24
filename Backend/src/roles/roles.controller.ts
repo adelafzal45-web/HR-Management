@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+ Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+} from '@nestjs/common';
+
+import { UpdateRoleDto } from './dto/update-role.dto';
 
 import {
   ApiTags,
@@ -68,6 +78,28 @@ export class RoleController {
   findOne(@Param('id') id: string) {
     return this.roleService.findOne(id);
   }
+  @Patch(':id')
+@ApiOperation({
+  summary: 'Update a role',
+})
+@ApiParam({
+  name: 'id',
+  description: 'Role UUID',
+})
+@ApiResponse({
+  status: 200,
+  description: 'Role updated successfully.',
+})
+@ApiResponse({
+  status: 404,
+  description: 'Role not found.',
+})
+update(
+  @Param('id') id: string,
+  @Body() updateRoleDto: UpdateRoleDto,
+) {
+  return this.roleService.update(id, updateRoleDto);
+}
 
   @Delete(':id')
   @ApiOperation({

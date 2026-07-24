@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-
+import { UpdateRolePermissionDto } from './dto/update-role.dto';
 import { Repository } from 'typeorm';
 
 import { RolePermission } from './role-permissions.entity';
@@ -52,6 +52,49 @@ export class RolePermissionsService {
       relations: ['role', 'permission'],
     });
   }
+
+  async update(id: string, dto: UpdateRolePermissionDto) {
+  const rolePermission = await this.rolePermissionRepository.findOne({
+    where: {
+      role_permission_id: id,
+    },
+    relations: ['role', 'permission'],
+  });
+
+  if (!rolePermission) {
+    throw new NotFoundException('Role Permission not found');
+  }
+
+  if (dto.roleId) {
+    const role = await this.roleRepository.findOne({
+      where: {
+        role_id: dto.roleId,
+      },
+    });
+
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    rolePermission.role = role;
+  }
+
+  if (dto.permissionId) {
+    const permission = await this.permissionRepository.findOne({
+      where: {
+        permission_id: dto.permissionId,
+      },
+    });
+
+    if (!permission) {
+      throw new NotFoundException('Permission not found');
+    }
+
+    rolePermission.permission = permission;
+  }
+
+  return this.rolePermissionRepository.save(rolePermission);
+}
 
   async remove(id: string) {
     await this.rolePermissionRepository.delete(id);

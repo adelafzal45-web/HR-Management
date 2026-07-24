@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { Repository } from 'typeorm';
 
 import { Role } from './roles.entity';
@@ -31,6 +32,22 @@ export class RoleService {
       },
     });
   }
+
+  async update(id: string, updateRoleDto: UpdateRoleDto) {
+  const role = await this.roleRepository.findOne({
+    where: {
+      role_id: id,
+    },
+  });
+
+  if (!role) {
+    throw new NotFoundException('Role not found');
+  }
+
+  Object.assign(role, updateRoleDto);
+
+  return this.roleRepository.save(role);
+}
 
   async remove(id: string) {
     await this.roleRepository.delete(id);

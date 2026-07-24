@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { Department } from './department.entity';
 
+import { UpdateDepartmentDto } from './dto/update-department.dto';
+import { NotFoundException } from '@nestjs/common';
 @Injectable()
 export class DepartmentsService {
   constructor(
@@ -26,7 +28,24 @@ export class DepartmentsService {
       },
     });
   }
+async update(
+  id: string,
+  updateDepartmentDto: UpdateDepartmentDto,
+) {
+  const department = await this.departmentRepository.findOne({
+    where: {
+      department_id: id,
+    },
+  });
 
+  if (!department) {
+    throw new NotFoundException('Department not found');
+  }
+
+  Object.assign(department, updateDepartmentDto);
+
+  return this.departmentRepository.save(department);
+}
   async delete(id: string) {
     await this.departmentRepository.delete(id);
 

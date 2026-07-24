@@ -55,21 +55,21 @@ overtime_hours?: number;
 })
 is_overtime!: boolean;
 
-  @ManyToOne(() => User, (user) => user.attendance, {
-    nullable: false,
-    eager: true,
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({
-    name: 'user_id',
-  })
+ @ManyToOne(() => User, (user) => user.attendance, {
+  nullable: false,
+  eager: true,
+  onDelete: 'CASCADE',
+})
+@JoinColumn({
+  name: 'user_id',
+})
+user!: User;
 
-  @ManyToOne(() => Shift, (shift) => shift.attendance, {
+@ManyToOne(() => Shift, (shift) => shift.attendance, {
   eager: true,
 })
 @JoinColumn({
   name: 'shift_id',
 })
 shift!: Shift;
-  user!: User;
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Patch } from '@nestjs/common';
 
 import {
   ApiTags,
@@ -10,7 +10,7 @@ import {
 
 import { DepartmentsService } from './department.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
-
+import { UpdateDepartmentDto } from './dto/update-department.dto';
 @ApiTags('Departments')
 @Controller('departments')
 export class DepartmentsController {
@@ -68,6 +68,31 @@ export class DepartmentsController {
   findOne(@Param('id') id: string) {
     return this.departmentService.findOne(id);
   }
+@Patch(':id')
+@ApiOperation({
+  summary: 'Update a department',
+})
+@ApiParam({
+  name: 'id',
+  description: 'Department UUID',
+})
+@ApiBody({
+  type: UpdateDepartmentDto,
+})
+@ApiResponse({
+  status: 200,
+  description: 'Department updated successfully.',
+})
+@ApiResponse({
+  status: 404,
+  description: 'Department not found.',
+})
+update(
+  @Param('id') id: string,
+  @Body() updateDepartmentDto: UpdateDepartmentDto,
+) {
+  return this.departmentService.update(id, updateDepartmentDto);
+}
 
   @Delete(':id')
   @ApiOperation({
