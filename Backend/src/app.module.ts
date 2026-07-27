@@ -18,6 +18,8 @@ import { ShiftsModule } from './shifts/shifts.module';
 import { JobCategoriesModule } from './job-categories/job-categories.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PayrollModule } from './payroll/payroll.module';
+import { AppraisalQuestionModule } from './appraisal-question/appraisal-question.module';
+import { PerformanceReviewModule } from './performance-review/performance-review.module';
 
 @Module({
   imports: [
@@ -32,7 +34,7 @@ import { PayrollModule } from './payroll/payroll.module';
 
       password: '123454321',
 
-      database: 'HR2',
+      database: 'HR',
 
       autoLoadEntities: true,
 
@@ -66,6 +68,10 @@ import { PayrollModule } from './payroll/payroll.module';
     NotificationsModule,
 
     PayrollModule,
+
+    AppraisalQuestionModule,
+
+    PerformanceReviewModule,
   ],
 
   controllers: [AppController],

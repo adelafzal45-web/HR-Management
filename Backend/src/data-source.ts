@@ -12,6 +12,8 @@ import { Shift } from './shifts/shifts.entity';
 import { JobCategory } from './job-categories/job-category.entity';
 import { Notification } from './notifications/notifications.entity';
 import { Payroll } from './payroll/payroll.entity';
+import { AppraisalQuestion } from './appraisal-question/appraisal-question.entity';
+import { PerformanceReview } from './performance-review/performance-review.entity';
 export const AppDataSource = new DataSource({
   type: 'postgres',
 
@@ -23,7 +25,7 @@ export const AppDataSource = new DataSource({
 
   password: '123454321',
 
-  database: 'HR2',
+  database: 'HR',
 
   synchronize: false,
 
@@ -40,6 +42,8 @@ export const AppDataSource = new DataSource({
     JobCategory,
     Notification,
     Payroll,
+    AppraisalQuestion,
+    PerformanceReview,
   ],
 
   migrations: ['src/migrations/*.ts'],
