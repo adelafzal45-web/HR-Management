@@ -1,0 +1,14 @@
+export * from "./ChangePassword";
+export { default as ChangePassword } from "./ChangePassword";
+export * from "./EditProfile";
+export { default as EditProfile } from "./EditProfile";
+export * from "./ForgetPassword";
+export { default as ForgetPassword } from "./ForgetPassword";
+export * from "./Login";
+export { default as Login } from "./Login";
+export * from "./ResetPassword";
+export { default as ResetPassword } from "./ResetPassword";
+export * from "./SignUp";
+export { default as SignUp } from "./SignUp";
+export * from "./SignUpSuccess";
+export { default as SignUpSuccess } from "./SignUpSuccess";

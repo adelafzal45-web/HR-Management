@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Typography: Poppins, kept to light weights (400/500/600) across the dashboard;
+  600 is the heaviest weight used anywhere, reserved for KPI values.
+*/
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: "Poppins", system-ui, sans-serif;
+  background: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+input::placeholder {
+  color: #b7bcc3;
+}
+
+/* Scrollable but scrollbar-less containers (sidebar rail, mobile drawer). */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth momentum scrolling on iOS for our custom scroll containers. */
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+}

@@ -1,0 +1,18 @@
+export * from "./Branding";
+export { default as Branding } from "./Branding";
+export * from "./CompanyDetails";
+export { default as CompanyDetails } from "./CompanyDetails";
+export * from "./Departments";
+export { default as Departments } from "./Departments";
+export * from "./Designations";
+export { default as Designations } from "./Designations";
+export * from "./JobCategories";
+export { default as JobCategories } from "./JobCategories";
+export * from "./Permissions";
+export { default as Permissions } from "./Permissions";
+export * from "./Roles";
+export { default as Roles } from "./Roles";
+export * from "./SettingsLayout";
+export { default as SettingsLayout } from "./SettingsLayout";
+export * from "./Shifts";
+export { default as Shifts } from "./Shifts";
