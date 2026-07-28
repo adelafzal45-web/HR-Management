@@ -18,7 +18,12 @@ export class AppraisalQuestionService {
     private readonly userRepository: Repository<User>,
   ) {}
 
+  // ==========================================
+  // CREATE APPRAISAL QUESTION
+  // ==========================================
+
   async create(createDto: CreateAppraisalQuestionDto) {
+    // Find the user who is creating the question
     const user = await this.userRepository.findOne({
       where: {
         user_id: createDto.user_id,
@@ -29,42 +34,91 @@ export class AppraisalQuestionService {
       throw new NotFoundException('User not found');
     }
 
+    // Create question
     const question = this.appraisalQuestionRepository.create({
       question_text: createDto.question_text,
+
       question_type: createDto.question_type,
-      weight: createDto.weight,
-      is_active: createDto.is_active,
-      user,
+
+      is_active: createDto.is_active ?? true,
+
+      // User who created the question
+      createdBy: user,
+
+      // One-to-one weight
+      weight: {
+        weight_percentage: createDto.weight,
+      },
     });
+
+    /*
+      Because AppraisalQuestion.weight has:
+
+      cascade: true
+
+      TypeORM will also create the
+      AppraisalQuestionWeight record.
+    */
 
     return await this.appraisalQuestionRepository.save(question);
   }
 
+  // ==========================================
+  // FIND ALL QUESTIONS
+  // ==========================================
+
   async findAll() {
     return await this.appraisalQuestionRepository.find({
-      relations: ['user', 'performanceReviews'],
+      relations: [
+        'createdBy',
+        'options',
+        'weight',
+        'performanceReviews',
+      ],
     });
   }
+
+  // ==========================================
+  // FIND ONE QUESTION
+  // ==========================================
 
   async findOne(id: string) {
     const question = await this.appraisalQuestionRepository.findOne({
       where: {
         question_id: id,
       },
-      relations: ['user', 'performanceReviews'],
+      relations: [
+        'createdBy',
+        'options',
+        'weight',
+        'performanceReviews',
+      ],
     });
 
     if (!question) {
-      throw new NotFoundException('Appraisal Question not found');
+      throw new NotFoundException(
+        'Appraisal Question not found',
+      );
     }
 
     return question;
   }
 
-  async update(id: string, updateDto: UpdateAppraisalQuestionDto) {
+  // ==========================================
+  // UPDATE QUESTION
+  // ==========================================
+
+  async update(
+    id: string,
+    updateDto: UpdateAppraisalQuestionDto,
+  ) {
     const question = await this.findOne(id);
 
-    if (updateDto.user_id) {
+    // ------------------------------------------
+    // Update question creator
+    // ------------------------------------------
+
+    if (updateDto.user_id !== undefined) {
       const user = await this.userRepository.findOne({
         where: {
           user_id: updateDto.user_id,
@@ -75,17 +129,61 @@ export class AppraisalQuestionService {
         throw new NotFoundException('User not found');
       }
 
-      question.user = user;
+      question.createdBy = user;
     }
 
-    Object.assign(question, updateDto);
+    // ------------------------------------------
+    // Update question text
+    // ------------------------------------------
+
+    if (updateDto.question_text !== undefined) {
+      question.question_text = updateDto.question_text;
+    }
+
+    // ------------------------------------------
+    // Update question type
+    // ------------------------------------------
+
+    if (updateDto.question_type !== undefined) {
+      question.question_type = updateDto.question_type;
+    }
+
+    // ------------------------------------------
+    // Update active status
+    // ------------------------------------------
+
+    if (updateDto.is_active !== undefined) {
+      question.is_active = updateDto.is_active;
+    }
+
+    // ------------------------------------------
+    // Update question weight
+    // ------------------------------------------
+
+    if (updateDto.weight !== undefined) {
+      if (!question.weight) {
+        throw new NotFoundException(
+          'Weight record not found for this appraisal question',
+        );
+      }
+
+      question.weight.weight_percentage = updateDto.weight;
+    }
 
     return await this.appraisalQuestionRepository.save(question);
   }
 
+  // ==========================================
+  // DELETE QUESTION
+  // ==========================================
+
   async remove(id: string) {
     const question = await this.findOne(id);
 
-    return await this.appraisalQuestionRepository.remove(question);
+    await this.appraisalQuestionRepository.remove(question);
+
+    return {
+      message: 'Appraisal Question deleted successfully',
+    };
   }
 }

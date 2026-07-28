@@ -8,109 +8,151 @@ import {
   Post,
 } from '@nestjs/common';
 
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import { PerformanceReviewService } from './performance-review.service';
+
 import { CreatePerformanceReviewDto } from './dto/create-performance-review.dto';
 import { UpdatePerformanceReviewDto } from './dto/update-performance-review.dto';
 
 @ApiTags('Performance Reviews')
-@Controller('performance-review')
+@Controller('performance-reviews')
 export class PerformanceReviewController {
   constructor(
     private readonly performanceReviewService: PerformanceReviewService,
   ) {}
 
+  // =========================
+  // CREATE
+  // =========================
+
   @Post()
   @ApiOperation({
-    summary: 'Create performance review',
-    description: 'Creates a new performance review record for an employee',
+    summary: 'Create a performance review',
+    description:
+      'Creates a performance review for an employee by another employee/reviewer.',
+  })
+  @ApiBody({
+    type: CreatePerformanceReviewDto,
   })
   @ApiResponse({
     status: 201,
-    description: 'Performance review created successfully',
+    description: 'Performance review created successfully.',
   })
-  create(@Body() createPerformanceReviewDto: CreatePerformanceReviewDto) {
-    return this.performanceReviewService.create(createPerformanceReviewDto);
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request body.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Reviewer or reviewee employee not found.',
+  })
+  create(
+    @Body() createDto: CreatePerformanceReviewDto,
+  ) {
+    return this.performanceReviewService.create(createDto);
   }
+
+  // =========================
+  // GET ALL
+  // =========================
 
   @Get()
   @ApiOperation({
     summary: 'Get all performance reviews',
-    description: 'Returns all performance review records',
   })
   @ApiResponse({
     status: 200,
-    description: 'Performance reviews fetched successfully',
+    description: 'Returns all performance reviews.',
   })
   findAll() {
     return this.performanceReviewService.findAll();
   }
 
+  // =========================
+  // GET ONE
+  // =========================
+
   @Get(':id')
   @ApiOperation({
-    summary: 'Get performance review by ID',
-    description: 'Returns a single performance review using UUID',
+    summary: 'Get a performance review by ID',
   })
   @ApiParam({
     name: 'id',
-    example: '8f9b8b2e-5a6a-4d9e-b4c1-123456789abc',
     description: 'Performance review UUID',
+    example: '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
   })
   @ApiResponse({
     status: 200,
-    description: 'Performance review found successfully',
+    description: 'Performance review found.',
   })
   @ApiResponse({
     status: 404,
-    description: 'Performance review not found',
+    description: 'Performance review not found.',
   })
   findOne(@Param('id') id: string) {
     return this.performanceReviewService.findOne(id);
   }
 
+  // =========================
+  // UPDATE
+  // =========================
+
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update performance review',
-    description: 'Updates an existing performance review record',
+    summary: 'Update a performance review',
+    description:
+      'Partially updates an existing performance review.',
   })
   @ApiParam({
     name: 'id',
-    example: '8f9b8b2e-5a6a-4d9e-b4c1-123456789abc',
     description: 'Performance review UUID',
+    example: '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
+  })
+  @ApiBody({
+    type: UpdatePerformanceReviewDto,
   })
   @ApiResponse({
     status: 200,
-    description: 'Performance review updated successfully',
+    description: 'Performance review updated successfully.',
   })
   @ApiResponse({
     status: 404,
-    description: 'Performance review not found',
+    description: 'Performance review not found.',
   })
   update(
     @Param('id') id: string,
-    @Body() updatePerformanceReviewDto: UpdatePerformanceReviewDto,
+    @Body() updateDto: UpdatePerformanceReviewDto,
   ) {
-    return this.performanceReviewService.update(id, updatePerformanceReviewDto);
+    return this.performanceReviewService.update(id, updateDto);
   }
+
+  // =========================
+  // DELETE
+  // =========================
 
   @Delete(':id')
   @ApiOperation({
-    summary: 'Delete performance review',
-    description: 'Deletes a performance review record by ID',
+    summary: 'Delete a performance review',
   })
   @ApiParam({
     name: 'id',
-    example: '8f9b8b2e-5a6a-4d9e-b4c1-123456789abc',
     description: 'Performance review UUID',
+    example: '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
   })
   @ApiResponse({
     status: 200,
-    description: 'Performance review deleted successfully',
+    description: 'Performance review deleted successfully.',
   })
   @ApiResponse({
     status: 404,
-    description: 'Performance review not found',
+    description: 'Performance review not found.',
   })
   remove(@Param('id') id: string) {
     return this.performanceReviewService.remove(id);

@@ -20,6 +20,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { AppraisalQuestionModule } from './appraisal-question/appraisal-question.module';
 import { PerformanceReviewModule } from './performance-review/performance-review.module';
+import { AppraisalQuestionOptionsModule} from './apprisal-question-options/apprisal-question-options.module';
+import { AppraisalQuestionWeightsModule } from './apprisal-question-weight/apprisal-question-weight.module';
+import { PerformanceReviewAnswerModule } from './performance-review-answer/performance-review-answer.module';
 
 @Module({
   imports: [
@@ -72,6 +75,12 @@ import { PerformanceReviewModule } from './performance-review/performance-review
     AppraisalQuestionModule,
 
     PerformanceReviewModule,
+
+    AppraisalQuestionOptionsModule,
+
+    AppraisalQuestionWeightsModule,
+
+    PerformanceReviewAnswerModule,
   ],
 
   controllers: [AppController],

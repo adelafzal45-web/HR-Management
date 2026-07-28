@@ -1,64 +1,60 @@
 import {
   IsDateString,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
-  Max,
-  Min,
+  MaxLength,
 } from 'class-validator';
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreatePerformanceReviewDto {
   @ApiProperty({
-    example: '8f9b8b2e-5a6a-4d9e-b4c1-123456789abc',
-    description: 'User ID of the employee being reviewed',
+    description: 'UUID of the employee conducting the review',
+    example: '7d86f0b2-5c28-4f69-9bb2-cd4c90dd6d34',
   })
   @IsUUID()
   @IsNotEmpty()
-  user_id!: string;
+  reviewer_id!: string;
 
   @ApiProperty({
-    example: '9a7c6d4e-2b1f-4c8a-9d5e-987654321abc',
-    description: 'Appraisal question ID associated with this review',
+    description: 'UUID of the employee being reviewed',
+    example: '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
   })
   @IsUUID()
   @IsNotEmpty()
-  question_id!: string;
+  reviewee_id!: string;
 
   @ApiProperty({
-    example: 'Q1 2026',
-    description: 'Performance review period',
+    description: 'Review period',
+    example: '2026-Q2',
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   review_period!: string;
 
   @ApiProperty({
-    example: 4.5,
-    description: 'Performance rating given to the employee',
-    minimum: 0,
-    maximum: 5,
+    description: 'Date on which the review was conducted',
+    example: '2026-07-28',
   })
-  @IsNumber()
-  @Min(0)
-  @Max(5)
-  rating!: number;
+  @IsDateString()
+  @IsNotEmpty()
+  review_date!: string;
 
   @ApiPropertyOptional({
-    example: 'Employee has shown excellent teamwork and communication skills.',
-    description: 'Additional comments about employee performance',
+    description: 'Overall calculated score percentage',
+    example: 85.50,
+  })
+  @IsOptional()
+  total_score_percentage?: number;
+
+  @ApiPropertyOptional({
+    description: 'Overall comments about the employee',
+    example: 'Excellent performance during this review period.',
   })
   @IsOptional()
   @IsString()
   comments?: string;
-
-  @ApiProperty({
-    example: '2026-07-24',
-    description: 'Date when the performance review was conducted',
-  })
-  @IsDateString()
-  review_date!: Date;
 }

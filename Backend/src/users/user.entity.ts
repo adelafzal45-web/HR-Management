@@ -181,16 +181,22 @@ export class User {
   notifications!: Notification[];
 
   @OneToMany(
-    () => AppraisalQuestion,
-    (appraisalQuestion) => appraisalQuestion.user,
-  )
-  appraisalQuestions: AppraisalQuestion[];
+  () => AppraisalQuestion,
+  (appraisalQuestion) => appraisalQuestion.createdBy,
+)
+appraisalQuestions!: AppraisalQuestion[];
 
-  @OneToMany(
-    () => PerformanceReview,
-    (performanceReview) => performanceReview.user,
-  )
-  performanceReviews: PerformanceReview[];
+@OneToMany(
+  () => PerformanceReview,
+  (performanceReview) => performanceReview.reviewer,
+)
+reviewsGiven!: PerformanceReview[];
+
+@OneToMany(
+  () => PerformanceReview,
+  (performanceReview) => performanceReview.reviewee,
+)
+reviewsReceived!: PerformanceReview[];
 
   @CreateDateColumn()
   created_at!: Date;

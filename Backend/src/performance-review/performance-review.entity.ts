@@ -4,39 +4,38 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 import { User } from '../users/user.entity';
-import { AppraisalQuestion } from '../appraisal-question/appraisal-question.entity';
+import { PerformanceReviewAnswer } from '../performance-review-answer/performance-review-answer.entity';
 
 @Entity('performance_reviews')
 export class PerformanceReview {
   @PrimaryGeneratedColumn('uuid')
   review_id!: string;
 
-  @ManyToOne(() => User, (user) => user.performanceReviews, {
+  // Employee/Lead who is conducting the review
+  @ManyToOne(() => User, (user) => user.reviewsGiven, {
     nullable: false,
     onDelete: 'CASCADE',
   })
   @JoinColumn({
-    name: 'user_id',
+    name: 'reviewer_id',
   })
-  user!: User;
+  reviewer!: User;
 
-  @ManyToOne(
-    () => AppraisalQuestion,
-    (appraisalQuestion) => appraisalQuestion.performanceReviews,
-    {
-      nullable: false,
-      onDelete: 'CASCADE',
-    },
-  )
-  @JoinColumn({
-    name: 'question_id',
+  // Employee who is being evaluated
+  @ManyToOne(() => User, (user) => user.reviewsReceived, {
+    nullable: false,
+    onDelete: 'CASCADE',
   })
-  appraisalQuestion!: AppraisalQuestion;
+  @JoinColumn({
+    name: 'reviewee_id',
+  })
+  reviewee!: User;
 
   @Column({
     type: 'varchar',
@@ -45,11 +44,17 @@ export class PerformanceReview {
   review_period!: string;
 
   @Column({
-    type: 'decimal',
-    precision: 3,
-    scale: 2,
+    type: 'date',
   })
-  rating!: number;
+  review_date!: Date;
+
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
+  total_score_percentage?: number;
 
   @Column({
     type: 'text',
@@ -57,10 +62,14 @@ export class PerformanceReview {
   })
   comments?: string;
 
-  @Column({
-    type: 'date',
-  })
-  review_date!: Date;
+  @OneToMany(
+    () => PerformanceReviewAnswer,
+    (answer) => answer.review,
+    {
+      cascade: true,
+    },
+  )
+  answers!: PerformanceReviewAnswer[];
 
   @CreateDateColumn()
   created_at!: Date;

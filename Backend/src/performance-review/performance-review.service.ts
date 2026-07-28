@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { PerformanceReview } from './performance-review.entity';
+
 import { User } from '../users/user.entity';
-import { AppraisalQuestion } from '../appraisal-question/appraisal-question.entity';
 
 import { CreatePerformanceReviewDto } from './dto/create-performance-review.dto';
 import { UpdatePerformanceReviewDto } from './dto/update-performance-review.dto';
@@ -17,122 +21,167 @@ export class PerformanceReviewService {
 
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-
-    @InjectRepository(AppraisalQuestion)
-    private readonly appraisalQuestionRepository: Repository<AppraisalQuestion>,
   ) {}
 
-  async create(createPerformanceReviewDto: CreatePerformanceReviewDto) {
-    const user = await this.userRepository.findOne({
+  // =========================
+  // CREATE
+  // =========================
+
+  async create(createDto: CreatePerformanceReviewDto) {
+    const reviewer = await this.userRepository.findOne({
       where: {
-        user_id: createPerformanceReviewDto.user_id,
+        user_id: createDto.reviewer_id,
       },
     });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
+    if (!reviewer) {
+      throw new NotFoundException('Reviewer employee not found');
     }
 
-    const appraisalQuestion = await this.appraisalQuestionRepository.findOne({
+    const reviewee = await this.userRepository.findOne({
       where: {
-        question_id: createPerformanceReviewDto.question_id,
+        user_id: createDto.reviewee_id,
       },
     });
 
-    if (!appraisalQuestion) {
-      throw new NotFoundException('Appraisal Question not found');
+    if (!reviewee) {
+      throw new NotFoundException('Reviewee employee not found');
     }
 
-    const performanceReview = this.performanceReviewRepository.create({
-      review_period: createPerformanceReviewDto.review_period,
-      rating: createPerformanceReviewDto.rating,
-      comments: createPerformanceReviewDto.comments,
-      review_date: createPerformanceReviewDto.review_date,
-      user,
-      appraisalQuestion,
+    const review = this.performanceReviewRepository.create({
+      reviewer,
+      reviewee,
+      review_period: createDto.review_period,
+      review_date: new Date(createDto.review_date),
+      total_score_percentage: createDto.total_score_percentage,
+      comments: createDto.comments,
     });
 
-    return await this.performanceReviewRepository.save(performanceReview);
+    return this.performanceReviewRepository.save(review);
   }
 
-  async findAll() {
-    return await this.performanceReviewRepository.find({
-      relations: ['user', 'appraisalQuestion'],
+  // =========================
+  // GET ALL
+  // =========================
+
+  findAll() {
+    return this.performanceReviewRepository.find({
+      relations: [
+        'reviewer',
+        'reviewee',
+        'answers',
+      ],
     });
   }
+
+  // =========================
+  // GET ONE
+  // =========================
 
   async findOne(id: string) {
-    const performanceReview = await this.performanceReviewRepository.findOne({
+    const review = await this.performanceReviewRepository.findOne({
       where: {
         review_id: id,
       },
-      relations: ['user', 'appraisalQuestion'],
+      relations: [
+        'reviewer',
+        'reviewee',
+        'answers',
+      ],
     });
 
-    if (!performanceReview) {
-      throw new NotFoundException('Performance Review not found');
+    if (!review) {
+      throw new NotFoundException('Performance review not found');
     }
 
-    return performanceReview;
+    return review;
   }
+
+  // =========================
+  // UPDATE
+  // =========================
 
   async update(
     id: string,
-    updatePerformanceReviewDto: UpdatePerformanceReviewDto,
+    updateDto: UpdatePerformanceReviewDto,
   ) {
-    const performanceReview = await this.findOne(id);
+    const review = await this.performanceReviewRepository.findOne({
+      where: {
+        review_id: id,
+      },
+    });
 
-    if (updatePerformanceReviewDto.user_id) {
-      const user = await this.userRepository.findOne({
+    if (!review) {
+      throw new NotFoundException('Performance review not found');
+    }
+
+    if (updateDto.reviewer_id) {
+      const reviewer = await this.userRepository.findOne({
         where: {
-          user_id: updatePerformanceReviewDto.user_id,
+          user_id: updateDto.reviewer_id,
         },
       });
 
-      if (!user) {
-        throw new NotFoundException('User not found');
+      if (!reviewer) {
+        throw new NotFoundException('Reviewer employee not found');
       }
 
-      performanceReview.user = user;
+      review.reviewer = reviewer;
     }
 
-    if (updatePerformanceReviewDto.question_id) {
-      const appraisalQuestion = await this.appraisalQuestionRepository.findOne({
+    if (updateDto.reviewee_id) {
+      const reviewee = await this.userRepository.findOne({
         where: {
-          question_id: updatePerformanceReviewDto.question_id,
+          user_id: updateDto.reviewee_id,
         },
       });
 
-      if (!appraisalQuestion) {
-        throw new NotFoundException('Appraisal Question not found');
+      if (!reviewee) {
+        throw new NotFoundException('Reviewee employee not found');
       }
 
-      performanceReview.appraisalQuestion = appraisalQuestion;
+      review.reviewee = reviewee;
     }
 
-    if (updatePerformanceReviewDto.review_period !== undefined) {
-      performanceReview.review_period =
-        updatePerformanceReviewDto.review_period;
+    if (updateDto.review_period !== undefined) {
+      review.review_period = updateDto.review_period;
     }
 
-    if (updatePerformanceReviewDto.rating !== undefined) {
-      performanceReview.rating = updatePerformanceReviewDto.rating;
+    if (updateDto.review_date !== undefined) {
+      review.review_date = new Date(updateDto.review_date);
     }
 
-    if (updatePerformanceReviewDto.comments !== undefined) {
-      performanceReview.comments = updatePerformanceReviewDto.comments;
+    if (updateDto.total_score_percentage !== undefined) {
+      review.total_score_percentage =
+        updateDto.total_score_percentage;
     }
 
-    if (updatePerformanceReviewDto.review_date !== undefined) {
-      performanceReview.review_date = updatePerformanceReviewDto.review_date;
+    if (updateDto.comments !== undefined) {
+      review.comments = updateDto.comments;
     }
 
-    return await this.performanceReviewRepository.save(performanceReview);
+    return this.performanceReviewRepository.save(review);
   }
 
-  async remove(id: string) {
-    const performanceReview = await this.findOne(id);
+  // =========================
+  // DELETE
+  // =========================
 
-    return await this.performanceReviewRepository.remove(performanceReview);
+  async remove(id: string) {
+    const review = await this.performanceReviewRepository.findOne({
+      where: {
+        review_id: id,
+      },
+    });
+
+    if (!review) {
+      throw new NotFoundException('Performance review not found');
+    }
+
+    await this.performanceReviewRepository.remove(review);
+
+    return {
+      message: 'Performance review deleted successfully',
+    };
   }
 }
