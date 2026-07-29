@@ -20,6 +20,10 @@ import { JobCategoriesService } from './job-categories.service';
 
 import { CreateJobCategoryDto } from './dto/create-job-category.dto';
 import { UpdateJobCategoryDto } from './dto/update-job-category.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
+
 
 @ApiTags('Job Categories')
 @Controller('job-categories')
@@ -27,6 +31,8 @@ export class JobCategoriesController {
   constructor(private readonly jobCategoryService: JobCategoriesService) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.create')
   @ApiOperation({
     summary: 'Create Job Category',
   })
@@ -42,6 +48,8 @@ export class JobCategoriesController {
   }
 
   @Get()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get all Job Categories',
   })
@@ -54,6 +62,8 @@ export class JobCategoriesController {
   }
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get Job Category by ID',
   })
@@ -66,6 +76,8 @@ export class JobCategoriesController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update Job Category',
   })
@@ -80,6 +92,8 @@ export class JobCategoriesController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Delete Job Category',
   })

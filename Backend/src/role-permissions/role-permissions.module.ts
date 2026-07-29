@@ -8,8 +8,9 @@ import { Permission } from '../permissions/permission.entity';
 import { RolePermissionsController } from './role-permissions.controller';
 import { RolePermissionsService } from './role-permissions.service';
 
+import { AuthorizationModule } from '../authorization/authorization.module';
 @Module({
-  imports: [TypeOrmModule.forFeature([RolePermission, Role, Permission])],
+  imports: [TypeOrmModule.forFeature([RolePermission, Role, Permission]),AuthorizationModule],
   controllers: [RolePermissionsController],
   providers: [RolePermissionsService],
 })

@@ -1,6 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
+import {
+  InjectRepository,
+} from '@nestjs/typeorm';
+
+import {
+  Repository,
+} from 'typeorm';
 
 import { User } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -13,12 +22,14 @@ export class UserService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  /**
-   * Maps DTO relation IDs to TypeORM relation objects.
-   */
+  // ==========================================
+  // MAP DTO RELATION IDs TO ENTITY RELATIONS
+  // ==========================================
+
   private mapRelations(
     dto: Partial<CreateUserDto | UpdateUserDto>,
   ): Partial<User> {
+
     const user: Partial<User> = {
       employee_code: dto.employee_code,
       first_name: dto.first_name,
@@ -36,38 +47,62 @@ export class UserService {
       status: dto.status,
     };
 
-    if (dto.roleId) {
+    // ==========================================
+    // ROLE
+    // ==========================================
+
+    if (dto.role_id) {
       user.role = {
-        role_id: dto.roleId,
+        role_id: dto.role_id,
       } as User['role'];
     }
 
-    if (dto.departmentId) {
+    // ==========================================
+    // DEPARTMENT
+    // ==========================================
+
+    if (dto.department_id) {
       user.department = {
-        department_id: dto.departmentId,
+        department_id: dto.department_id,
       } as User['department'];
     }
 
-    if (dto.designationId) {
+    // ==========================================
+    // DESIGNATION
+    // ==========================================
+
+    if (dto.designation_id) {
       user.designation = {
-        designation_id: dto.designationId,
+        designation_id: dto.designation_id,
       } as User['designation'];
     }
 
-    if (dto.jobCategoryId) {
+    // ==========================================
+    // JOB CATEGORY
+    // ==========================================
+
+    if (dto.job_category_id) {
       user.jobCategory = {
-        job_category_id: dto.jobCategoryId,
+        job_category_id: dto.job_category_id,
       } as User['jobCategory'];
     }
 
-    if (dto.shiftId) {
+    // ==========================================
+    // SHIFT
+    // ==========================================
+
+    if (dto.shift_id) {
       user.shift = {
-        shift_id: dto.shiftId,
+        shift_id: dto.shift_id,
       } as User['shift'];
     }
 
     return user;
   }
+
+  // ==========================================
+  // CREATE USER
+  // ==========================================
 
   async create(createUserDto: CreateUserDto) {
     const newUser = this.userRepository.create(
@@ -77,39 +112,71 @@ export class UserService {
     return await this.userRepository.save(newUser);
   }
 
+  // ==========================================
+  // FIND ALL USERS
+  // ==========================================
+
   async findAll() {
     return await this.userRepository.find({
-      relations: ['role', 'department', 'designation', 'shift', 'jobCategory'],
+      relations: [
+        'role',
+        'department',
+        'designation',
+        'shift',
+        'jobCategory',
+      ],
     });
   }
 
+  // ==========================================
+  // FIND ONE USER
+  // ==========================================
+
   async findOne(id: string) {
-    return await this.userRepository.findOne({
+    const user = await this.userRepository.findOne({
       where: {
         user_id: id,
       },
-      relations: ['role', 'department', 'designation', 'shift', 'jobCategory'],
+      relations: [
+        'role',
+        'department',
+        'designation',
+        'shift',
+        'jobCategory',
+      ],
     });
-  }
 
-  async update(id: string, updateUserDto: UpdateUserDto) {
-    const existingUser = await this.findOne(id);
-
-    if (!existingUser) {
+    if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    Object.assign(existingUser, this.mapRelations(updateUserDto));
+    return user;
+  }
+
+  // ==========================================
+  // UPDATE USER
+  // ==========================================
+
+  async update(
+    id: string,
+    updateUserDto: UpdateUserDto,
+  ) {
+    const existingUser = await this.findOne(id);
+
+    Object.assign(
+      existingUser,
+      this.mapRelations(updateUserDto),
+    );
 
     return await this.userRepository.save(existingUser);
   }
 
+  // ==========================================
+  // DELETE USER
+  // ==========================================
+
   async delete(id: string) {
     const existingUser = await this.findOne(id);
-
-    if (!existingUser) {
-      throw new NotFoundException('User not found');
-    }
 
     await this.userRepository.remove(existingUser);
 

@@ -6,9 +6,10 @@ import { User } from '../users/user.entity';
 
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
+import { AuthorizationModule } from '../authorization/authorization.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Attendance, User])],
+  imports: [TypeOrmModule.forFeature([Attendance, User]),AuthorizationModule],
   controllers: [AttendanceController],
   providers: [AttendanceService],
   exports: [AttendanceService],

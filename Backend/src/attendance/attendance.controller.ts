@@ -19,6 +19,9 @@ import {
 import { AttendanceService } from './attendance.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
 @ApiTags('Attendance')
 @Controller('attendance')
@@ -26,6 +29,8 @@ export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+@RequirePermission('attendance.create')
   @ApiOperation({
     summary: 'Create attendance record',
     description: 'Creates a new attendance record for an employee.',
@@ -46,6 +51,8 @@ export class AttendanceController {
   }
 
   @Get()
+ @UseGuards(PermissionGuard)
+@RequirePermission('attendance.view')
   @ApiOperation({
     summary: 'Get all attendance records',
   })
@@ -58,6 +65,8 @@ export class AttendanceController {
   }
 
   @Get(':id')
+ @UseGuards(PermissionGuard)
+@RequirePermission('attendance.view')
   @ApiOperation({
     summary: 'Get attendance by ID',
   })
@@ -79,6 +88,8 @@ export class AttendanceController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('ttendance.update')
   @ApiOperation({
     summary: 'Update attendance record',
   })
@@ -106,6 +117,8 @@ export class AttendanceController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('attendance.delete')
   @ApiOperation({
     summary: 'Delete attendance record',
   })

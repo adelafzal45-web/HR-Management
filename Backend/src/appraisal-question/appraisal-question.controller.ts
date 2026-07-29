@@ -19,6 +19,9 @@ import {
 import { AppraisalQuestionService } from './appraisal-question.service';
 import { CreateAppraisalQuestionDto } from './dto/create-appraisal-question.dto';
 import { UpdateAppraisalQuestionDto } from './dto/update-appraisal-question.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
 @ApiTags('Appraisal Questions')
 @Controller('appraisal-question')
@@ -28,6 +31,8 @@ export class AppraisalQuestionController {
   ) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+@RequirePermission('appraisal.create')
   @ApiOperation({
     summary: 'Create appraisal question',
     description: 'Creates a new appraisal question.',
@@ -44,6 +49,8 @@ export class AppraisalQuestionController {
   }
 
   @Get()
+  @UseGuards(PermissionGuard)
+@RequirePermission('appraisal.view')
   @ApiOperation({
     summary: 'Get all appraisal questions',
     description: 'Returns all appraisal questions.',
@@ -57,6 +64,8 @@ export class AppraisalQuestionController {
   }
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('appraisal.view')
   @ApiOperation({
     summary: 'Get appraisal question by ID',
     description: 'Returns a single appraisal question.',
@@ -79,6 +88,8 @@ export class AppraisalQuestionController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('appraisal.update')
   @ApiOperation({
     summary: 'Update appraisal question',
     description: 'Updates an existing appraisal question.',
@@ -99,6 +110,8 @@ export class AppraisalQuestionController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('appraisal.delete')
   @ApiOperation({
     summary: 'Delete appraisal question',
     description: 'Deletes an appraisal question.',

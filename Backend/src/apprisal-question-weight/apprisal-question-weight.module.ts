@@ -10,12 +10,15 @@ import { AppraisalQuestionWeightsController } from './apprisal-question-weight.c
 
 import { AppraisalQuestionWeightsService } from './apprisal-question-weight.service';
 
+import { AuthorizationModule } from '../authorization/authorization.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       AppraisalQuestionWeight,
       AppraisalQuestion,
     ]),
+    AuthorizationModule
   ],
 
   controllers: [

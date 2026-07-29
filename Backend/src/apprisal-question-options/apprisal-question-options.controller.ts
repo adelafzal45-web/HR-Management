@@ -21,6 +21,11 @@ import { AppraisalQuestionOptionsService } from './apprisal-question-options.ser
 import { CreateAppraisalQuestionOptionDto } from './dto/create.dto';
 
 import { UpdateAppraisalQuestionOptionDto } from './dto/update.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
+
+
 
 @ApiTags('Appraisal Question Options')
 @Controller('appraisal-question-options')
@@ -30,6 +35,9 @@ export class AppraisalQuestionOptionsController {
   ) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.create')
+
   @ApiOperation({
     summary: 'Create an appraisal question option',
     description:
@@ -54,6 +62,8 @@ export class AppraisalQuestionOptionsController {
   }
 
   @Get()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get all appraisal question options',
   })
@@ -67,6 +77,8 @@ export class AppraisalQuestionOptionsController {
   }
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get an appraisal question option',
   })
@@ -89,6 +101,8 @@ export class AppraisalQuestionOptionsController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update an appraisal question option',
   })
@@ -117,6 +131,8 @@ export class AppraisalQuestionOptionsController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Delete an appraisal question option',
   })

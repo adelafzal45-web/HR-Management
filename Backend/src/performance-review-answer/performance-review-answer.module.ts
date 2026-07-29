@@ -8,7 +8,7 @@ import { PerformanceReviewAnswerService } from './performance-review-answer.serv
 import { PerformanceReview } from '../performance-review/performance-review.entity';
 import { AppraisalQuestion } from '../appraisal-question/appraisal-question.entity';
 import { AppraisalQuestionOption } from '../apprisal-question-options/apprisal-question-options.entity';
-
+import { AuthorizationModule } from '../authorization/authorization.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -17,6 +17,7 @@ import { AppraisalQuestionOption } from '../apprisal-question-options/apprisal-q
       AppraisalQuestion,
       AppraisalQuestionOption,
     ]),
+     AuthorizationModule
   ],
 
   controllers: [

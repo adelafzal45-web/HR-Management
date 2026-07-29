@@ -20,13 +20,17 @@ import { UserService } from './users.service';
 import { User } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 @ApiTags('Users')
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.create')
   @ApiOperation({
     summary: 'Create a new user',
     description: 'Creates a new employee/user in the HR Management System.',
@@ -47,6 +51,8 @@ export class UserController {
   }
 
   @Get()
+ /* @UseGuards(PermissionGuard)
+ @RequirePermission('employees.view')*/
   @ApiOperation({
     summary: 'Get all users',
   })
@@ -54,11 +60,14 @@ export class UserController {
     status: 200,
     description: 'Returns all users.',
   })
-  findAll() {
+  findAll()
+   {
     return this.userService.findAll();
   }
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.create')
   @ApiOperation({
     summary: 'Get a user by ID',
   })
@@ -80,6 +89,8 @@ export class UserController {
   }
 
   @Patch(':id')
+ @UseGuards(PermissionGuard)
+@RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update a user',
   })
@@ -100,6 +111,8 @@ export class UserController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Delete a user',
   })

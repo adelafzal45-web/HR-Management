@@ -19,12 +19,17 @@ import {
 import { RolePermissionsService } from './role-permissions.service';
 import { CreateRolePermissionDto } from './dto/create-role-permission.dto';
 import { UpdateRolePermissionDto } from './dto/update-role.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
+
 @ApiTags('Role Permissions')
 @Controller('role-permissions')
 export class RolePermissionsController {
   constructor(private readonly rolePermissionService: RolePermissionsService) {}
 
   @Post()
+ 
   @ApiOperation({
     summary: 'Assign a permission to a role',
     description: 'Creates a new relationship between a role and a permission.',
@@ -45,6 +50,7 @@ export class RolePermissionsController {
   }
 
   @Get()
+ 
   @ApiOperation({
     summary: 'Get all role-permission mappings',
   })
@@ -57,6 +63,8 @@ export class RolePermissionsController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update a role-permission mapping',
   })
@@ -77,6 +85,8 @@ export class RolePermissionsController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Remove a role-permission mapping',
   })

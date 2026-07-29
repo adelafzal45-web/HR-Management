@@ -20,6 +20,10 @@ import { PerformanceReviewService } from './performance-review.service';
 
 import { CreatePerformanceReviewDto } from './dto/create-performance-review.dto';
 import { UpdatePerformanceReviewDto } from './dto/update-performance-review.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
+
 
 @ApiTags('Performance Reviews')
 @Controller('performance-reviews')
@@ -33,6 +37,8 @@ export class PerformanceReviewController {
   // =========================
 
   @Post()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.create')
   @ApiOperation({
     summary: 'Create a performance review',
     description:
@@ -64,6 +70,8 @@ export class PerformanceReviewController {
   // =========================
 
   @Get()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get all performance reviews',
   })
@@ -80,6 +88,8 @@ export class PerformanceReviewController {
   // =========================
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get a performance review by ID',
   })
@@ -105,6 +115,8 @@ export class PerformanceReviewController {
   // =========================
 
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update a performance review',
     description:
@@ -138,6 +150,8 @@ export class PerformanceReviewController {
   // =========================
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Delete a performance review',
   })

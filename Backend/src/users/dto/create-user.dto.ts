@@ -78,28 +78,37 @@ export class CreateUserDto {
   })
   status?: boolean;
 
+  // ==========================
+  // RELATION IDs
+  // ==========================
+
   @ApiProperty({
-    example: 'role-uuid',
+    example: '51323aec-760f-40a6-8660-fac0483079dc',
+    description: 'Role UUID',
   })
-  roleId!: string;
+  role_id!: string;
 
   @ApiProperty({
     example: 'department-uuid',
+    description: 'Department UUID',
   })
-  departmentId!: string;
+  department_id!: string;
 
   @ApiProperty({
     example: 'designation-uuid',
+    description: 'Designation UUID',
   })
-  designationId!: string;
+  designation_id!: string;
 
   @ApiProperty({
     example: 'job-category-uuid',
+    description: 'Job Category UUID',
   })
-  jobCategoryId!: string;
+  job_category_id!: string;
 
   @ApiProperty({
     example: 'shift-uuid',
+    description: 'Shift UUID',
   })
-  shiftId!: string;
+  shift_id!: string;
 }

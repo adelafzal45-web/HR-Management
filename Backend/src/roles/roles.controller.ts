@@ -20,6 +20,10 @@ import {
 
 import { RoleService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
+
 
 @ApiTags('Roles')
 @Controller('roles')
@@ -27,6 +31,7 @@ export class RoleController {
   constructor(private readonly roleService: RoleService) {}
 
   @Post()
+
   @ApiOperation({
     summary: 'Create a new role',
     description: 'Creates a new role in the HR Management System.',
@@ -47,6 +52,8 @@ export class RoleController {
   }
 
   @Get()
+
+
   @ApiOperation({
     summary: 'Get all roles',
   })
@@ -59,6 +66,7 @@ export class RoleController {
   }
 
   @Get(':id')
+ 
   @ApiOperation({
     summary: 'Get a role by ID',
   })
@@ -79,6 +87,8 @@ export class RoleController {
     return this.roleService.findOne(id);
   }
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('roles.update')
   @ApiOperation({
     summary: 'Update a role',
   })
@@ -99,6 +109,8 @@ export class RoleController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('roles.delete')
   @ApiOperation({
     summary: 'Delete a role',
   })

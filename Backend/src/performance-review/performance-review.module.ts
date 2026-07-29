@@ -8,7 +8,7 @@ import { PerformanceReviewService } from './performance-review.service';
 import { User } from '../users/user.entity';
 
 import { PerformanceReviewAnswer } from '../performance-review-answer/performance-review-answer.entity';
-
+import { AuthorizationModule } from '../authorization/authorization.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -16,6 +16,7 @@ import { PerformanceReviewAnswer } from '../performance-review-answer/performanc
       User,
       PerformanceReviewAnswer,
     ]),
+    AuthorizationModule 
   ],
 
   controllers: [

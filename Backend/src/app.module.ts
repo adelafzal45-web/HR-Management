@@ -23,6 +23,7 @@ import { PerformanceReviewModule } from './performance-review/performance-review
 import { AppraisalQuestionOptionsModule} from './apprisal-question-options/apprisal-question-options.module';
 import { AppraisalQuestionWeightsModule } from './apprisal-question-weight/apprisal-question-weight.module';
 import { PerformanceReviewAnswerModule } from './performance-review-answer/performance-review-answer.module';
+import { AuthorizationModule } from './authorization/authorization.module';
 
 @Module({
   imports: [
@@ -81,6 +82,8 @@ import { PerformanceReviewAnswerModule } from './performance-review-answer/perfo
     AppraisalQuestionWeightsModule,
 
     PerformanceReviewAnswerModule,
+
+    AuthorizationModule,
   ],
 
   controllers: [AppController],

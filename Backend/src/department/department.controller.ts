@@ -19,12 +19,18 @@ import {
 import { DepartmentsService } from './department.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
+
 @ApiTags('Departments')
 @Controller('departments')
 export class DepartmentsController {
   constructor(private readonly departmentService: DepartmentsService) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.create')
   @ApiOperation({
     summary: 'Create a new department',
     description: 'Creates a new department in the HR Management System.',
@@ -45,6 +51,8 @@ export class DepartmentsController {
   }
 
   @Get()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get all departments',
   })
@@ -57,6 +65,8 @@ export class DepartmentsController {
   }
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get a department by ID',
   })
@@ -77,6 +87,8 @@ export class DepartmentsController {
     return this.departmentService.findOne(id);
   }
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update a department',
   })
@@ -103,6 +115,8 @@ export class DepartmentsController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Delete a department',
   })

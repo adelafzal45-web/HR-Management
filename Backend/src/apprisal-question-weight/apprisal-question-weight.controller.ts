@@ -21,6 +21,9 @@ import { AppraisalQuestionWeightsService } from './apprisal-question-weight.serv
 import { CreateAppraisalQuestionWeightDto } from './dto/create.dto';
 
 import { UpdateAppraisalQuestionWeightDto } from './dto/update.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
 @ApiTags('Appraisal Question Weights')
 @Controller('appraisal-question-weights')
@@ -30,6 +33,8 @@ export class AppraisalQuestionWeightsController {
   ) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.create')
   @ApiOperation({
     summary: 'Create an appraisal question weight',
     description:
@@ -60,6 +65,8 @@ export class AppraisalQuestionWeightsController {
   }
 
   @Get()
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get all appraisal question weights',
   })
@@ -73,6 +80,8 @@ export class AppraisalQuestionWeightsController {
   }
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get an appraisal question weight',
   })
@@ -97,6 +106,8 @@ export class AppraisalQuestionWeightsController {
   }
 
   @Patch(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update an appraisal question weight',
   })
@@ -131,6 +142,8 @@ export class AppraisalQuestionWeightsController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Delete an appraisal question weight',
   })

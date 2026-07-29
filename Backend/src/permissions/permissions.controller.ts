@@ -10,6 +10,9 @@ import {
 
 import { PermissionsService } from './permissions.service';
 import { CreatePermissionDto } from './dto/create-permission.dto';
+import { UseGuards } from '@nestjs/common';
+import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
+import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
 @ApiTags('Permissions')
 @Controller('permissions')
@@ -17,6 +20,7 @@ export class PermissionsController {
   constructor(private readonly permissionService: PermissionsService) {}
 
   @Post()
+ 
   @ApiOperation({
     summary: 'Create a new permission',
     description: 'Creates a new permission in the HR Management System.',
@@ -37,6 +41,7 @@ export class PermissionsController {
   }
 
   @Get()
+ 
   @ApiOperation({
     summary: 'Get all permissions',
   })
@@ -49,6 +54,7 @@ export class PermissionsController {
   }
 
   @Get(':id')
+  
   @ApiOperation({
     summary: 'Get permission by ID',
   })
@@ -70,6 +76,8 @@ export class PermissionsController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionGuard)
+@RequirePermission('permissions.delete')
   @ApiOperation({
     summary: 'Delete a permission',
   })

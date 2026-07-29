@@ -9,6 +9,7 @@ import { AppraisalQuestion } from '../appraisal-question/appraisal-question.enti
 import { AppraisalQuestionOptionsController } from './apprisal-question-options.controller';
 
 import { AppraisalQuestionOptionsService } from './apprisal-question-options.service';
+import { AuthorizationModule } from '../authorization/authorization.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AppraisalQuestionOptionsService } from './apprisal-question-options.ser
       AppraisalQuestionOption,
       AppraisalQuestion,
     ]),
+     AuthorizationModule
   ],
 
   controllers: [
