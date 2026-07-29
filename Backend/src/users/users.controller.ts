@@ -82,20 +82,20 @@ export class UserController {
   // ==========================================
 
   @Get()
-  @UseGuards(PermissionGuard)
-  @RequirePermission('employees.view')
+  /*@UseGuards(PermissionGuard)
+  @RequirePermission('employees.view')*/
   @ApiOperation({
     summary: 'Get all users',
     description:
       'Returns all users/employees. The current user must have employees.view permission.',
   })
-  @ApiHeader({
+ /* @ApiHeader({
     name: 'x-user-id',
     description:
       'UUID of the user performing this action.',
     required: true,
     example: 'dced0533-ad5e-4f86-8e76-34e9a4e78451',
-  })
+  })*/
   @ApiResponse({
     status: 200,
     description: 'Returns all users.',
