@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -39,7 +36,6 @@ export class AuthorizationService {
     userId: string,
     permissionName: string,
   ): Promise<boolean> {
-
     // Find the CURRENT user and load:
     //
     // User → Role → RolePermissions → Permission
@@ -78,8 +74,7 @@ export class AuthorizationService {
     // GET ROLE PERMISSIONS
     // ------------------------------------------
 
-    const rolePermissions =
-      user.role.rolePermissions ?? [];
+    const rolePermissions = user.role.rolePermissions ?? [];
 
     // ------------------------------------------
     // CHECK REQUESTED PERMISSION
@@ -87,8 +82,7 @@ export class AuthorizationService {
 
     return rolePermissions.some(
       (rolePermission) =>
-        rolePermission.permission?.permission_name ===
-        permissionName,
+        rolePermission.permission?.permission_name === permissionName,
     );
   }
 }

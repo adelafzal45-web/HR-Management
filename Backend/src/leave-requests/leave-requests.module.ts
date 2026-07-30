@@ -8,7 +8,10 @@ import { LeaveRequestsController } from './leave-requests.controller';
 import { LeaveRequestsService } from './leave-requests.service';
 import { AuthorizationModule } from '../authorization/authorization.module';
 @Module({
-  imports: [TypeOrmModule.forFeature([LeaveRequest, User]), AuthorizationModule],
+  imports: [
+    TypeOrmModule.forFeature([LeaveRequest, User]),
+    AuthorizationModule,
+  ],
   controllers: [LeaveRequestsController],
   providers: [LeaveRequestsService],
   exports: [LeaveRequestsService],

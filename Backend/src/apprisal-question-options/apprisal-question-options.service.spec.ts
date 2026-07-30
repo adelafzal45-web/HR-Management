@@ -9,7 +9,9 @@ describe('ApprisalQuestionOptionsService', () => {
       providers: [ApprisalQuestionOptionsService],
     }).compile();
 
-    service = module.get<ApprisalQuestionOptionsService>(ApprisalQuestionOptionsService);
+    service = module.get<ApprisalQuestionOptionsService>(
+      ApprisalQuestionOptionsService,
+    );
   });
 
   it('should be defined', () => {

@@ -1,17 +1,31 @@
 import {
   IsDateString,
+  IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+import { EvaluationType } from '../../appraisal-forms/appraisal-forms.entity';
+
 export class CreatePerformanceReviewDto {
   @ApiProperty({
-    description: 'UUID of the employee conducting the review',
+    description: 'Appraisal Form ID',
+    example: '7d86f0b2-5c28-4f69-9bb2-cd4c90dd6d34',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  form_id!: string;
+
+  @ApiProperty({
+    description: 'Reviewer (Team Lead / Manager)',
     example: '7d86f0b2-5c28-4f69-9bb2-cd4c90dd6d34',
   })
   @IsUUID()
@@ -19,7 +33,7 @@ export class CreatePerformanceReviewDto {
   reviewer_id!: string;
 
   @ApiProperty({
-    description: 'UUID of the employee being reviewed',
+    description: 'Employee being evaluated',
     example: '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
   })
   @IsUUID()
@@ -27,8 +41,15 @@ export class CreatePerformanceReviewDto {
   reviewee_id!: string;
 
   @ApiProperty({
-    description: 'Review period',
-    example: '2026-Q2',
+    enum: EvaluationType,
+    example: EvaluationType.DAILY,
+  })
+  @IsEnum(EvaluationType)
+  evaluation_type!: EvaluationType;
+
+  @ApiProperty({
+    description: 'Review Period',
+    example: '2026-08-01',
   })
   @IsString()
   @IsNotEmpty()
@@ -36,23 +57,33 @@ export class CreatePerformanceReviewDto {
   review_period!: string;
 
   @ApiProperty({
-    description: 'Date on which the review was conducted',
-    example: '2026-07-28',
+    description: 'Review Date',
+    example: '2026-08-01',
   })
   @IsDateString()
-  @IsNotEmpty()
   review_date!: string;
 
   @ApiPropertyOptional({
-    description: 'Overall calculated score percentage',
-    example: 85.50,
+    description: 'Total Score Percentage',
+    example: 85.5,
   })
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
   total_score_percentage?: number;
 
   @ApiPropertyOptional({
-    description: 'Overall comments about the employee',
-    example: 'Excellent performance during this review period.',
+    description: 'Draft | Submitted | Completed',
+    example: 'Draft',
+  })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({
+    description: 'Review Comments',
+    example: 'Excellent performance.',
   })
   @IsOptional()
   @IsString()

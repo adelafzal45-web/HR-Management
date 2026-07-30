@@ -18,14 +18,10 @@ export class AppraisalQuestionOption {
   // Many Options -> One Question
   // ==========================================
 
-  @ManyToOne(
-    () => AppraisalQuestion,
-    (question) => question.options,
-    {
-      nullable: false,
-      onDelete: 'CASCADE',
-    },
-  )
+  @ManyToOne(() => AppraisalQuestion, (question) => question.options, {
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({
     name: 'question_id',
   })

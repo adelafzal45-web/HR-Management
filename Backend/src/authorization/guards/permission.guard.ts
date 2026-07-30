@@ -19,26 +19,19 @@ export class PermissionGuard implements CanActivate {
     private readonly authorizationService: AuthorizationService,
   ) {}
 
-  async canActivate(
-    context: ExecutionContext,
-  ): Promise<boolean> {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     // Get required permission from the endpoint
-    const permissionName =
-      this.reflector.getAllAndOverride<string>(
-        PERMISSION_KEY,
-        [
-          context.getHandler(),
-          context.getClass(),
-        ],
-      );
+    const permissionName = this.reflector.getAllAndOverride<string>(
+      PERMISSION_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     // Endpoint does not require permission
     if (!permissionName) {
       return true;
     }
 
-    const request =
-      context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest();
 
     /*
      * TEMPORARY:
@@ -51,16 +44,13 @@ export class PermissionGuard implements CanActivate {
     const userId = request.headers['x-user-id'];
 
     if (!userId) {
-      throw new UnauthorizedException(
-        'User ID is required',
-      );
+      throw new UnauthorizedException('User ID is required');
     }
 
-    const hasPermission =
-      await this.authorizationService.hasPermission(
-        userId,
-        permissionName,
-      );
+    const hasPermission = await this.authorizationService.hasPermission(
+      userId,
+      permissionName,
+    );
 
     if (!hasPermission) {
       throw new ForbiddenException(

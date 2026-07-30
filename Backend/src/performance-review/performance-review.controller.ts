@@ -24,7 +24,6 @@ import { UseGuards } from '@nestjs/common';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
-
 @ApiTags('Performance Reviews')
 @Controller('performance-reviews')
 export class PerformanceReviewController {
@@ -38,7 +37,7 @@ export class PerformanceReviewController {
 
   @Post()
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.create')
+  @RequirePermission('employees.create')
   @ApiOperation({
     summary: 'Create a performance review',
     description:
@@ -59,9 +58,7 @@ export class PerformanceReviewController {
     status: 404,
     description: 'Reviewer or reviewee employee not found.',
   })
-  create(
-    @Body() createDto: CreatePerformanceReviewDto,
-  ) {
+  create(@Body() createDto: CreatePerformanceReviewDto) {
     return this.performanceReviewService.create(createDto);
   }
 
@@ -71,7 +68,7 @@ export class PerformanceReviewController {
 
   @Get()
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.view')
+  @RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get all performance reviews',
   })
@@ -89,7 +86,7 @@ export class PerformanceReviewController {
 
   @Get(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.view')
+  @RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get a performance review by ID',
   })
@@ -116,11 +113,10 @@ export class PerformanceReviewController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.update')
+  @RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update a performance review',
-    description:
-      'Partially updates an existing performance review.',
+    description: 'Partially updates an existing performance review.',
   })
   @ApiParam({
     name: 'id',
@@ -151,7 +147,7 @@ export class PerformanceReviewController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.delete')
+  @RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Delete a performance review',
   })

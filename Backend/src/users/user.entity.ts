@@ -18,7 +18,6 @@ import { Shift } from '../shifts/shifts.entity';
 import { JobCategory } from '../job-categories/job-category.entity';
 import { Payroll } from '../payroll/payroll.entity';
 import { Notification } from '../notifications/notifications.entity';
-import { AppraisalQuestion } from '../appraisal-question/appraisal-question.entity';
 import { PerformanceReview } from '../performance-review/performance-review.entity';
 
 @Entity('users')
@@ -181,22 +180,16 @@ export class User {
   notifications!: Notification[];
 
   @OneToMany(
-  () => AppraisalQuestion,
-  (appraisalQuestion) => appraisalQuestion.createdBy,
-)
-appraisalQuestions!: AppraisalQuestion[];
+    () => PerformanceReview,
+    (performanceReview) => performanceReview.reviewer,
+  )
+  reviewsGiven!: PerformanceReview[];
 
-@OneToMany(
-  () => PerformanceReview,
-  (performanceReview) => performanceReview.reviewer,
-)
-reviewsGiven!: PerformanceReview[];
-
-@OneToMany(
-  () => PerformanceReview,
-  (performanceReview) => performanceReview.reviewee,
-)
-reviewsReceived!: PerformanceReview[];
+  @OneToMany(
+    () => PerformanceReview,
+    (performanceReview) => performanceReview.reviewee,
+  )
+  reviewsReceived!: PerformanceReview[];
 
   @CreateDateColumn()
   created_at!: Date;

@@ -23,16 +23,14 @@ import { UseGuards } from '@nestjs/common';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
-
 @ApiTags('Leave Requests')
 @Controller('leave-requests')
-
 export class LeaveRequestsController {
   constructor(private readonly leaveRequestsService: LeaveRequestsService) {}
 
   @Post()
   @UseGuards(PermissionGuard)
-@RequirePermission('leave-request.create')
+  @RequirePermission('leave-request.create')
   @ApiOperation({
     summary: 'Create a leave request',
     description: 'Allows an employee to submit a leave request.',
@@ -54,7 +52,7 @@ export class LeaveRequestsController {
 
   @Get()
   @UseGuards(PermissionGuard)
-@RequirePermission('leave-request.view')
+  @RequirePermission('leave-request.view')
   @ApiOperation({
     summary: 'Get all leave requests',
   })
@@ -68,7 +66,7 @@ export class LeaveRequestsController {
 
   @Get(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('leave-request.view')
+  @RequirePermission('leave-request.view')
   @ApiOperation({
     summary: 'Get leave request by ID',
   })
@@ -91,7 +89,7 @@ export class LeaveRequestsController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('leave-request.update')
+  @RequirePermission('leave-request.update')
   @ApiOperation({
     summary: 'Update a leave request',
   })
@@ -120,7 +118,7 @@ export class LeaveRequestsController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('leave-request.delete')
+  @RequirePermission('leave-request.delete')
   @ApiOperation({
     summary: 'Delete a leave request',
   })

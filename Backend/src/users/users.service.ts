@@ -1,15 +1,8 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
-import {
-  InjectRepository,
-} from '@nestjs/typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 
-import {
-  Repository,
-} from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { User } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -29,7 +22,6 @@ export class UserService {
   private mapRelations(
     dto: Partial<CreateUserDto | UpdateUserDto>,
   ): Partial<User> {
-
     const user: Partial<User> = {
       employee_code: dto.employee_code,
       first_name: dto.first_name,
@@ -118,13 +110,7 @@ export class UserService {
 
   async findAll() {
     return await this.userRepository.find({
-      relations: [
-        'role',
-        'department',
-        'designation',
-        'shift',
-        'jobCategory',
-      ],
+      relations: ['role', 'department', 'designation', 'shift', 'jobCategory'],
     });
   }
 
@@ -137,13 +123,7 @@ export class UserService {
       where: {
         user_id: id,
       },
-      relations: [
-        'role',
-        'department',
-        'designation',
-        'shift',
-        'jobCategory',
-      ],
+      relations: ['role', 'department', 'designation', 'shift', 'jobCategory'],
     });
 
     if (!user) {
@@ -157,16 +137,10 @@ export class UserService {
   // UPDATE USER
   // ==========================================
 
-  async update(
-    id: string,
-    updateUserDto: UpdateUserDto,
-  ) {
+  async update(id: string, updateUserDto: UpdateUserDto) {
     const existingUser = await this.findOne(id);
 
-    Object.assign(
-      existingUser,
-      this.mapRelations(updateUserDto),
-    );
+    Object.assign(existingUser, this.mapRelations(updateUserDto));
 
     return await this.userRepository.save(existingUser);
   }

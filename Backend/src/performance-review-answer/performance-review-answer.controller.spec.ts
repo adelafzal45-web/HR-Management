@@ -9,7 +9,9 @@ describe('PerformanceReviewAnswerController', () => {
       controllers: [PerformanceReviewAnswerController],
     }).compile();
 
-    controller = module.get<PerformanceReviewAnswerController>(PerformanceReviewAnswerController);
+    controller = module.get<PerformanceReviewAnswerController>(
+      PerformanceReviewAnswerController,
+    );
   });
 
   it('should be defined', () => {

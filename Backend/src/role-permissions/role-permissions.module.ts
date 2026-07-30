@@ -10,7 +10,10 @@ import { RolePermissionsService } from './role-permissions.service';
 
 import { AuthorizationModule } from '../authorization/authorization.module';
 @Module({
-  imports: [TypeOrmModule.forFeature([RolePermission, Role, Permission]),AuthorizationModule],
+  imports: [
+    TypeOrmModule.forFeature([RolePermission, Role, Permission]),
+    AuthorizationModule,
+  ],
   controllers: [RolePermissionsController],
   providers: [RolePermissionsService],
 })

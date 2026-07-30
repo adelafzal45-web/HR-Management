@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 
 import {
@@ -20,16 +21,14 @@ import { PerformanceReviewAnswerService } from './performance-review-answer.serv
 
 import { CreatePerformanceReviewAnswerDto } from './dto/create.dto';
 import { UpdatePerformanceReviewAnswerDto } from './dto/update.dto';
-import { UseGuards } from '@nestjs/common';
+
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
 @ApiTags('Performance Review Answers')
 @Controller('performance-review-answers')
 export class PerformanceReviewAnswerController {
-  constructor(
-    private readonly answerService: PerformanceReviewAnswerService,
-  ) {}
+  constructor(private readonly answerService: PerformanceReviewAnswerService) {}
 
   // ==========================================
   // CREATE
@@ -37,33 +36,19 @@ export class PerformanceReviewAnswerController {
 
   @Post()
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.create')
+  @RequirePermission('employees.create')
   @ApiOperation({
-    summary: 'Create a performance review answer',
-    description:
-      'Adds an answer to a specific appraisal question within a performance review.',
+    summary: 'Create Performance Review Answer',
+    description: 'Adds an answer against an Appraisal Form Question.',
   })
   @ApiBody({
     type: CreatePerformanceReviewAnswerDto,
   })
   @ApiResponse({
     status: 201,
-    description:
-      'Performance review answer created successfully.',
+    description: 'Performance Review Answer created successfully.',
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid request body.',
-  })
-  @ApiResponse({
-    status: 404,
-    description:
-      'Performance review, appraisal question, or selected option not found.',
-  })
-  create(
-    @Body()
-    createDto: CreatePerformanceReviewAnswerDto,
-  ) {
+  create(@Body() createDto: CreatePerformanceReviewAnswerDto) {
     return this.answerService.create(createDto);
   }
 
@@ -73,14 +58,13 @@ export class PerformanceReviewAnswerController {
 
   @Get()
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.view')
+  @RequirePermission('employees.view')
   @ApiOperation({
-    summary: 'Get all performance review answers',
+    summary: 'Get All Performance Review Answers',
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Returns all performance review answers.',
+    description: 'Returns all Performance Review Answers.',
   })
   findAll() {
     return this.answerService.findAll();
@@ -92,25 +76,21 @@ export class PerformanceReviewAnswerController {
 
   @Get(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.view')
+  @RequirePermission('employees.view')
   @ApiOperation({
-    summary: 'Get a performance review answer by ID',
+    summary: 'Get Performance Review Answer',
   })
   @ApiParam({
     name: 'id',
-    description: 'Performance review answer UUID',
-    example:
-      '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
+    description: 'Performance Review Answer UUID',
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Performance review answer found.',
+    description: 'Performance Review Answer found.',
   })
   @ApiResponse({
     status: 404,
-    description:
-      'Performance review answer not found.',
+    description: 'Performance Review Answer not found.',
   })
   findOne(@Param('id') id: string) {
     return this.answerService.findOne(id);
@@ -122,40 +102,26 @@ export class PerformanceReviewAnswerController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.update')
+  @RequirePermission('employees.update')
   @ApiOperation({
-    summary: 'Update a performance review answer',
-    description:
-      'Partially updates an existing performance review answer.',
+    summary: 'Update Performance Review Answer',
   })
   @ApiParam({
     name: 'id',
-    description: 'Performance review answer UUID',
-    example:
-      '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
+    description: 'Performance Review Answer UUID',
   })
   @ApiBody({
     type: UpdatePerformanceReviewAnswerDto,
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Performance review answer updated successfully.',
-  })
-  @ApiResponse({
-    status: 404,
-    description:
-      'Performance review answer not found.',
+    description: 'Performance Review Answer updated successfully.',
   })
   update(
     @Param('id') id: string,
-    @Body()
-    updateDto: UpdatePerformanceReviewAnswerDto,
+    @Body() updateDto: UpdatePerformanceReviewAnswerDto,
   ) {
-    return this.answerService.update(
-      id,
-      updateDto,
-    );
+    return this.answerService.update(id, updateDto);
   }
 
   // ==========================================
@@ -164,25 +130,17 @@ export class PerformanceReviewAnswerController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.delete')
+  @RequirePermission('employees.delete')
   @ApiOperation({
-    summary: 'Delete a performance review answer',
+    summary: 'Delete Performance Review Answer',
   })
   @ApiParam({
     name: 'id',
-    description: 'Performance review answer UUID',
-    example:
-      '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
+    description: 'Performance Review Answer UUID',
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Performance review answer deleted successfully.',
-  })
-  @ApiResponse({
-    status: 404,
-    description:
-      'Performance review answer not found.',
+    description: 'Performance Review Answer deleted successfully.',
   })
   remove(@Param('id') id: string) {
     return this.answerService.remove(id);

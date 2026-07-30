@@ -7,7 +7,7 @@ import { DepartmentsService } from './department.service';
 import { AuthorizationModule } from '../authorization/authorization.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Department]),AuthorizationModule],
+  imports: [TypeOrmModule.forFeature([Department]), AuthorizationModule],
   controllers: [DepartmentsController],
   providers: [DepartmentsService],
   exports: [DepartmentsService, TypeOrmModule],

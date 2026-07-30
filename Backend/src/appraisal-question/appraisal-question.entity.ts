@@ -2,36 +2,18 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  JoinColumn,
-  ManyToOne,
   OneToMany,
-  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
-import { User } from '../users/user.entity';
-import { PerformanceReview } from '../performance-review/performance-review.entity';
 import { AppraisalQuestionOption } from '../apprisal-question-options/apprisal-question-options.entity';
-import { AppraisalQuestionWeight } from '../apprisal-question-weight/apprisal-question-weight.entity';
+import { AppraisalFormQuestion } from '../appraisal-form-questions/appraisal-form-questions.entity';
 
 @Entity('appraisal_questions')
 export class AppraisalQuestion {
   @PrimaryGeneratedColumn('uuid')
   question_id!: string;
-
-  // ==========================================
-  // Question Creator
-  // ==========================================
-
-  @ManyToOne(() => User, (user) => user.appraisalQuestions, {
-    nullable: false,
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({
-    name: 'created_by',
-  })
-  createdBy!: User;
 
   // ==========================================
   // Question Details
@@ -56,38 +38,22 @@ export class AppraisalQuestion {
 
   // ==========================================
   // Question Options
-  // One Question -> Many Options
   // ==========================================
 
-  @OneToMany(
-    () => AppraisalQuestionOption,
-    (option) => option.question,
-    {
-      cascade: true,
-    },
-  )
+  @OneToMany(() => AppraisalQuestionOption, (option) => option.question, {
+    cascade: true,
+  })
   options!: AppraisalQuestionOption[];
 
   // ==========================================
-  // Question Weight
-  // One Question -> One Weight
+  // Appraisal Form Questions
   // ==========================================
 
-  @OneToOne(
-    () => AppraisalQuestionWeight,
-    (weight) => weight.question,
-    {
-      cascade: true,
-    },
+  @OneToMany(
+    () => AppraisalFormQuestion,
+    (formQuestion) => formQuestion.question,
   )
-  weight!: AppraisalQuestionWeight;
-
-  // ==========================================
-  // Performance Reviews
-  // ==========================================
-
- 
-  performanceReviews!: PerformanceReview[];
+  formQuestions!: AppraisalFormQuestion[];
 
   // ==========================================
   // Timestamps

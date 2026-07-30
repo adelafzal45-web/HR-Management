@@ -6,30 +6,26 @@ import { PerformanceReviewAnswerController } from './performance-review-answer.c
 import { PerformanceReviewAnswerService } from './performance-review-answer.service';
 
 import { PerformanceReview } from '../performance-review/performance-review.entity';
-import { AppraisalQuestion } from '../appraisal-question/appraisal-question.entity';
+import { AppraisalFormQuestion } from '../appraisal-form-questions/appraisal-form-questions.entity';
 import { AppraisalQuestionOption } from '../apprisal-question-options/apprisal-question-options.entity';
+
 import { AuthorizationModule } from '../authorization/authorization.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       PerformanceReviewAnswer,
       PerformanceReview,
-      AppraisalQuestion,
+      AppraisalFormQuestion,
       AppraisalQuestionOption,
     ]),
-     AuthorizationModule
+    AuthorizationModule,
   ],
 
-  controllers: [
-    PerformanceReviewAnswerController,
-  ],
+  controllers: [PerformanceReviewAnswerController],
 
-  providers: [
-    PerformanceReviewAnswerService,
-  ],
+  providers: [PerformanceReviewAnswerService],
 
-  exports: [
-    PerformanceReviewAnswerService,
-  ],
+  exports: [PerformanceReviewAnswerService],
 })
 export class PerformanceReviewAnswerModule {}

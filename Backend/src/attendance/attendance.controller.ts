@@ -30,7 +30,7 @@ export class AttendanceController {
 
   @Post()
   @UseGuards(PermissionGuard)
-@RequirePermission('attendance.create')
+  @RequirePermission('attendance.create')
   @ApiOperation({
     summary: 'Create attendance record',
     description: 'Creates a new attendance record for an employee.',
@@ -51,8 +51,8 @@ export class AttendanceController {
   }
 
   @Get()
- @UseGuards(PermissionGuard)
-@RequirePermission('attendance.view')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.view')
   @ApiOperation({
     summary: 'Get all attendance records',
   })
@@ -65,8 +65,8 @@ export class AttendanceController {
   }
 
   @Get(':id')
- @UseGuards(PermissionGuard)
-@RequirePermission('attendance.view')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.view')
   @ApiOperation({
     summary: 'Get attendance by ID',
   })
@@ -89,7 +89,7 @@ export class AttendanceController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('ttendance.update')
+  @RequirePermission('ttendance.update')
   @ApiOperation({
     summary: 'Update attendance record',
   })
@@ -118,7 +118,7 @@ export class AttendanceController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('attendance.delete')
+  @RequirePermission('attendance.delete')
   @ApiOperation({
     summary: 'Delete attendance record',
   })

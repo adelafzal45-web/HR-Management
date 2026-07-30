@@ -20,7 +20,6 @@ export class PermissionsController {
   constructor(private readonly permissionService: PermissionsService) {}
 
   @Post()
- 
   @ApiOperation({
     summary: 'Create a new permission',
     description: 'Creates a new permission in the HR Management System.',
@@ -41,7 +40,6 @@ export class PermissionsController {
   }
 
   @Get()
- 
   @ApiOperation({
     summary: 'Get all permissions',
   })
@@ -54,7 +52,6 @@ export class PermissionsController {
   }
 
   @Get(':id')
-  
   @ApiOperation({
     summary: 'Get permission by ID',
   })
@@ -77,7 +74,7 @@ export class PermissionsController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('permissions.delete')
+  @RequirePermission('permissions.delete')
   @ApiOperation({
     summary: 'Delete a permission',
   })

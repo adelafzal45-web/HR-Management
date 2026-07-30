@@ -21,7 +21,6 @@ import {
 import { AppraisalQuestionService } from './appraisal-question.service';
 import { CreateAppraisalQuestionDto } from './dto/create-appraisal-question.dto';
 import { UpdateAppraisalQuestionDto } from './dto/update-appraisal-question.dto';
-
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
@@ -191,10 +190,7 @@ export class AppraisalQuestionController {
     @Param('id') id: string,
     @Body() updateAppraisalQuestionDto: UpdateAppraisalQuestionDto,
   ) {
-    return this.appraisalQuestionService.update(
-      id,
-      updateAppraisalQuestionDto,
-    );
+    return this.appraisalQuestionService.update(id, updateAppraisalQuestionDto);
   }
 
   // ============================

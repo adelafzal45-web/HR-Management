@@ -1,22 +1,19 @@
 import {
+  IsBoolean,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
-  MaxLength,
-  IsNumber,
-  Min,
   Max,
+  Min,
 } from 'class-validator';
 
-import {
-  ApiProperty,
-  ApiPropertyOptional,
-} from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreatePerformanceReviewAnswerDto {
   @ApiProperty({
-    description: 'UUID of the performance review',
+    description: 'Performance Review UUID',
     example: '7d86f0b2-5c28-4f69-9bb2-cd4c90dd6d34',
   })
   @IsUUID()
@@ -24,16 +21,15 @@ export class CreatePerformanceReviewAnswerDto {
   review_id!: string;
 
   @ApiProperty({
-    description: 'UUID of the appraisal question',
-    example: '8f52df59-6b08-42c2-94f6-7a5d34f3d1d5',
+    description: 'Appraisal Form Question UUID',
+    example: '31bb67ea-3b8c-4d1d-bd9e-2d50cb3f9f67',
   })
   @IsUUID()
   @IsNotEmpty()
-  question_id!: string;
+  form_question_id!: string;
 
   @ApiPropertyOptional({
-    description:
-      'UUID of the selected appraisal question option. Used for rating-type questions.',
+    description: 'Selected option UUID (for Rating/Radio questions)',
     example: 'c12e45ab-7f4e-4f12-8e67-123456789abc',
   })
   @IsOptional()
@@ -41,19 +37,16 @@ export class CreatePerformanceReviewAnswerDto {
   selected_option_id?: string;
 
   @ApiPropertyOptional({
-    description:
-      'Text answer for a comment-type appraisal question.',
-    example:
-      'The employee consistently demonstrated strong communication skills.',
+    description: 'Comment/Text answer',
+    example: 'Excellent communication throughout the sprint.',
   })
   @IsOptional()
   @IsString()
   answer_comment?: string;
 
   @ApiPropertyOptional({
-    description:
-      'Calculated percentage score for this answer.',
-    example: 85.50,
+    description: 'Calculated percentage for this answer',
+    example: 20,
     minimum: 0,
     maximum: 100,
   })
@@ -62,4 +55,12 @@ export class CreatePerformanceReviewAnswerDto {
   @Min(0)
   @Max(100)
   answered_percentage?: number;
+
+  @ApiPropertyOptional({
+    description: 'Automatically marked zero because employee was absent',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  is_absent_auto_zero?: boolean;
 }

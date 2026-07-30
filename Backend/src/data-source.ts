@@ -12,11 +12,16 @@ import { Shift } from './shifts/shifts.entity';
 import { JobCategory } from './job-categories/job-category.entity';
 import { Notification } from './notifications/notifications.entity';
 import { Payroll } from './payroll/payroll.entity';
+
 import { AppraisalQuestion } from './appraisal-question/appraisal-question.entity';
-import {AppraisalQuestionOption} from'./apprisal-question-options/apprisal-question-options.entity';
-import{AppraisalQuestionWeight} from './apprisal-question-weight/apprisal-question-weight.entity'
+import { AppraisalQuestionOption } from './apprisal-question-options/apprisal-question-options.entity';
+
+import { AppraisalForms } from './appraisal-forms/appraisal-forms.entity';
+import { AppraisalFormQuestion } from './appraisal-form-questions/appraisal-form-questions.entity';
+
 import { PerformanceReview } from './performance-review/performance-review.entity';
-import {PerformanceReviewAnswer} from './performance-review-answer/performance-review-answer.entity'
+import { PerformanceReviewAnswer } from './performance-review-answer/performance-review-answer.entity';
+
 export const AppDataSource = new DataSource({
   type: 'postgres',
 
@@ -47,10 +52,10 @@ export const AppDataSource = new DataSource({
     Payroll,
     AppraisalQuestion,
     AppraisalQuestionOption,
-    AppraisalQuestionWeight,
+    AppraisalForms,
+    AppraisalFormQuestion,
     PerformanceReview,
-    PerformanceReviewAnswer
-
+    PerformanceReviewAnswer,
   ],
 
   migrations: ['src/migrations/*.ts'],

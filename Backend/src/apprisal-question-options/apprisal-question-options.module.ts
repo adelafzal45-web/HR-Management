@@ -13,23 +13,14 @@ import { AuthorizationModule } from '../authorization/authorization.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      AppraisalQuestionOption,
-      AppraisalQuestion,
-    ]),
-     AuthorizationModule
+    TypeOrmModule.forFeature([AppraisalQuestionOption, AppraisalQuestion]),
+    AuthorizationModule,
   ],
 
-  controllers: [
-    AppraisalQuestionOptionsController,
-  ],
+  controllers: [AppraisalQuestionOptionsController],
 
-  providers: [
-    AppraisalQuestionOptionsService,
-  ],
+  providers: [AppraisalQuestionOptionsService],
 
-  exports: [
-    AppraisalQuestionOptionsService,
-  ],
+  exports: [AppraisalQuestionOptionsService],
 })
 export class AppraisalQuestionOptionsModule {}

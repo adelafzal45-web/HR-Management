@@ -9,7 +9,9 @@ describe('ApprisalQuestionOptionsController', () => {
       controllers: [ApprisalQuestionOptionsController],
     }).compile();
 
-    controller = module.get<ApprisalQuestionOptionsController>(ApprisalQuestionOptionsController);
+    controller = module.get<ApprisalQuestionOptionsController>(
+      ApprisalQuestionOptionsController,
+    );
   });
 
   it('should be defined', () => {

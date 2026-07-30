@@ -30,7 +30,7 @@ export class DepartmentsController {
 
   @Post()
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.create')
+  @RequirePermission('employees.create')
   @ApiOperation({
     summary: 'Create a new department',
     description: 'Creates a new department in the HR Management System.',
@@ -52,7 +52,7 @@ export class DepartmentsController {
 
   @Get()
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.view')
+  @RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get all departments',
   })
@@ -66,7 +66,7 @@ export class DepartmentsController {
 
   @Get(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.view')
+  @RequirePermission('employees.view')
   @ApiOperation({
     summary: 'Get a department by ID',
   })
@@ -88,7 +88,7 @@ export class DepartmentsController {
   }
   @Patch(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.update')
+  @RequirePermission('employees.update')
   @ApiOperation({
     summary: 'Update a department',
   })
@@ -116,7 +116,7 @@ export class DepartmentsController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.delete')
+  @RequirePermission('employees.delete')
   @ApiOperation({
     summary: 'Delete a department',
   })

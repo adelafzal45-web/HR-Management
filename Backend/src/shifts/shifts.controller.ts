@@ -186,10 +186,7 @@ export class ShiftsController {
     status: 404,
     description: 'Shift not found.',
   })
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateShiftDto,
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateShiftDto) {
     return this.shiftsService.update(id, dto);
   }
 

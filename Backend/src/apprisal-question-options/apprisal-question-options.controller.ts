@@ -25,8 +25,6 @@ import { UseGuards } from '@nestjs/common';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
-
-
 @ApiTags('Appraisal Question Options')
 @Controller('appraisal-question-options')
 export class AppraisalQuestionOptionsController {
@@ -36,12 +34,10 @@ export class AppraisalQuestionOptionsController {
 
   @Post()
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.create')
-
+  @RequirePermission('apprisal-question.create')
   @ApiOperation({
     summary: 'Create an appraisal question option',
-    description:
-      'Creates a rating option for an appraisal question.',
+    description: 'Creates a rating option for an appraisal question.',
   })
   @ApiBody({
     type: CreateAppraisalQuestionOptionDto,
@@ -63,14 +59,13 @@ export class AppraisalQuestionOptionsController {
 
   @Get()
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.view')
+  @RequirePermission('apprisal-question.view')
   @ApiOperation({
     summary: 'Get all appraisal question options',
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Returns all appraisal question options.',
+    description: 'Returns all appraisal question options.',
   })
   findAll() {
     return this.optionService.findAll();
@@ -78,15 +73,14 @@ export class AppraisalQuestionOptionsController {
 
   @Get(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.view')
+  @RequirePermission('apprisal-question.view.own')
   @ApiOperation({
     summary: 'Get an appraisal question option',
   })
   @ApiParam({
     name: 'id',
     description: 'Appraisal question option UUID',
-    example:
-      '7f8b9c12-1234-4567-8901-123456789abc',
+    example: '7f8b9c12-1234-4567-8901-123456789abc',
   })
   @ApiResponse({
     status: 200,
@@ -102,7 +96,7 @@ export class AppraisalQuestionOptionsController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.update')
+  @RequirePermission('apprisal-question.update')
   @ApiOperation({
     summary: 'Update an appraisal question option',
   })
@@ -115,8 +109,7 @@ export class AppraisalQuestionOptionsController {
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Appraisal question option updated successfully.',
+    description: 'Appraisal question option updated successfully.',
   })
   @ApiResponse({
     status: 404,
@@ -132,7 +125,7 @@ export class AppraisalQuestionOptionsController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-@RequirePermission('employees.delete')
+  @RequirePermission('apprisal-question.delete')
   @ApiOperation({
     summary: 'Delete an appraisal question option',
   })
@@ -142,8 +135,7 @@ export class AppraisalQuestionOptionsController {
   })
   @ApiResponse({
     status: 200,
-    description:
-      'Appraisal question option deleted successfully.',
+    description: 'Appraisal question option deleted successfully.',
   })
   @ApiResponse({
     status: 404,

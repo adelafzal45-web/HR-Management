@@ -20,10 +20,11 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { AppraisalQuestionModule } from './appraisal-question/appraisal-question.module';
 import { PerformanceReviewModule } from './performance-review/performance-review.module';
-import { AppraisalQuestionOptionsModule} from './apprisal-question-options/apprisal-question-options.module';
-import { AppraisalQuestionWeightsModule } from './apprisal-question-weight/apprisal-question-weight.module';
+import { AppraisalQuestionOptionsModule } from './apprisal-question-options/apprisal-question-options.module';
 import { PerformanceReviewAnswerModule } from './performance-review-answer/performance-review-answer.module';
 import { AuthorizationModule } from './authorization/authorization.module';
+import { AppraisalFormsModule } from './appraisal-forms/appraisal-forms.module';
+import { AppraisalFormQuestionsModule } from './appraisal-form-questions/appraisal-form-questions.module';
 
 @Module({
   imports: [
@@ -79,11 +80,13 @@ import { AuthorizationModule } from './authorization/authorization.module';
 
     AppraisalQuestionOptionsModule,
 
-    AppraisalQuestionWeightsModule,
-
     PerformanceReviewAnswerModule,
 
     AuthorizationModule,
+
+    AppraisalFormsModule,
+
+    AppraisalFormQuestionsModule,
   ],
 
   controllers: [AppController],

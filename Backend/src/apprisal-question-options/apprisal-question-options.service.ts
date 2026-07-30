@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -34,9 +31,7 @@ export class AppraisalQuestionOptionsService {
     });
 
     if (!question) {
-      throw new NotFoundException(
-        'Appraisal question not found',
-      );
+      throw new NotFoundException('Appraisal question not found');
     }
 
     const option = this.optionRepository.create({
@@ -69,19 +64,14 @@ export class AppraisalQuestionOptionsService {
     });
 
     if (!option) {
-      throw new NotFoundException(
-        'Appraisal question option not found',
-      );
+      throw new NotFoundException('Appraisal question option not found');
     }
 
     return option;
   }
 
   // UPDATE
-  async update(
-    id: string,
-    dto: UpdateAppraisalQuestionOptionDto,
-  ) {
+  async update(id: string, dto: UpdateAppraisalQuestionOptionDto) {
     const option = await this.optionRepository.findOne({
       where: {
         option_id: id,
@@ -89,9 +79,7 @@ export class AppraisalQuestionOptionsService {
     });
 
     if (!option) {
-      throw new NotFoundException(
-        'Appraisal question option not found',
-      );
+      throw new NotFoundException('Appraisal question option not found');
     }
 
     if (dto.questionId) {
@@ -102,9 +90,7 @@ export class AppraisalQuestionOptionsService {
       });
 
       if (!question) {
-        throw new NotFoundException(
-          'Appraisal question not found',
-        );
+        throw new NotFoundException('Appraisal question not found');
       }
 
       option.question = question;
@@ -134,9 +120,7 @@ export class AppraisalQuestionOptionsService {
     });
 
     if (!option) {
-      throw new NotFoundException(
-        'Appraisal question option not found',
-      );
+      throw new NotFoundException('Appraisal question option not found');
     }
 
     await this.optionRepository.remove(option);
