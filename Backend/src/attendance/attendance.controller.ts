@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
 } from '@nestjs/common';
 
 import {
@@ -14,6 +15,7 @@ import {
   ApiResponse,
   ApiParam,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 
 import { AttendanceService } from './attendance.service';
@@ -64,6 +66,37 @@ export class AttendanceController {
     return this.attendanceService.findAll();
   }
 
+  @Get('working-day-calendar')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.view')
+  @ApiOperation({
+    summary: 'Working-day flags for a date range',
+    description:
+      'One entry per calendar day, so reports and calendars can mark non-working days and exclude them from absence calculations. Applies the designation -> department -> global fallback.',
+  })
+  @ApiQuery({ name: 'from', required: true, example: '2026-08-01' })
+  @ApiQuery({ name: 'to', required: true, example: '2026-08-31' })
+  @ApiQuery({ name: 'department_id', required: false })
+  @ApiQuery({ name: 'designation_id', required: false })
+  @ApiResponse({ status: 200, description: 'Calendar returned.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or reversed date range, or range longer than 366 days.',
+  })
+  getWorkingDayCalendar(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('department_id') departmentId?: string,
+    @Query('designation_id') designationId?: string,
+  ) {
+    return this.attendanceService.getWorkingDayCalendar(
+      from,
+      to,
+      departmentId,
+      designationId,
+    );
+  }
+
   @Get(':id')
   @UseGuards(PermissionGuard)
   @RequirePermission('attendance.view')
@@ -89,7 +122,7 @@ export class AttendanceController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('ttendance.update')
+  @RequirePermission('attendance.update')
   @ApiOperation({
     summary: 'Update attendance record',
   })

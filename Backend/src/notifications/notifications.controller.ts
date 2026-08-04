@@ -24,7 +24,7 @@ export class NotificationsController {
 
   @Post()
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.create')
+  @RequirePermission('notifications.create')
   @ApiOperation({
     summary: 'Create a new notification',
     description: 'Allows an Admin or HR to create a new notification.',
@@ -43,7 +43,7 @@ export class NotificationsController {
 
   @Get()
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.view')
+  @RequirePermission('notifications.view')
   @ApiOperation({
     summary: 'Get all notifications',
   })
@@ -57,7 +57,7 @@ export class NotificationsController {
 
   @Get(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.view')
+  @RequirePermission('notifications.view')
   @ApiOperation({
     summary: 'Get notification by ID',
   })
@@ -80,7 +80,7 @@ export class NotificationsController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.update')
+  @RequirePermission('notifications.update')
   @ApiOperation({
     summary: 'Update a notification',
   })
@@ -103,7 +103,7 @@ export class NotificationsController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.delete')
+  @RequirePermission('notifications.delete')
   @ApiOperation({
     summary: 'Delete a notification',
   })

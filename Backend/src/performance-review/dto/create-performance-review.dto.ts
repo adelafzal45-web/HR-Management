@@ -88,4 +88,11 @@ export class CreatePerformanceReviewDto {
   @IsOptional()
   @IsString()
   comments?: string;
+  @ApiProperty({
+    description: 'Attendance ID',
+    example: '1f40d503-c3d9-45ef-a2f2-a98d56b7c333',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  attendance_id!: string;
 }

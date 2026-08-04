@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Department } from '../department/department.entity';
+import { AppraisalForms } from '../appraisal-forms/appraisal-forms.entity';
 @Entity('designations')
 export class Designation {
   @PrimaryGeneratedColumn('uuid')
@@ -29,4 +30,6 @@ export class Designation {
 
   @OneToMany(() => User, (user) => user.designation)
   users!: User[];
+  @OneToMany(() => AppraisalForms, (appraisalForm) => appraisalForm.designation)
+  appraisalForms!: AppraisalForms[];
 }

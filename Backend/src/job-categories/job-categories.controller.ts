@@ -31,7 +31,7 @@ export class JobCategoriesController {
 
   @Post()
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.create')
+  @RequirePermission('job-categories.create')
   @ApiOperation({
     summary: 'Create Job Category',
   })
@@ -48,7 +48,7 @@ export class JobCategoriesController {
 
   @Get()
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.view')
+  @RequirePermission('job-categories.view')
   @ApiOperation({
     summary: 'Get all Job Categories',
   })
@@ -62,7 +62,7 @@ export class JobCategoriesController {
 
   @Get(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.view')
+  @RequirePermission('job-categories.view')
   @ApiOperation({
     summary: 'Get Job Category by ID',
   })
@@ -76,7 +76,7 @@ export class JobCategoriesController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.update')
+  @RequirePermission('job-categories.update')
   @ApiOperation({
     summary: 'Update Job Category',
   })
@@ -92,7 +92,7 @@ export class JobCategoriesController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.delete')
+  @RequirePermission('job-categories.delete')
   @ApiOperation({
     summary: 'Delete Job Category',
   })

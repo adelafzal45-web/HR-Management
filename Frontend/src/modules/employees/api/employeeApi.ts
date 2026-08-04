@@ -11,12 +11,13 @@
 // (Backend/src/users/{users.controller,users.service,user.entity}.ts and
 // dto/{create-user,update-user}.dto.ts) — not guessed from Swagger:
 //
-//   POST   /api/users        body: CreateUserDto        -> the created user
-//   GET    /api/users        (no query params supported — findAll() takes
-//                             none; ignored ones are dropped server-side)
-//   GET    /api/users/:id                                -> one user
-//   PATCH  /api/users/:id     body: Partial<CreateUserDto> -> the updated user
-//   DELETE /api/users/:id                                -> { message }
+// POST /api/users body: CreateUserDto -> the created user
+// GET /api/users query: search, department_id, status, page,
+// limit, sortBy, sortOrder
+// -> { data, total, page, limit, totalPages }
+// GET /api/users/:id -> one user
+// PATCH /api/users/:id body: Partial<CreateUserDto> -> the updated user
+// DELETE /api/users/:id -> { message }
 //
 // CreateUserDto (UpdateUserDto = PartialType(CreateUserDto), so same shape,
 // all optional) fields: employee_code, first_name, last_name, email,
@@ -35,43 +36,49 @@
 // relation's display field is `title`, not `name`. `fromApiUser` reads those
 // nested shapes directly.
 //
-// Not supported by this endpoint at all, so the frontend can't write them
-// here: `overtimeAllowed` (the entity has `is_overtime`/`working_hours`/
-// `overtime_hours`/`attendance_status` columns, but none are in
-// CreateUserDto/UpdateUserDto — presumably system-managed elsewhere, e.g.
-// attendance) and `managerId` (User has no manager relation/column at all).
+// This module predates the employee-management work and is kept for the five
+// other modules that consume it (AppraisalManagement, LeaveRequests,
+// AttendanceRecords, ProcessPayroll, adminOpsApi). New employee screens use
+// `employeeService.ts`, which speaks the current DTO shape directly —
+// snake_case throughout, with team leads, leave assignments, account settings
+// and photo upload. Prefer that for anything new.
+//
+// Two mappings here are historical: `overtimeAllowed` and `managerId`. Both
+// concepts now exist on the backend as `is_overtime` and `team_lead_id`, but
+// this module's readers still expect the old camelCase names, so the
+// normalizers below keep reading them. Writes go through employeeService.
 
 import { apiRequest, withDemoFallback, normalizeListResult } from "@/api/client";
 import { ENDPOINTS } from "@/app/config/endpoints";
 import {
-  mockEmployeesApi,
-  type Employee,
-  type EmployeePayload,
-  type EmployeeCreatePayload,
-  type ListParams,
-  type ListResult,
+ mockEmployeesApi,
+ type Employee,
+ type EmployeePayload,
+ type EmployeeCreatePayload,
+ type ListParams,
+ type ListResult,
 } from "@/modules/employees/mocks/employeeMockData";
 
 export type {
-  Employee,
-  EmployeePayload,
-  EmployeeCreatePayload,
-  Gender,
-  EmploymentType,
-  EmployeeStatus,
-  ListParams,
-  ListResult,
+ Employee,
+ EmployeePayload,
+ EmployeeCreatePayload,
+ Gender,
+ EmploymentType,
+ EmployeeStatus,
+ ListParams,
+ ListResult,
 } from "@/modules/employees/mocks/employeeMockData";
 
 const qs = (params: ListParams) => {
-  const search = new URLSearchParams();
-  if (params.search) search.set("search", params.search);
-  if (params.departmentId) search.set("departmentId", params.departmentId);
-  if (params.status) search.set("status", params.status);
-  if (params.page) search.set("page", String(params.page));
-  if (params.pageSize) search.set("pageSize", String(params.pageSize));
-  const str = search.toString();
-  return str ? `?${str}` : "";
+ const search = new URLSearchParams();
+ if (params.search) search.set("search", params.search);
+ if (params.departmentId) search.set("departmentId", params.departmentId);
+ if (params.status) search.set("status", params.status);
+ if (params.page) search.set("page", String(params.page));
+ if (params.pageSize) search.set("pageSize", String(params.pageSize));
+ const str = search.toString();
+ return str ? `?${str}` : "";
 };
 
 // ---- Wire <-> app-model mapping (per the /api/users Swagger schema) -------
@@ -82,15 +89,15 @@ const qs = (params: ListParams) => {
 // can key off it directly (labels, filter values, <Select> options, etc.).
 // These two maps are the only place that translate between the two.
 const EMPLOYMENT_TYPE_TO_API: Record<string, string> = {
-  full_time: "Full-Time",
-  part_time: "Part-Time",
-  contract: "Contract",
-  intern: "Intern",
+ full_time: "Full-Time",
+ part_time: "Part-Time",
+ contract: "Contract",
+ intern: "Intern",
 };
 const GENDER_TO_API: Record<string, string> = {
-  male: "Male",
-  female: "Female",
-  other: "Other",
+ male: "Male",
+ female: "Female",
+ other: "Other",
 };
 
 /**
@@ -100,38 +107,38 @@ const GENDER_TO_API: Record<string, string> = {
  *
  * Two fields are intentionally NOT sent, because the backend has nowhere to
  * put them:
- *  - `overtimeAllowed` — the entity's `is_overtime`/`working_hours`/
- *    `overtime_hours`/`attendance_status` columns exist, but none of them
- *    are in CreateUserDto/UpdateUserDto, so this endpoint can't write them
- *    (they're presumably system-managed, e.g. by the attendance module).
- *  - `managerId` — `User` has no manager relation/column anywhere in the
- *    entity; there's simply no such concept on this table.
+ * - `overtimeAllowed` — the entity's `is_overtime`/`working_hours`/
+ * `overtime_hours`/`attendance_status` columns exist, but none of them
+ * are in CreateUserDto/UpdateUserDto, so this endpoint can't write them
+ * (they're presumably system-managed, e.g. by the attendance module).
+ * - `managerId` — `User` has no manager relation/column anywhere in the
+ * entity; there's simply no such concept on this table.
  * There's no global ValidationPipe registered, so sending them wouldn't
  * error — they'd just be silently dropped. Leaving them out keeps this
  * function an honest description of what the backend actually accepts.
  */
 function toApiBody(payload: EmployeePayload | EmployeeCreatePayload) {
-  return {
-    employee_code: payload.employeeCode,
-    first_name: payload.firstName,
-    last_name: payload.lastName,
-    email: payload.email,
-    ...("password" in payload ? { password: payload.password } : {}),
-    phone: payload.phone,
-    profile_image: payload.profileImageUrl,
-    date_of_birth: payload.dateOfBirth,
-    gender: GENDER_TO_API[payload.gender] ?? payload.gender,
-    address: payload.address,
-    employee_type: EMPLOYMENT_TYPE_TO_API[payload.employmentType] ?? payload.employmentType,
-    joining_date: payload.joiningDate,
-    salary: payload.salary,
-    status: payload.status === "active",
-    roleId: payload.roleId,
-    departmentId: payload.departmentId,
-    designationId: payload.designationId,
-    jobCategoryId: payload.jobCategoryId,
-    shiftId: payload.shiftId,
-  };
+ return {
+ employee_code: payload.employeeCode,
+ first_name: payload.firstName,
+ last_name: payload.lastName,
+ email: payload.email,
+ ...("password" in payload ? { password: payload.password } : {}),
+ phone: payload.phone,
+ profile_image: payload.profileImageUrl,
+ date_of_birth: payload.dateOfBirth,
+ gender: GENDER_TO_API[payload.gender] ?? payload.gender,
+ address: payload.address,
+ employee_type: EMPLOYMENT_TYPE_TO_API[payload.employmentType] ?? payload.employmentType,
+ joining_date: payload.joiningDate,
+ salary: payload.salary,
+ status: payload.status === "active",
+ role_id: payload.roleId,
+ department_id: payload.departmentId,
+ designation_id: payload.designationId,
+ job_category_id: payload.jobCategoryId,
+ shift_id: payload.shiftId,
+ };
 }
 
 /**
@@ -145,7 +152,7 @@ function toApiBody(payload: EmployeePayload | EmployeeCreatePayload) {
 // app's internal model uses lowercase snake_case. Normalize instead of
 // hardcoding a lookup table so any casing/spacing variant still matches.
 const toSnake = (v: unknown): string =>
-  typeof v === "string" ? v.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
+ typeof v === "string" ? v.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
 
 // Shared, module-level so remove() (and anything else that has to read a raw
 // wire object defensively) can reuse them instead of guessing at shape.
@@ -154,119 +161,121 @@ const num = (v: unknown, fallback = 0) => (typeof v === "number" ? v : Number(v)
 const bool = (v: unknown) => v === true || v === "true" || v === 1;
 const pick = (...vals: unknown[]) => vals.find((v) => v !== undefined && v !== null && v !== "");
 const nested = (v: unknown, key: string): unknown =>
-  v && typeof v === "object" ? (v as Record<string, unknown>)[key] : undefined;
+ v && typeof v === "object" ? (v as Record<string, unknown>)[key] : undefined;
 
 function fromApiUser(rawIn: Record<string, unknown> | null | undefined): Employee {
-  // Defensive against a 200/201 with an empty or unexpected body — fall back
-  // to an empty object rather than throwing deep inside a `.then()`.
-  const raw = rawIn && typeof rawIn === "object" ? rawIn : {};
-  const gender = toSnake(raw.gender);
-  const employmentType = toSnake(pick(raw.employmentType, raw.employee_type));
+ // Defensive against a 200/201 with an empty or unexpected body — fall back
+ // to an empty object rather than throwing deep inside a `.then()`.
+ const raw = rawIn && typeof rawIn === "object" ? rawIn : {};
+ const gender = toSnake(raw.gender);
+ const employmentType = toSnake(pick(raw.employmentType, raw.employee_type));
 
-  return {
-    employeeId: str(pick(raw.employeeId, raw.id, raw.user_id)),
-    employeeCode: str(pick(raw.employeeCode, raw.employee_code)),
-    firstName: str(pick(raw.firstName, raw.first_name)),
-    lastName: str(pick(raw.lastName, raw.last_name)),
-    email: str(raw.email),
-    phone: str(raw.phone),
-    profileImageUrl: str(pick(raw.profileImageUrl, raw.profile_image)),
-    dateOfBirth: str(pick(raw.dateOfBirth, raw.date_of_birth)),
-    gender: (["male", "female", "other"].includes(gender) ? gender : "male") as Employee["gender"],
-    address: str(raw.address),
-    joiningDate: str(pick(raw.joiningDate, raw.joining_date)),
-    employmentType: (["full_time", "part_time", "contract", "intern"].includes(employmentType)
-      ? employmentType
-      : "full_time") as Employee["employmentType"],
-    salary: num(raw.salary),
-    // Live field is `is_overtime`; `overtimeAllowed`/`overtime_allowed` kept
-    // as fallbacks in case the backend renames it later.
-    overtimeAllowed: bool(pick(raw.overtimeAllowed, raw.overtime_allowed, raw.is_overtime)),
-    roleId: str(pick(raw.roleId, nested(raw.role, "role_id"), nested(raw.role, "id"))),
-    roleName: str(pick(raw.roleName, nested(raw.role, "role_name"), nested(raw.role, "name")), "—"),
-    departmentId: str(pick(raw.departmentId, nested(raw.department, "department_id"), nested(raw.department, "id"))),
-    departmentName: str(
-      pick(raw.departmentName, nested(raw.department, "department_name"), nested(raw.department, "name")),
-      "—",
-    ),
-    designationId: str(
-      pick(raw.designationId, nested(raw.designation, "designation_id"), nested(raw.designation, "id")),
-    ),
-    // The designation relation exposes the title under `title`, not `name`.
-    designationName: str(
-      pick(raw.designationName, nested(raw.designation, "title"), nested(raw.designation, "name")),
-      "—",
-    ),
-    jobCategoryId: str(
-      pick(raw.jobCategoryId, nested(raw.jobCategory, "job_category_id"), nested(raw.jobCategory, "id")),
-    ),
-    jobCategoryName: str(
-      pick(raw.jobCategoryName, nested(raw.jobCategory, "job_category_name"), nested(raw.jobCategory, "name")),
-      "—",
-    ),
-    shiftId: str(pick(raw.shiftId, nested(raw.shift, "shift_id"), nested(raw.shift, "id"))),
-    shiftName: str(pick(raw.shiftName, nested(raw.shift, "shift_name"), nested(raw.shift, "name")), "—"),
-    managerId: str(pick(raw.managerId, raw.manager_id, nested(raw.manager, "user_id"), nested(raw.manager, "id"))),
-    managerName: str(
-      pick(
-        raw.managerName,
-        nested(raw.manager, "name"),
-        [nested(raw.manager, "first_name"), nested(raw.manager, "last_name")].filter(Boolean).join(" ") || undefined,
-      ),
-      "—",
-    ),
-    status: bool(raw.status) || raw.status === "active" ? "active" : "inactive",
-    createdAt: str(pick(raw.createdAt, raw.created_at), new Date().toISOString().slice(0, 10)),
-  };
+ return {
+ employeeId: str(pick(raw.employeeId, raw.id, raw.user_id)),
+ employeeCode: str(pick(raw.employeeCode, raw.employee_code)),
+ firstName: str(pick(raw.firstName, raw.first_name)),
+ lastName: str(pick(raw.lastName, raw.last_name)),
+ email: str(raw.email),
+ phone: str(raw.phone),
+ profileImageUrl: str(pick(raw.profileImageUrl, raw.profile_image)),
+ /** 128px derivative of `profileImageUrl`, for small renderings. */
+ profileImageThumbUrl: str(pick(raw.profileImageThumbUrl, raw.profile_image_thumb)),
+ dateOfBirth: str(pick(raw.dateOfBirth, raw.date_of_birth)),
+ gender: (["male", "female", "other"].includes(gender) ? gender : "male") as Employee["gender"],
+ address: str(raw.address),
+ joiningDate: str(pick(raw.joiningDate, raw.joining_date)),
+ employmentType: (["full_time", "part_time", "contract", "intern"].includes(employmentType)
+ ? employmentType
+ : "full_time") as Employee["employmentType"],
+ salary: num(raw.salary),
+ // Live field is `is_overtime`; `overtimeAllowed`/`overtime_allowed` kept
+ // as fallbacks in case the backend renames it later.
+ overtimeAllowed: bool(pick(raw.overtimeAllowed, raw.overtime_allowed, raw.is_overtime)),
+ roleId: str(pick(raw.roleId, nested(raw.role, "role_id"), nested(raw.role, "id"))),
+ roleName: str(pick(raw.roleName, nested(raw.role, "role_name"), nested(raw.role, "name")), "—"),
+ departmentId: str(pick(raw.departmentId, nested(raw.department, "department_id"), nested(raw.department, "id"))),
+ departmentName: str(
+ pick(raw.departmentName, nested(raw.department, "department_name"), nested(raw.department, "name")),
+ "—",
+ ),
+ designationId: str(
+ pick(raw.designationId, nested(raw.designation, "designation_id"), nested(raw.designation, "id")),
+ ),
+ // The designation relation exposes the title under `title`, not `name`.
+ designationName: str(
+ pick(raw.designationName, nested(raw.designation, "title"), nested(raw.designation, "name")),
+ "—",
+ ),
+ jobCategoryId: str(
+ pick(raw.jobCategoryId, nested(raw.jobCategory, "job_category_id"), nested(raw.jobCategory, "id")),
+ ),
+ jobCategoryName: str(
+ pick(raw.jobCategoryName, nested(raw.jobCategory, "job_category_name"), nested(raw.jobCategory, "name")),
+ "—",
+ ),
+ shiftId: str(pick(raw.shiftId, nested(raw.shift, "shift_id"), nested(raw.shift, "id"))),
+ shiftName: str(pick(raw.shiftName, nested(raw.shift, "shift_name"), nested(raw.shift, "name")), "—"),
+ managerId: str(pick(raw.managerId, raw.manager_id, nested(raw.manager, "user_id"), nested(raw.manager, "id"))),
+ managerName: str(
+ pick(
+ raw.managerName,
+ nested(raw.manager, "name"),
+ [nested(raw.manager, "first_name"), nested(raw.manager, "last_name")].filter(Boolean).join(" ") || undefined,
+ ),
+ "—",
+ ),
+ status: bool(raw.status) || raw.status === "active" ? "active" : "inactive",
+ createdAt: str(pick(raw.createdAt, raw.created_at), new Date().toISOString().slice(0, 10)),
+ };
 }
 
 export const employeesApi = {
-  list: (params: ListParams = {}) =>
-    withDemoFallback<ListResult<Employee>>(
-      () =>
-        apiRequest<unknown>(`${ENDPOINTS.employees.base}${qs(params)}`).then((raw) => {
-          const normalized = normalizeListResult<Record<string, unknown>>(raw);
-          return { data: normalized.data.map(fromApiUser), total: normalized.total };
-        }),
-      () => mockEmployeesApi.list(params),
-    ),
+ list: (params: ListParams = {}) =>
+ withDemoFallback<ListResult<Employee>>(
+ () =>
+ apiRequest<unknown>(`${ENDPOINTS.employees.base}${qs(params)}`).then((raw) => {
+ const normalized = normalizeListResult<Record<string, unknown>>(raw);
+ return { data: normalized.data.map(fromApiUser), total: normalized.total };
+ }),
+ () => mockEmployeesApi.list(params),
+ ),
 
-  getById: (id: string) =>
-    withDemoFallback<Employee>(
-      () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id)).then(fromApiUser),
-      () => mockEmployeesApi.getById(id),
-    ),
+ getById: (id: string) =>
+ withDemoFallback<Employee>(
+ () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id)).then(fromApiUser),
+ () => mockEmployeesApi.getById(id),
+ ),
 
-  create: (payload: EmployeeCreatePayload) =>
-    withDemoFallback<Employee>(
-      () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.base, { method: "POST", body: toApiBody(payload) }).then(fromApiUser),
-      () => mockEmployeesApi.create(payload),
-    ),
+ create: (payload: EmployeeCreatePayload) =>
+ withDemoFallback<Employee>(
+ () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.base, { method: "POST", body: toApiBody(payload) }).then(fromApiUser),
+ () => mockEmployeesApi.create(payload),
+ ),
 
-  update: (id: string, payload: EmployeePayload) =>
-    withDemoFallback<Employee>(
-      () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id), { method: "PATCH", body: toApiBody(payload) }).then(fromApiUser),
-      () => mockEmployeesApi.update(id, payload),
-    ),
+ update: (id: string, payload: EmployeePayload) =>
+ withDemoFallback<Employee>(
+ () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id), { method: "PATCH", body: toApiBody(payload) }).then(fromApiUser),
+ () => mockEmployeesApi.update(id, payload),
+ ),
 
-  setStatus: (id: string, status: "active" | "inactive") =>
-    withDemoFallback<Employee>(
-      () =>
-        apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id), { method: "PATCH", body: { status: status === "active" } }).then(
-          fromApiUser,
-        ),
-      () => mockEmployeesApi.setStatus(id, status),
-    ),
+ setStatus: (id: string, status: "active" | "inactive") =>
+ withDemoFallback<Employee>(
+ () =>
+ apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id), { method: "PATCH", body: { status: status === "active" } }).then(
+ fromApiUser,
+ ),
+ () => mockEmployeesApi.setStatus(id, status),
+ ),
 
-  remove: (id: string) =>
-    withDemoFallback<{ employeeId: string }>(
-      () =>
-        apiRequest<Record<string, unknown> | null>(ENDPOINTS.employees.byId(id), { method: "DELETE" }).then((raw) => ({
-          // A 204/empty body, `{ employeeId }`, `{ user_id }`, or the full
-          // deleted user object should all resolve correctly — fall back to
-          // the id we requested deletion of if the body doesn't echo one.
-          employeeId: str(pick(raw?.employeeId, raw?.id, raw?.user_id), id),
-        })),
-      () => mockEmployeesApi.remove(id),
-    ),
+ remove: (id: string) =>
+ withDemoFallback<{ employeeId: string }>(
+ () =>
+ apiRequest<Record<string, unknown> | null>(ENDPOINTS.employees.byId(id), { method: "DELETE" }).then((raw) => ({
+ // A 204/empty body, `{ employeeId }`, `{ user_id }`, or the full
+ // deleted user object should all resolve correctly — fall back to
+ // the id we requested deletion of if the body doesn't echo one.
+ employeeId: str(pick(raw?.employeeId, raw?.id, raw?.user_id), id),
+ })),
+ () => mockEmployeesApi.remove(id),
+ ),
 };

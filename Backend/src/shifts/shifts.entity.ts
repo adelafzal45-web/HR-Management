@@ -33,6 +33,11 @@ export class Shift {
   @Column({
     default: 0,
   })
+  break_duration_minutes!: number;
+
+  @Column({
+    default: 0,
+  })
   grace_period_minutes!: number;
 
   @Column({

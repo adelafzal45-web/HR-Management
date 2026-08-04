@@ -85,4 +85,37 @@ export class AuthorizationService {
         rolePermission.permission?.permission_name === permissionName,
     );
   }
+
+  /**
+   * Every permission name granted to a user's role.
+   *
+   * Used at login so the frontend can gate its UI off the caller's real
+   * permission set without having to read the RBAC config endpoints (which
+   * are HR-only). Returns an empty array for a user with no role — the
+   * least-privilege default.
+   */
+  async getPermissionsForUser(userId: string): Promise<string[]> {
+    const user = await this.userRepository.findOne({
+      where: { user_id: userId },
+      relations: {
+        role: {
+          rolePermissions: {
+            permission: true,
+          },
+        },
+      },
+    });
+
+    if (!user?.role) {
+      return [];
+    }
+
+    const names = (user.role.rolePermissions ?? [])
+      .map((rp) => rp.permission?.permission_name)
+      .filter((name): name is string => Boolean(name));
+
+    // The role_permissions table has no unique constraint on
+    // (role_id, permission_id), so duplicates are possible.
+    return [...new Set(names)].sort();
+  }
 }

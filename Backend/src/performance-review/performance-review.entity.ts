@@ -13,6 +13,7 @@ import { User } from '../users/user.entity';
 import { Attendance } from '../attendance/attendance.entity';
 
 import { PerformanceReviewAnswer } from '../performance-review-answer/performance-review-answer.entity';
+import { ReviewApproval } from './review-approval.entity';
 
 import {
   AppraisalForms,
@@ -69,17 +70,20 @@ export class PerformanceReview {
 
   // ==========================================
   // Attendance Link
-  // Employee Attendance For This Evaluation Day
+  // Optional: only day-bound (Daily) evaluations reference an attendance row.
+  // Periodic reviews are not tied to a single day, so this stays null.
+  // Matches the nullable attendance_id column in
+  // 1785500000000-AppraisalVerticalFixes.
   // ==========================================
 
   @ManyToOne(() => Attendance, (attendance) => attendance.performanceReviews, {
-    nullable: false,
-    onDelete: 'CASCADE',
+    nullable: true,
+    onDelete: 'SET NULL',
   })
   @JoinColumn({
     name: 'attendance_id',
   })
-  attendance!: Attendance;
+  attendance?: Attendance | null;
 
   // ==========================================
   // Evaluation Type
@@ -89,6 +93,7 @@ export class PerformanceReview {
   @Column({
     type: 'enum',
     enum: EvaluationType,
+    enumName: 'performance_reviews_evaluation_type_enum',
   })
   evaluation_type!: EvaluationType;
 
@@ -125,7 +130,13 @@ export class PerformanceReview {
 
   // ==========================================
   // Review Status
-  // Draft | Submitted | Completed
+  // Draft | Submitted | Approved | Rejected
+  //
+  // A review is locked once it leaves Draft: submitting sets locked_at, and
+  // further edits are rejected with 409 until HR reopens it (which clears
+  // locked_at and returns the status to Draft). 'Completed' was the legacy
+  // terminal value and was folded into 'Submitted' by the
+  // AppraisalDynamicForms migration — nothing writes it anymore.
   // ==========================================
 
   @Column({
@@ -135,11 +146,59 @@ export class PerformanceReview {
   })
   status!: string;
 
+  /** When the review was submitted (locked). */
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+  })
+  submitted_at?: Date | null;
+
+  /** Set together with submitted_at; cleared by a reopen. */
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+  })
+  locked_at?: Date | null;
+
+  /** Who approved (or last approved) this review; null until approval. */
+  @ManyToOne(() => User, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({
+    name: 'approved_by_user_id',
+  })
+  approvedBy?: User | null;
+
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+  })
+  approved_at?: Date | null;
+
+  /** True when the scheduler created this review, not a human. */
+  @Column({
+    type: 'boolean',
+    default: false,
+  })
+  is_auto_generated!: boolean;
+
   @Column({
     type: 'text',
     nullable: true,
   })
   comments?: string;
+
+  // ==========================================
+  // Reviewer's Recommendation
+  // Added by 1785500000000-AppraisalVerticalFixes.
+  // ==========================================
+
+  @Column({
+    type: 'text',
+    nullable: true,
+  })
+  recommendation?: string;
 
   // ==========================================
   // Review Answers
@@ -149,6 +208,14 @@ export class PerformanceReview {
     cascade: true,
   })
   answers!: PerformanceReviewAnswer[];
+
+  // ==========================================
+  // Approval trail
+  // Append-only: one row per submit / approve / reject / reopen.
+  // ==========================================
+
+  @OneToMany(() => ReviewApproval, (approval) => approval.review)
+  approvals!: ReviewApproval[];
 
   // ==========================================
   // Timestamps

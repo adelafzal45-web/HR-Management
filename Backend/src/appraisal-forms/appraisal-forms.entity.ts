@@ -5,10 +5,23 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 
 import { PerformanceReview } from '../performance-review/performance-review.entity';
 import { AppraisalFormQuestion } from '../appraisal-form-questions/appraisal-form-questions.entity';
+import { AppraisalFormAssignment } from './appraisal-form-assignment.entity';
+import { Department } from '../department/department.entity';
+import { Designation } from '../designation/designation.entity';
+import { User } from '../users/user.entity';
+
+/** Lifecycle of a form: questions are editable only while Draft. */
+export enum FormStatus {
+  DRAFT = 'Draft',
+  PUBLISHED = 'Published',
+  ARCHIVED = 'Archived',
+}
 
 export enum EvaluationType {
   DAILY = 'Daily',
@@ -46,23 +59,32 @@ export class AppraisalForms {
   })
   status!: string;
 
-  @Column({
-    type: 'uuid',
+  @ManyToOne(() => Department, (department) => department.appraisalForms, {
     nullable: true,
+    onDelete: 'SET NULL',
   })
-  department_id?: string;
+  @JoinColumn({
+    name: 'department_id',
+  })
+  department?: Department;
 
-  @Column({
-    type: 'uuid',
+  @ManyToOne(() => Designation, (designation) => designation.appraisalForms, {
     nullable: true,
+    onDelete: 'SET NULL',
   })
-  designation_id?: string;
+  @JoinColumn({
+    name: 'designation_id',
+  })
+  designation?: Designation;
 
-  @Column({
-    type: 'uuid',
+  @ManyToOne(() => User, (user) => user.createdAppraisalForms, {
     nullable: true,
+    onDelete: 'SET NULL',
   })
-  created_by?: string;
+  @JoinColumn({
+    name: 'created_by',
+  })
+  createdBy?: User;
 
   @Column({
     default: true,
@@ -85,6 +107,16 @@ export class AppraisalForms {
     (formQuestion) => formQuestion.appraisalForm,
   )
   formQuestions!: AppraisalFormQuestion[];
+
+  // ==========================================
+  // Assignments (department / designation / employee)
+  // ==========================================
+
+  @OneToMany(
+    () => AppraisalFormAssignment,
+    (assignment) => assignment.form,
+  )
+  assignments!: AppraisalFormAssignment[];
 
   // ==========================================
   // Timestamps

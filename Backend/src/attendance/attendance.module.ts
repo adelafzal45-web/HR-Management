@@ -10,6 +10,7 @@ import { AttendanceService } from './attendance.service';
 import { PerformanceReviewModule } from '../performance-review/performance-review.module';
 
 import { AuthorizationModule } from '../authorization/authorization.module';
+import { WorkingDaySchedulesModule } from '../working-day-schedules/working-day-schedules.module';
 
 @Module({
   imports: [
@@ -18,6 +19,10 @@ import { AuthorizationModule } from '../authorization/authorization.module';
     forwardRef(() => PerformanceReviewModule),
 
     AuthorizationModule,
+
+    // Attendance must know which days are working days before it can decide
+    // what counts as an absence.
+    WorkingDaySchedulesModule,
   ],
 
   controllers: [AttendanceController],

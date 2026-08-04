@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 
 import { User } from '../users/user.entity';
 import { Designation } from '../designation/designation.entity';
+import { AppraisalForms } from '../appraisal-forms/appraisal-forms.entity';
 @Entity('departments')
 export class Department {
   @PrimaryGeneratedColumn('uuid')
@@ -24,4 +25,6 @@ export class Department {
 
   @OneToMany(() => Designation, (designation) => designation.department)
   designations!: Designation[];
+  @OneToMany(() => AppraisalForms, (appraisalForm) => appraisalForm.department)
+  appraisalForms!: AppraisalForms[];
 }

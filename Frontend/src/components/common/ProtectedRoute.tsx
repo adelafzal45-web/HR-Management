@@ -1,20 +1,25 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "@/app/providers/AuthContext";
-import type { AuthUser } from "@/utils/auth";
+import { useAuth, type AuthUser } from "@/app/providers/AuthContext";
+import LoadingOverlay from "@/components/common/LoadingOverlay";
 
 type ProtectedRouteProps = {
   children: ReactNode;
   // When provided, the user's `role` must be one of these to view the route
   // (Team Lead / HR Manager / Administrator workspaces). Omit for routes
   // every authenticated role can see (Dashboard, Profile, Phase 1 screens).
-  // A user with no `role` yet (older session / backend not returning it)
-  // is treated as a plain employee and redirected, same as a mismatched role.
   roles?: NonNullable<AuthUser["role"]>[];
 };
 
 export default function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  // On a hard refresh the stored token is re-validated against GET /auth/me.
+  // Until that resolves we know nothing about the session, so redirecting here
+  // would bounce an authenticated user to /login on every reload.
+  if (isLoading) {
+    return <LoadingOverlay show label="Restoring your session…" />;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

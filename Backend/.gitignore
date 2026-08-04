@@ -54,3 +54,7 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Uploaded employee photos. Runtime data, not source — and it can contain
+# personal information, which does not belong in version control.
+/uploads

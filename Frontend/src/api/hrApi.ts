@@ -1,5 +1,9 @@
 // API modules for the Phase 1 employee self-service screens:
-// Attendance, Leave, Payroll, Appraisal, Notifications.
+// Attendance, Leave, Payroll, Notifications.
+//
+// Appraisal is NOT here — it has a real backend facade and lives in
+// modules/appraisal/api/appraisalApi.ts, which uses lib/apiClient (no demo
+// fallback, so errors surface instead of turning into mock data).
 //
 // Same contract as authApi/profileApi in api.ts: every call tries the real
 // NestJS backend first (apiRequest, which itself pings /health and attaches
@@ -29,32 +33,30 @@ import { parsePayrollRow, type ParsedPayrollRow } from "@/modules/payroll/api/pa
 import { ENDPOINTS } from "@/app/config/endpoints";
 import { getSession } from "@/utils/auth";
 import {
-  mockAttendanceApi,
-  mockLeaveApi,
-  mockPayrollApi,
-  mockAppraisalApi,
-  mockNotificationApi,
-  leaveTypes,
-  type AttendanceRecord,
-  type AttendanceStatus,
-  type LeaveType,
-  type LeaveRequest,
-  type LeaveStatus,
-  type PayrollRecord,
-  type AppraisalRecord,
-  type NotificationRecord,
-  type NotificationType,
+ mockAttendanceApi,
+ mockLeaveApi,
+ mockPayrollApi,
+ mockNotificationApi,
+ leaveTypes,
+ type AttendanceRecord,
+ type AttendanceStatus,
+ type LeaveType,
+ type LeaveRequest,
+ type LeaveStatus,
+ type PayrollRecord,
+ type NotificationRecord,
+ type NotificationType,
 } from "@/mocks/hrMockData";
 
 function currentEmployeeId(): string | undefined {
-  return getSession()?.user.employeeId;
+ return getSession()?.user.employeeId;
 }
 
 // Backend responses may come back either as a bare array or as the
 // `{ data, total }` list envelope used elsewhere in this app (see
 // settingsApi.ts / employeeApi.ts) — normalize both to an array.
 function toArray<T>(res: T[] | { data: T[] }): T[] {
-  return Array.isArray(res) ? res : (res?.data ?? []);
+ return Array.isArray(res) ? res : (res?.data ?? []);
 }
 
 // Adapts one row from `GET /attendance` to the frontend's AttendanceRecord
@@ -64,118 +66,118 @@ function toArray<T>(res: T[] | { data: T[] }): T[] {
 // confirmed shape. `working_hours`/`overtime_hours` also arrive as numeric
 // strings (e.g. `"7.76"`), not numbers.
 function adaptAttendanceRow(row: any): AttendanceRecord {
-  const parsed = parseAttendanceRow(row);
-  return {
-    attendanceId: parsed.attendanceId,
-    employeeId: parsed.employeeId,
-    shiftId: parsed.shiftId,
-    shiftName: parsed.shiftName,
-    attendanceDate: parsed.attendanceDate,
-    checkIn: parsed.checkIn,
-    checkOut: parsed.checkOut,
-    workingHours: parsed.workingHours,
-    overtimeHours: parsed.overtimeHours,
-    isOvertime: parsed.isOvertime,
-    status: parsed.status as AttendanceStatus,
-  };
+ const parsed = parseAttendanceRow(row);
+ return {
+ attendanceId: parsed.attendanceId,
+ employeeId: parsed.employeeId,
+ shiftId: parsed.shiftId,
+ shiftName: parsed.shiftName,
+ attendanceDate: parsed.attendanceDate,
+ checkIn: parsed.checkIn,
+ checkOut: parsed.checkOut,
+ workingHours: parsed.workingHours,
+ overtimeHours: parsed.overtimeHours,
+ isOvertime: parsed.isOvertime,
+ status: parsed.status as AttendanceStatus,
+ };
 }
 
 // The live `GET /attendance` route takes no query params (findAll() ignores
 // them — same as `/users`), so every filter below (by employee, by date, by
 // month) has to happen client-side after fetching the full list.
 async function fetchAllAttendance(): Promise<AttendanceRecord[]> {
-  return toArray(await apiRequest<any>(ENDPOINTS.attendance.base)).map(adaptAttendanceRow);
+ return toArray(await apiRequest<any>(ENDPOINTS.attendance.base)).map(adaptAttendanceRow);
 }
 
 // ---- Attendance — full CRUD at /attendance ---------------------------------
 export const attendanceApi = {
-  getToday: () =>
-    withDemoFallback<AttendanceRecord | null>(
-      async () => {
-        const employeeId = currentEmployeeId();
-        const today = new Date().toISOString().slice(0, 10);
-        const rows = await fetchAllAttendance();
-        return rows.find((r) => r.employeeId === employeeId && r.attendanceDate === today) ?? null;
-      },
-      () => mockAttendanceApi.getToday(),
-    ),
+ getToday: () =>
+ withDemoFallback<AttendanceRecord | null>(
+ async () => {
+ const employeeId = currentEmployeeId();
+ const today = new Date().toISOString().slice(0, 10);
+ const rows = await fetchAllAttendance();
+ return rows.find((r) => r.employeeId === employeeId && r.attendanceDate === today) ?? null;
+ },
+ () => mockAttendanceApi.getToday(),
+ ),
 
-  checkIn: () =>
-    withDemoFallback<AttendanceRecord>(
-      async () => {
-        const employeeId = currentEmployeeId();
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, "0");
-        const mm = String(now.getMinutes()).padStart(2, "0");
+ checkIn: () =>
+ withDemoFallback<AttendanceRecord>(
+ async () => {
+ const employeeId = currentEmployeeId();
+ const now = new Date();
+ const hh = String(now.getHours()).padStart(2, "0");
+ const mm = String(now.getMinutes()).padStart(2, "0");
 
-        // No shift is stored on the session — reuse the employee's most
-        // recent attendance row's shift, if one exists, so the FK isn't
-        // dropped on every check-in.
-        const priorRows = await fetchAllAttendance();
-        const mine = priorRows.filter((r) => r.employeeId === employeeId).sort((a, b) => (a.attendanceDate < b.attendanceDate ? 1 : -1));
-        const shiftId = mine[0]?.shiftId || undefined;
+ // No shift is stored on the session — reuse the employee's most
+ // recent attendance row's shift, if one exists, so the FK isn't
+ // dropped on every check-in.
+ const priorRows = await fetchAllAttendance();
+ const mine = priorRows.filter((r) => r.employeeId === employeeId).sort((a, b) => (a.attendanceDate < b.attendanceDate ? 1 : -1));
+ const shiftId = mine[0]?.shiftId || undefined;
 
-        const created = await apiRequest<any>(ENDPOINTS.attendance.base, {
-          method: "POST",
-          body: {
-            user_id: employeeId,
-            attendance_date: now.toISOString().slice(0, 10),
-            check_in: `${hh}:${mm}:00`,
-            attendance_status: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15) ? "Late" : "Present",
-            ...(shiftId ? { shiftId } : {}),
-          },
-        });
-        return adaptAttendanceRow(created);
-      },
-      () => mockAttendanceApi.checkIn(),
-    ),
+ const created = await apiRequest<any>(ENDPOINTS.attendance.base, {
+ method: "POST",
+ body: {
+ user_id: employeeId,
+ attendance_date: now.toISOString().slice(0, 10),
+ check_in: `${hh}:${mm}:00`,
+ attendance_status: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15) ? "Late" : "Present",
+ ...(shiftId ? { shiftId } : {}),
+ },
+ });
+ return adaptAttendanceRow(created);
+ },
+ () => mockAttendanceApi.checkIn(),
+ ),
 
-  checkOut: () =>
-    withDemoFallback<AttendanceRecord>(
-      async () => {
-        const today = await attendanceApi.getToday();
-        if (!today) throw new Error("No check-in found for today.");
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, "0");
-        const mm = String(now.getMinutes()).padStart(2, "0");
-        const checkOut = `${hh}:${mm}`;
-        // The live backend doesn't compute working/overtime hours itself
-        // (its seed data shows `working_hours` unrelated to check-in/out),
-        // so derive them here and send them along with the check-out time.
-        const { workingHours, overtimeHours, isOvertime } = today.checkIn
-          ? computeHours(today.checkIn, checkOut)
-          : { workingHours: null, overtimeHours: null, isOvertime: false };
-        const updated = await apiRequest<any>(ENDPOINTS.attendance.byId(today.attendanceId), {
-          method: "PATCH",
-          body: {
-            check_out: `${checkOut}:00`,
-            working_hours: workingHours,
-            overtime_hours: overtimeHours,
-            is_overtime: isOvertime,
-          },
-        });
-        return adaptAttendanceRow(updated);
-      },
-      () => mockAttendanceApi.checkOut(),
-    ),
+ checkOut: () =>
+ withDemoFallback<AttendanceRecord>(
+ async () => {
+ const today = await attendanceApi.getToday();
+ if (!today) throw new Error("No check-in found for today.");
+ const now = new Date();
+ const hh = String(now.getHours()).padStart(2, "0");
+ const mm = String(now.getMinutes()).padStart(2, "0");
+ const checkOut = `${hh}:${mm}`;
+ // The live backend doesn't compute working/overtime hours itself
+ // (its seed data shows `working_hours` unrelated to check-in/out),
+ // so derive them here and send them along with the check-out time.
+ const { workingHours, overtimeHours, isOvertime } = today.checkIn
+ ? computeHours(today.checkIn, checkOut)
+ : { workingHours: null, overtimeHours: null, isOvertime: false };
+ const updated = await apiRequest<any>(ENDPOINTS.attendance.byId(today.attendanceId), {
+ method: "PATCH",
+ body: {
+ check_out: `${checkOut}:00`,
+ working_hours: workingHours,
+ overtime_hours: overtimeHours,
+ is_overtime: isOvertime,
+ },
+ });
+ return adaptAttendanceRow(updated);
+ },
+ () => mockAttendanceApi.checkOut(),
+ ),
 
-  // The live API has no `?month=&year=` filter, so pull every record and
-  // narrow to this employee + the requested month client-side.
-  getHistory: (params: { month: number; year: number }) =>
-    withDemoFallback<AttendanceRecord[]>(
-      async () => {
-        const employeeId = currentEmployeeId();
-        const rows = await fetchAllAttendance();
-        return rows
-          .filter((r) => r.employeeId === employeeId)
-          .filter((r) => {
-            const d = new Date(r.attendanceDate);
-            return d.getMonth() + 1 === params.month && d.getFullYear() === params.year;
-          })
-          .sort((a, b) => (a.attendanceDate < b.attendanceDate ? 1 : -1));
-      },
-      () => mockAttendanceApi.getHistory(params),
-    ),
+ // The live API has no `?month=&year=` filter, so pull every record and
+ // narrow to this employee + the requested month client-side.
+ getHistory: (params: { month: number; year: number }) =>
+ withDemoFallback<AttendanceRecord[]>(
+ async () => {
+ const employeeId = currentEmployeeId();
+ const rows = await fetchAllAttendance();
+ return rows
+ .filter((r) => r.employeeId === employeeId)
+ .filter((r) => {
+ const d = new Date(r.attendanceDate);
+ return d.getMonth() + 1 === params.month && d.getFullYear() === params.year;
+ })
+ .sort((a, b) => (a.attendanceDate < b.attendanceDate ? 1 : -1));
+ },
+ () => mockAttendanceApi.getHistory(params),
+ ),
 };
 
 // Adapts one row from `GET /leave-requests` (confirmed shape: leave_id,
@@ -185,76 +187,76 @@ export const attendanceApi = {
 // LeaveType table (leave_type is a free-text column), so leaveTypeId is
 // derived from the name rather than coming from the backend.
 function adaptLeaveRow(row: any): LeaveRequest {
-  const parsed = parseLeaveRow(row);
-  return {
-    leaveId: parsed.leaveId,
-    employeeId: parsed.employeeId,
-    leaveTypeId: leaveTypes.find((t) => t.leaveTypeName === parsed.leaveTypeName)?.leaveTypeId ?? "LT-OTHER",
-    leaveTypeName: parsed.leaveTypeName,
-    startDate: parsed.startDate,
-    endDate: parsed.endDate,
-    totalDays: parsed.totalDays,
-    reason: parsed.reason,
-    status: parsed.status as LeaveStatus,
-    appliedOn: parsed.appliedOn,
-    approvedOn: parsed.approvedOn,
-    approvedBy: parsed.approvedByName,
-    // No equivalent column on the schema's LeaveRequests table.
-    remarks: null,
-  };
+ const parsed = parseLeaveRow(row);
+ return {
+ leaveId: parsed.leaveId,
+ employeeId: parsed.employeeId,
+ leaveTypeId: leaveTypes.find((t) => t.leaveTypeName === parsed.leaveTypeName)?.leaveTypeId ?? "LT-OTHER",
+ leaveTypeName: parsed.leaveTypeName,
+ startDate: parsed.startDate,
+ endDate: parsed.endDate,
+ totalDays: parsed.totalDays,
+ reason: parsed.reason,
+ status: parsed.status as LeaveStatus,
+ appliedOn: parsed.appliedOn,
+ approvedOn: parsed.approvedOn,
+ approvedBy: parsed.approvedByName,
+ // No equivalent column on the schema's LeaveRequests table.
+ remarks: null,
+ };
 }
 
 // ---- Leave — full CRUD at /leave-requests -----------------------------------
 export const leaveApi = {
-  // No `LeaveType` table exists in the schema (leave_type is a free-text
-  // column on LeaveRequests) — this list is the fixed set of values the
-  // UI offers, kept purely client-side.
-  getLeaveTypes: () => Promise.resolve<LeaveType[]>(leaveTypes),
+ // No `LeaveType` table exists in the schema (leave_type is a free-text
+ // column on LeaveRequests) — this list is the fixed set of values the
+ // UI offers, kept purely client-side.
+ getLeaveTypes: () => Promise.resolve<LeaveType[]>(leaveTypes),
 
-  // Leave balance (allocated/used/remaining) isn't modeled anywhere in the
-  // schema either — there's no table to compute it from server-side, so
-  // this stays on demo data until the backend adds that concept.
-  getBalance: () => mockLeaveApi.getBalance(),
+ // Leave balance (allocated/used/remaining) isn't modeled anywhere in the
+ // schema either — there's no table to compute it from server-side, so
+ // this stays on demo data until the backend adds that concept.
+ getBalance: () => mockLeaveApi.getBalance(),
 
-  // The live `GET /leave-requests` route takes no query params (findAll()
-  // ignores them, same as `/attendance` and `/users`), so filtering to the
-  // current employee happens client-side after fetching the full list.
-  getMyLeaves: () =>
-    withDemoFallback<LeaveRequest[]>(
-      async () => {
-        const employeeId = currentEmployeeId();
-        const rows = toArray(await apiRequest<any>(ENDPOINTS.leaveRequests.base));
-        return rows
-          .map(adaptLeaveRow)
-          .filter((r) => r.employeeId === employeeId)
-          .sort((a, b) => (a.appliedOn < b.appliedOn ? 1 : -1));
-      },
-      () => mockLeaveApi.getMyLeaves(),
-    ),
+ // The live `GET /leave-requests` route takes no query params (findAll()
+ // ignores them, same as `/attendance` and `/users`), so filtering to the
+ // current employee happens client-side after fetching the full list.
+ getMyLeaves: () =>
+ withDemoFallback<LeaveRequest[]>(
+ async () => {
+ const employeeId = currentEmployeeId();
+ const rows = toArray(await apiRequest<any>(ENDPOINTS.leaveRequests.base));
+ return rows
+ .map(adaptLeaveRow)
+ .filter((r) => r.employeeId === employeeId)
+ .sort((a, b) => (a.appliedOn < b.appliedOn ? 1 : -1));
+ },
+ () => mockLeaveApi.getMyLeaves(),
+ ),
 
-  // Confirmed POST body (per the live Swagger doc): leave_type, start_date,
-  // end_date, reason, status, user_id, approved_by_id — snake_case, and the
-  // employee reference is `user_id`, not `employeeId`.
-  applyLeave: (payload: { leaveTypeId: string; startDate: string; endDate: string; reason: string }) =>
-    withDemoFallback<LeaveRequest>(
-      async () => {
-        const employeeId = currentEmployeeId();
-        const leaveTypeName = leaveTypes.find((t) => t.leaveTypeId === payload.leaveTypeId)?.leaveTypeName ?? "Leave";
-        const created = await apiRequest<any>(ENDPOINTS.leaveRequests.base, {
-          method: "POST",
-          body: {
-            user_id: employeeId,
-            leave_type: leaveTypeName,
-            start_date: payload.startDate,
-            end_date: payload.endDate,
-            reason: payload.reason,
-            status: "Pending",
-          },
-        });
-        return adaptLeaveRow(created);
-      },
-      () => mockLeaveApi.applyLeave(payload),
-    ),
+ // Confirmed POST body (per the live Swagger doc): leave_type, start_date,
+ // end_date, reason, status, user_id, approved_by_id — snake_case, and the
+ // employee reference is `user_id`, not `employeeId`.
+ applyLeave: (payload: { leaveTypeId: string; startDate: string; endDate: string; reason: string }) =>
+ withDemoFallback<LeaveRequest>(
+ async () => {
+ const employeeId = currentEmployeeId();
+ const leaveTypeName = leaveTypes.find((t) => t.leaveTypeId === payload.leaveTypeId)?.leaveTypeName ?? "Leave";
+ const created = await apiRequest<any>(ENDPOINTS.leaveRequests.base, {
+ method: "POST",
+ body: {
+ user_id: employeeId,
+ leave_type: leaveTypeName,
+ start_date: payload.startDate,
+ end_date: payload.endDate,
+ reason: payload.reason,
+ status: "Pending",
+ },
+ });
+ return adaptLeaveRow(created);
+ },
+ () => mockLeaveApi.applyLeave(payload),
+ ),
 };
 
 // ---- Payroll — confirmed live REST at /payroll -----------------------------
@@ -267,78 +269,68 @@ export const leaveApi = {
 // no separate pay-components table exposed, so the itemized breakdown shown
 // in the UI is synthesized from the flat columns (see payrollAdapter.ts).
 function toPayrollRecord(row: ParsedPayrollRow): PayrollRecord {
-  const components: PayrollRecord["components"] = [
-    { payComponentId: `${row.payrollId}-basic`, payrollId: row.payrollId, componentName: "Basic Salary", componentType: "Earning", amount: row.basicSalary },
-    { payComponentId: `${row.payrollId}-allowance`, payrollId: row.payrollId, componentName: "Allowance", componentType: "Earning", amount: row.allowance },
-    ...(row.bonus > 0
-      ? [{ payComponentId: `${row.payrollId}-bonus`, payrollId: row.payrollId, componentName: "Bonus", componentType: "Earning" as const, amount: row.bonus }]
-      : []),
-    { payComponentId: `${row.payrollId}-deduction`, payrollId: row.payrollId, componentName: "Deduction", componentType: "Deduction", amount: row.deduction },
-    { payComponentId: `${row.payrollId}-tax`, payrollId: row.payrollId, componentName: "Tax", componentType: "Deduction", amount: row.tax },
-  ];
-  return {
-    payrollId: row.payrollId,
-    employeeId: row.employeeId,
-    payrollMonth: row.payrollMonth,
-    payrollYear: row.payrollYear,
-    basicSalary: row.basicSalary,
-    allowance: row.allowance,
-    bonus: row.bonus,
-    deduction: row.deduction,
-    tax: row.tax,
-    netSalary: row.netSalary,
-    paymentDate: row.paymentDate,
-    generatedDate: row.paymentDate ?? new Date().toISOString().slice(0, 10),
-    status: row.status,
-    components,
-  };
+ const components: PayrollRecord["components"] = [
+ { payComponentId: `${row.payrollId}-basic`, payrollId: row.payrollId, componentName: "Basic Salary", componentType: "Earning", amount: row.basicSalary },
+ { payComponentId: `${row.payrollId}-allowance`, payrollId: row.payrollId, componentName: "Allowance", componentType: "Earning", amount: row.allowance },
+ ...(row.bonus > 0
+ ? [{ payComponentId: `${row.payrollId}-bonus`, payrollId: row.payrollId, componentName: "Bonus", componentType: "Earning" as const, amount: row.bonus }]
+ : []),
+ { payComponentId: `${row.payrollId}-deduction`, payrollId: row.payrollId, componentName: "Deduction", componentType: "Deduction", amount: row.deduction },
+ { payComponentId: `${row.payrollId}-tax`, payrollId: row.payrollId, componentName: "Tax", componentType: "Deduction", amount: row.tax },
+ ];
+ return {
+ payrollId: row.payrollId,
+ employeeId: row.employeeId,
+ payrollMonth: row.payrollMonth,
+ payrollYear: row.payrollYear,
+ basicSalary: row.basicSalary,
+ allowance: row.allowance,
+ bonus: row.bonus,
+ deduction: row.deduction,
+ tax: row.tax,
+ netSalary: row.netSalary,
+ paymentDate: row.paymentDate,
+ generatedDate: row.paymentDate ?? new Date().toISOString().slice(0, 10),
+ status: row.status,
+ components,
+ };
 }
 
 async function fetchAllPayroll(): Promise<ParsedPayrollRow[]> {
-  const rows = await apiRequest<any>(ENDPOINTS.payroll.base);
-  return (Array.isArray(rows) ? rows : (rows?.data ?? [])).map(parsePayrollRow);
+ const rows = await apiRequest<any>(ENDPOINTS.payroll.base);
+ return (Array.isArray(rows) ? rows : (rows?.data ?? [])).map(parsePayrollRow);
 }
 
 export const payrollApi = {
-  getMyPayroll: () =>
-    withDemoFallback<PayrollRecord[]>(
-      async () => {
-        const employeeId = currentEmployeeId();
-        const rows = await fetchAllPayroll();
-        return rows
-          .filter((r) => r.employeeId === employeeId)
-          .sort((a, b) => (a.payrollYear !== b.payrollYear ? b.payrollYear - a.payrollYear : b.payrollMonth - a.payrollMonth))
-          .map(toPayrollRecord);
-      },
-      () => mockPayrollApi.getMyPayroll(),
-    ),
+ getMyPayroll: () =>
+ withDemoFallback<PayrollRecord[]>(
+ async () => {
+ const employeeId = currentEmployeeId();
+ const rows = await fetchAllPayroll();
+ return rows
+ .filter((r) => r.employeeId === employeeId)
+ .sort((a, b) => (a.payrollYear !== b.payrollYear ? b.payrollYear - a.payrollYear : b.payrollMonth - a.payrollMonth))
+ .map(toPayrollRecord);
+ },
+ () => mockPayrollApi.getMyPayroll(),
+ ),
 
-  getPayslip: (payrollId: string) =>
-    withDemoFallback<PayrollRecord>(
-      async () => {
-        const row = await apiRequest<any>(ENDPOINTS.payroll.byId(payrollId));
-        return toPayrollRecord(parsePayrollRow(row));
-      },
-      () => mockPayrollApi.getPayslip(payrollId),
-    ),
+ getPayslip: (payrollId: string) =>
+ withDemoFallback<PayrollRecord>(
+ async () => {
+ const row = await apiRequest<any>(ENDPOINTS.payroll.byId(payrollId));
+ return toPayrollRecord(parsePayrollRow(row));
+ },
+ () => mockPayrollApi.getPayslip(payrollId),
+ ),
 };
 
-// ---- Appraisal — no REST controller in the Swagger doc yet -----------------
-// Schema has `AppraisalQuestions` + `PerformanceReviews`; same situation as
-// Payroll above — kept schema-shaped, demo data until the backend catches up.
-export const appraisalApi = {
-  getMyAppraisals: () =>
-    withDemoFallback<AppraisalRecord[]>(
-      () => apiRequest<AppraisalRecord[]>(`${ENDPOINTS.performanceReviews.base}?employeeId=${currentEmployeeId()}`),
-      () => mockAppraisalApi.getMyAppraisals(),
-    ),
-
-  getAppraisalDetail: (appraisalId: string) =>
-    withDemoFallback<AppraisalRecord>(
-      () => apiRequest<AppraisalRecord>(ENDPOINTS.performanceReviews.byId(appraisalId)),
-      () => mockAppraisalApi.getAppraisalDetail(appraisalId),
-    ),
-};
+// ---- Appraisal -------------------------------------------------------------
+// Intentionally absent. Appraisal is served by the real /appraisal/* facade —
+// see modules/appraisal/api/appraisalApi.ts (myAppraisalApi for an employee's
+// own history, teamAppraisalApi for a Team Lead, formsApi for HR). The old
+// entry here pointed at /performance-reviews?employeeId=, which no longer
+// exists, so it silently resolved to demo data.
 
 // ---- Notifications — confirmed live REST CRUD at /notifications -----------
 // Confirmed against the live Swagger doc: `POST /api/notifications` takes
@@ -352,80 +344,78 @@ export const appraisalApi = {
 // "General" when it's missing rather than assuming the field is dropped
 // server-side for good.
 function adaptNotificationRow(row: any): NotificationRecord {
-  const createdBy = row?.createdBy ?? null;
-  const createdByName = createdBy ? `${createdBy.first_name ?? ""} ${createdBy.last_name ?? ""}`.trim() : undefined;
-  return {
-    notificationId: String(row?.notification_id ?? row?.notificationId ?? row?.id ?? ""),
-    title: row?.title ?? "",
-    message: row?.message ?? "",
-    type: (row?.type as NotificationType) ?? "General",
-    isRead: false, // stitched in client-side by NotificationsContext (see there for why)
-    createdAt: row?.created_at ?? row?.createdAt ?? new Date().toISOString(),
-    createdById: createdBy?.user_id,
-    createdByName: createdByName || undefined,
-  };
+ const createdBy = row?.createdBy ?? null;
+ const createdByName = createdBy ? `${createdBy.first_name ?? ""} ${createdBy.last_name ?? ""}`.trim() : undefined;
+ return {
+ notificationId: String(row?.notification_id ?? row?.notificationId ?? row?.id ?? ""),
+ title: row?.title ?? "",
+ message: row?.message ?? "",
+ type: (row?.type as NotificationType) ?? "General",
+ isRead: false, // stitched in client-side by NotificationsContext (see there for why)
+ createdAt: row?.created_at ?? row?.createdAt ?? new Date().toISOString(),
+ createdById: createdBy?.user_id,
+ createdByName: createdByName || undefined,
+ };
 }
 
 export const notificationApi = {
-  getAll: () =>
-    withDemoFallback<NotificationRecord[]>(
-      async () => {
-        const rows = toArray(await apiRequest<any>(ENDPOINTS.notifications.base));
-        return rows.map(adaptNotificationRow).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-      },
-      () => mockNotificationApi.getAll(),
-    ),
+ getAll: () =>
+ withDemoFallback<NotificationRecord[]>(
+ async () => {
+ const rows = toArray(await apiRequest<any>(ENDPOINTS.notifications.base));
+ return rows.map(adaptNotificationRow).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+ },
+ () => mockNotificationApi.getAll(),
+ ),
 
-  // `createdBy` defaults to the signed-in user (matches the confirmed
-  // Swagger example body), but is accepted as an override for admin
-  // "send on behalf of" tooling if that's ever added.
-  create: (payload: { title: string; message: string; type: NotificationType; createdBy?: string }) =>
-    withDemoFallback<NotificationRecord>(
-      async () => {
-        const created = await apiRequest<any>(ENDPOINTS.notifications.base, {
-          method: "POST",
-          body: {
-            title: payload.title,
-            message: payload.message,
-            type: payload.type,
-            createdBy: payload.createdBy ?? currentEmployeeId(),
-          },
-        });
-        return adaptNotificationRow(created);
-      },
-      () => mockNotificationApi.create({ ...payload, createdById: currentEmployeeId() }),
-    ),
+ // `createdBy` defaults to the signed-in user (matches the confirmed
+ // Swagger example body), but is accepted as an override for admin
+ // "send on behalf of" tooling if that's ever added.
+ create: (payload: { title: string; message: string; type: NotificationType; createdBy?: string }) =>
+ withDemoFallback<NotificationRecord>(
+ async () => {
+ const created = await apiRequest<any>(ENDPOINTS.notifications.base, {
+ method: "POST",
+ body: {
+ title: payload.title,
+ message: payload.message,
+ type: payload.type,
+ createdBy: payload.createdBy ?? currentEmployeeId(),
+ },
+ });
+ return adaptNotificationRow(created);
+ },
+ () => mockNotificationApi.create({ ...payload, createdById: currentEmployeeId() }),
+ ),
 
-  update: (notificationId: string, payload: { title: string; message: string; type: NotificationType }) =>
-    withDemoFallback<NotificationRecord>(
-      async () => {
-        const updated = await apiRequest<any>(ENDPOINTS.notifications.byId(notificationId), {
-          method: "PATCH",
-          body: payload,
-        });
-        return adaptNotificationRow(updated);
-      },
-      () => mockNotificationApi.update(notificationId, payload),
-    ),
+ update: (notificationId: string, payload: { title: string; message: string; type: NotificationType }) =>
+ withDemoFallback<NotificationRecord>(
+ async () => {
+ const updated = await apiRequest<any>(ENDPOINTS.notifications.byId(notificationId), {
+ method: "PATCH",
+ body: payload,
+ });
+ return adaptNotificationRow(updated);
+ },
+ () => mockNotificationApi.update(notificationId, payload),
+ ),
 
-  remove: (notificationId: string) =>
-    withDemoFallback<{ notificationId: string }>(
-      () => apiRequest<{ notificationId: string }>(ENDPOINTS.notifications.byId(notificationId), { method: "DELETE" }),
-      () => mockNotificationApi.remove(notificationId),
-    ),
+ remove: (notificationId: string) =>
+ withDemoFallback<{ notificationId: string }>(
+ () => apiRequest<{ notificationId: string }>(ENDPOINTS.notifications.byId(notificationId), { method: "DELETE" }),
+ () => mockNotificationApi.remove(notificationId),
+ ),
 };
 
 export type {
-  AttendanceRecord,
-  AttendanceStatus,
-  LeaveType,
-  LeaveRequest,
-  LeaveStatus,
-  PayrollRecord,
-  PayComponent,
-  AppraisalRecord,
-  AppraisalScoreItem,
-  NotificationRecord,
-  NotificationType,
+ AttendanceRecord,
+ AttendanceStatus,
+ LeaveType,
+ LeaveRequest,
+ LeaveStatus,
+ PayrollRecord,
+ PayComponent,
+ NotificationRecord,
+ NotificationType,
 } from "@/mocks/hrMockData";
 export { monthLabel } from "@/mocks/hrMockData";

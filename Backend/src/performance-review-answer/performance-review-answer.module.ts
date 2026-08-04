@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { PerformanceReviewAnswer } from './performance-review-answer.entity';
-import { PerformanceReviewAnswerController } from './performance-review-answer.controller';
 import { PerformanceReviewAnswerService } from './performance-review-answer.service';
 
 import { PerformanceReview } from '../performance-review/performance-review.entity';
@@ -22,8 +21,8 @@ import { AuthorizationModule } from '../authorization/authorization.module';
     AuthorizationModule,
   ],
 
-  controllers: [PerformanceReviewAnswerController],
-
+  // No controller: answers are only ever written through
+  // POST /appraisal/evaluate/:employeeId on the facade.
   providers: [PerformanceReviewAnswerService],
 
   exports: [PerformanceReviewAnswerService],

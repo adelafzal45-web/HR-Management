@@ -16,6 +16,7 @@ import AdvancedFilterDrawer, { EMPTY_FILTERS, type ProfessionalFilters, type Sav
 import ImportProfessionalsModal, { type ImportRow } from "@/modules/professionals/components/ImportProfessionalsModal";
 import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
 import StatusBadge from "@/components/common/StatusBadge";
+import EmployeeAvatar from "@/modules/employees/components/EmployeeAvatar";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useToast } from "@/app/providers/ToastContext";
@@ -398,10 +399,13 @@ export default function ProfessionalsPage() {
       sortAccessor: (e) => `${e.firstName} ${e.lastName}`,
       render: (e) => (
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-light text-xs font-semibold text-brand-dark">
-            {e.firstName[0]}
-            {e.lastName[0]}
-          </span>
+          <EmployeeAvatar
+            firstName={e.firstName}
+            lastName={e.lastName}
+            photo={e.profileImageUrl}
+            thumb={e.profileImageThumbUrl}
+            size={36}
+          />
           <div className="min-w-0">
             <p className="truncate font-medium text-gray-900">
               {e.firstName} {e.lastName}

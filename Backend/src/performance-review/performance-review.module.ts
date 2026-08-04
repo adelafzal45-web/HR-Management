@@ -2,7 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { PerformanceReview } from './performance-review.entity';
-import { PerformanceReviewController } from './performance-review.controller';
+import { ReviewApproval } from './review-approval.entity';
 import { PerformanceReviewService } from './performance-review.service';
 
 import { User } from '../users/user.entity';
@@ -19,6 +19,7 @@ import { AuthorizationModule } from '../authorization/authorization.module';
   imports: [
     TypeOrmModule.forFeature([
       PerformanceReview,
+      ReviewApproval,
       User,
       AppraisalForms,
       PerformanceReviewAnswer,
@@ -30,8 +31,9 @@ import { AuthorizationModule } from '../authorization/authorization.module';
     AuthorizationModule,
   ],
 
-  controllers: [PerformanceReviewController],
-
+  // No controller: the generic CRUD surface was superseded by
+  // AppraisalFacadeController. The service is still exported because the facade
+  // depends on recalculateReviewScore().
   providers: [PerformanceReviewService],
 
   exports: [PerformanceReviewService],

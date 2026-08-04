@@ -1,182 +1,158 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, ClipboardList } from "lucide-react";
+import { ClipboardList, Info } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
-import BackendStatusBanner from "@/components/common/BackendStatusBanner";
-import { PrimaryButton } from "@/components/forms/FormField";
-import { useBackendStatus } from "@/hooks/useBackendStatus";
-import { appraisalCriteriaApi, type AppraisalQuestion } from "@/modules/team/api/teamApi";
-
-type DraftQuestion = Omit<AppraisalQuestion, "questionId"> & { questionId?: string; localId: string };
-
-let localIdCounter = 0;
-const nextLocalId = () => `local-${++localIdCounter}`;
+import LoadingOverlay from "@/components/common/LoadingOverlay";
+import { formsApi, type AppraisalForm, type FormQuestion } from "@/modules/appraisal/api/appraisalApi";
 
 export default function AppraisalCriteria() {
-  const status = useBackendStatus();
-
-  const [questions, setQuestions] = useState<DraftQuestion[]>([]);
+  const [forms, setForms] = useState<AppraisalForm[]>([]);
+  const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<FormQuestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await appraisalCriteriaApi.getCriteria();
-        setQuestions(data.map((q) => ({ ...q, localId: nextLocalId() })));
-      } catch {
-        setQuestions([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    formsApi
+      .list()
+      .then((data) => {
+        const published = data.filter((f) => f.status === "Published" && f.isActive);
+        setForms(published);
+        if (published.length > 0 && !selectedFormId) {
+          setSelectedFormId(published[0].formId);
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load evaluation forms."))
+      .finally(() => setLoading(false));
+  }, [selectedFormId]);
 
-  const total = questions.filter((q) => q.isActive).reduce((sum, q) => sum + (Number(q.weightage) || 0), 0);
-
-  const addQuestion = () => {
-    setQuestions((cur) => [
-      ...cur,
-      { localId: nextLocalId(), questionText: "", weightage: 0, isActive: true },
-    ]);
-    setSuccess(null);
-  };
-
-  const removeQuestion = (localId: string) => {
-    setQuestions((cur) => cur.filter((q) => q.localId !== localId));
-    setSuccess(null);
-  };
-
-  const updateQuestion = (localId: string, updates: Partial<DraftQuestion>) => {
-    setQuestions((cur) => cur.map((q) => (q.localId === localId ? { ...q, ...updates } : q)));
-    setSuccess(null);
-  };
-
-  const handleSave = async () => {
-    setError(null);
-    setSuccess(null);
-
-    if (questions.some((q) => q.isActive && !q.questionText.trim())) {
-      setError("Every active question needs criteria text.");
+  useEffect(() => {
+    if (!selectedFormId) {
+      setQuestions([]);
       return;
     }
-    if (total !== 100) {
-      setError(`Total weightage must equal 100% (currently ${total}%).`);
-      return;
-    }
+    setQuestionsLoading(true);
+    formsApi
+      .get(selectedFormId)
+      .then((detail) => setQuestions(detail.questions.filter((q) => q.isActive)))
+      .catch(() => setQuestions([]))
+      .finally(() => setQuestionsLoading(false));
+  }, [selectedFormId]);
 
-    setSaving(true);
-    try {
-      const saved = await appraisalCriteriaApi.saveCriteria(
-        questions.map(({ localId: _localId, ...q }) => q),
-      );
-      setQuestions(saved.map((q) => ({ ...q, localId: nextLocalId() })));
-      setSuccess("Appraisal criteria saved.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save appraisal criteria.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const selectedForm = forms.find((f) => f.formId === selectedFormId);
+  const total = questions.reduce((sum, q) => sum + q.weightage, 0);
 
   return (
-    <DashboardLayout title="Appraisal Criteria" activeKey="appraisal-criteria">
-      <BackendStatusBanner status={status} />
+    <DashboardLayout title="Evaluation Rubric" activeKey="appraisal-criteria">
+      <LoadingOverlay show={loading} label="Loading evaluation forms…" />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-gray-900">Appraisal Questions &amp; Weightage</h2>
-        <button
-          type="button"
-          onClick={addQuestion}
-          className="flex items-center gap-2 rounded-full bg-gradient-to-r from-brand to-brand-dark px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
-        >
-          <Plus size={16} /> Add Question
-        </button>
-      </div>
-
-      <div className="mt-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-        {loading ? (
-          <div className="space-y-2">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />
-            ))}
-          </div>
-        ) : questions.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-light text-brand-dark">
-              <ClipboardList size={24} />
-            </span>
-            <p className="text-sm font-semibold text-gray-900">No appraisal criteria yet</p>
-            <p className="max-w-sm text-sm text-gray-500">
-              Add questions and assign weightage — they must total 100% before you can save.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {questions.map((q) => (
-              <div
-                key={q.localId}
-                className={`flex flex-col gap-3 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center ${
-                  !q.isActive ? "opacity-50" : ""
-                }`}
-              >
-                <input
-                  type="text"
-                  value={q.questionText}
-                  onChange={(e) => updateQuestion(q.localId, { questionText: e.target.value })}
-                  placeholder="e.g. Job Knowledge"
-                  className="flex-1 rounded-lg bg-gray-100 px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
-                />
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={q.weightage}
-                    onChange={(e) => updateQuestion(q.localId, { weightage: Number(e.target.value) })}
-                    className="w-20 rounded-lg bg-gray-100 px-3 py-2.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
-                  />
-                  <span className="text-sm text-gray-500">%</span>
-                </div>
-                <label className="flex items-center gap-2 text-sm text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={q.isActive}
-                    onChange={(e) => updateQuestion(q.localId, { isActive: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-dark focus:ring-brand"
-                  />
-                  Active
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeQuestion(q.localId)}
-                  aria-label="Remove question"
-                  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-5">
-          <p className={`text-sm font-semibold ${total === 100 ? "text-emerald-600" : "text-rose-600"}`}>
-            Total weightage: {total}% {total === 100 ? "✓" : "(must equal 100%)"}
+      <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        <div className="flex items-start gap-2">
+          <Info size={16} className="mt-0.5 shrink-0" />
+          <p>
+            This is the evaluation rubric used when reviewing your team members. Questions and weights are configured
+            by HR and cannot be edited here.
           </p>
         </div>
-
-        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-        {success && <p className="mt-3 text-sm text-emerald-600">{success}</p>}
-
-        <div className="mt-4 max-w-xs">
-          <PrimaryButton type="button" onClick={handleSave} loading={saving} disabled={loading || questions.length === 0}>
-            Save Criteria
-          </PrimaryButton>
-        </div>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {!loading && forms.length === 0 && !error ? (
+        <div className="rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-gray-100">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-400">
+            <ClipboardList size={24} />
+          </span>
+          <p className="mt-3 text-sm font-semibold text-gray-900">No published evaluation forms yet</p>
+          <p className="mt-1 text-sm text-gray-500">
+            HR needs to create and publish an evaluation form before you can view the rubric.
+          </p>
+        </div>
+      ) : (
+        <>
+          {forms.length > 1 && (
+            <div className="mb-4">
+              <label htmlFor="form-select" className="mb-2 block text-sm font-medium text-gray-700">
+                Evaluation Form
+              </label>
+              <select
+                id="form-select"
+                value={selectedFormId ?? ""}
+                onChange={(e) => setSelectedFormId(e.target.value)}
+                className="w-full max-w-md rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
+              >
+                {forms.map((f) => (
+                  <option key={f.formId} value={f.formId}>
+                    {f.formName} ({f.evaluationType})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+            {selectedForm && (
+              <div className="mb-5 border-b border-gray-100 pb-4">
+                <h2 className="text-base font-semibold text-gray-900">{selectedForm.formName}</h2>
+                {selectedForm.description && (
+                  <p className="mt-1 text-sm text-gray-500">{selectedForm.description}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-400">
+                  Type: {selectedForm.evaluationType} · {selectedForm.questionCount} question
+                  {selectedForm.questionCount === 1 ? "" : "s"}
+                </p>
+              </div>
+            )}
+
+            {questionsLoading ? (
+              <div className="space-y-2">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />
+                ))}
+              </div>
+            ) : questions.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-400">This form has no active questions.</p>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {questions.map((q) => (
+                    <div
+                      key={q.questionId}
+                      className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4 sm:flex-row sm:items-center"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">{q.questionText}</p>
+                        {(q.minLabel || q.maxLabel) && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Scale: {q.minLabel ?? "1"} → {q.maxLabel ?? String(q.ratingScale)} (1–{q.ratingScale})
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <span className="font-semibold">{q.weightage}%</span>
+                        <span className="text-gray-400">weight</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 flex items-center justify-between border-t border-gray-100 pt-5">
+                  <p className="text-sm text-gray-600">
+                    {questions.length} active question{questions.length === 1 ? "" : "s"}
+                  </p>
+                  <p className={`text-sm font-semibold ${total === 100 ? "text-emerald-600" : "text-amber-600"}`}>
+                    Total: {total}%
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </DashboardLayout>
   );
 }

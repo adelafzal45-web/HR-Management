@@ -31,20 +31,17 @@ export class PermissionGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context
+      .switchToHttp()
+      .getRequest<{ user?: { user_id?: string } }>();
 
-    /*
-     * TEMPORARY:
-     * JWT is not implemented yet.
-     *
-     * Later this will become:
-     *
-     * const userId = request.user.user_id;
-     */
-    const userId = request.headers['x-user-id'];
+    // Identity comes from the verified JWT that the global JwtAuthGuard put on
+    // the request — never from a client-supplied header, which a caller could
+    // set to any user id to impersonate them.
+    const userId = request.user?.user_id;
 
     if (!userId) {
-      throw new UnauthorizedException('User ID is required');
+      throw new UnauthorizedException('Authentication is required');
     }
 
     const hasPermission = await this.authorizationService.hasPermission(

@@ -20,6 +20,8 @@ export class PermissionsController {
   constructor(private readonly permissionService: PermissionsService) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+  @RequirePermission('permissions.create')
   @ApiOperation({
     summary: 'Create a new permission',
     description: 'Creates a new permission in the HR Management System.',

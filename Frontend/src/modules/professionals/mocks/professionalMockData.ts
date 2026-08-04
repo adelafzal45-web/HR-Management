@@ -30,6 +30,8 @@ export type Professional = {
   email: string;
   phone: string;
   profileImageUrl: string;
+  /** 128px derivative of `profileImageUrl`, for small renderings. */
+  profileImageThumbUrl?: string;
   dateOfBirth: string; // YYYY-MM-DD
   gender: Gender;
   address: string;

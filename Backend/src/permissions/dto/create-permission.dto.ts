@@ -1,11 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 
 export class CreatePermissionDto {
   @ApiProperty({
-    example:
-      'employees.create , employees.update, employees.delete, employees.view, employees.viewOwn, every other module should have same format, except their names, these are as shifts, roles, appraisal, attendance etc',
-    description: 'Unique permission name',
+    example: 'employees.create',
+    description:
+      'Unique permission name in `module.action` form. Every module follows the same format (shifts, roles, appraisal, attendance, ...).',
   })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
   permission_name!: string;
 
   @ApiProperty({
@@ -13,5 +17,7 @@ export class CreatePermissionDto {
     description: 'Description of the permission',
     required: false,
   })
+  @IsOptional()
+  @IsString()
   description?: string;
 }

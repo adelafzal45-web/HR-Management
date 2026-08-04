@@ -1,93 +1,93 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TechnoCues HRMS</title>
-    <style>
-      /* Preloader shown on every hard refresh, for any page/route, until the
-         app has mounted. Pure CSS so it renders instantly, before React or
-         any bundle has loaded. Removed by main.tsx once the app is ready. */
-      #app-preloader {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 18px;
-        background: #ffffff;
-        font-family: "Poppins", system-ui, sans-serif;
-        transition: opacity 0.35s ease;
-      }
-      #app-preloader.app-preloader--hidden {
-        opacity: 0;
-        pointer-events: none;
-      }
-      #app-preloader .app-preloader__spinner {
-        position: relative;
-        width: 64px;
-        height: 64px;
-      }
-      #app-preloader .app-preloader__ring {
-        position: absolute;
-        inset: 0;
-        border-radius: 9999px;
-        border: 3px solid #fde9c8;
-      }
-      #app-preloader .app-preloader__arc {
-        position: absolute;
-        inset: 0;
-        border-radius: 9999px;
-        border: 3px solid transparent;
-        border-top-color: #f1b344;
-        border-right-color: #e08a3e;
-        animation: app-preloader-spin 0.8s linear infinite;
-      }
-      #app-preloader .app-preloader__badge {
-        position: absolute;
-        inset: 0;
-        margin: auto;
-        width: 36px;
-        height: 36px;
-        border-radius: 9999px;
-        object-fit: contain;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-        animation: app-preloader-pulse 1.6s ease-in-out infinite;
-      }
-      #app-preloader .app-preloader__label {
-        font-size: 13px;
-        font-weight: 500;
-        color: #6b7280;
-      }
-      @keyframes app-preloader-spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-      @keyframes app-preloader-pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.55;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app-preloader" role="status" aria-live="polite">
-      <div class="app-preloader__spinner">
-        <span class="app-preloader__ring"></span>
-        <span class="app-preloader__arc"></span>
-        <img class="app-preloader__badge" src="/src/assets/badge.png" alt="" />
-      </div>
-      <p class="app-preloader__label">Loading…</p>
-    </div>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+ <head>
+ <meta charset="UTF-8" />
+ <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+ <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ <title>TechnoCues HRMS</title>
+ <style>
+ /* Preloader shown on every hard refresh, for any page/route, until the
+ app has mounted. Pure CSS so it renders instantly, before React or
+ any bundle has loaded. Removed by main.tsx once the app is ready. */
+ #app-preloader {
+ position: fixed;
+ inset: 0;
+ z-index: 9999;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ justify-content: center;
+ gap: 18px;
+ background: #ffffff;
+ font-family: "Poppins", system-ui, sans-serif;
+ transition: opacity 0.35s ease;
+ }
+ #app-preloader.app-preloader--hidden {
+ opacity: 0;
+ pointer-events: none;
+ }
+ #app-preloader .app-preloader__spinner {
+ position: relative;
+ width: 64px;
+ height: 64px;
+ }
+ #app-preloader .app-preloader__ring {
+ position: absolute;
+ inset: 0;
+ border-radius: 9999px;
+ border: 3px solid #fde9c8;
+ }
+ #app-preloader .app-preloader__arc {
+ position: absolute;
+ inset: 0;
+ border-radius: 9999px;
+ border: 3px solid transparent;
+ border-top-color: #f1b344;
+ border-right-color: #e08a3e;
+ animation: app-preloader-spin 0.8s linear infinite;
+ }
+ #app-preloader .app-preloader__badge {
+ position: absolute;
+ inset: 0;
+ margin: auto;
+ width: 36px;
+ height: 36px;
+ border-radius: 9999px;
+ object-fit: contain;
+ box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+ animation: app-preloader-pulse 1.6s ease-in-out infinite;
+ }
+ #app-preloader .app-preloader__label {
+ font-size: 13px;
+ font-weight: 500;
+ color: #6b7280;
+ }
+ @keyframes app-preloader-spin {
+ to {
+ transform: rotate(360deg);
+ }
+ }
+ @keyframes app-preloader-pulse {
+ 0%,
+ 100% {
+ opacity: 1;
+ }
+ 50% {
+ opacity: 0.55;
+ }
+ }
+ </style>
+ </head>
+ <body>
+ <div id="app-preloader" role="status" aria-live="polite">
+ <div class="app-preloader__spinner">
+ <span class="app-preloader__ring"></span>
+ <span class="app-preloader__arc"></span>
+ <img class="app-preloader__badge" src="/src/assets/badge.png" alt="" />
+ </div>
+ <p class="app-preloader__label">Loading…</p>
+ </div>
+ <div id="root"></div>
+ <script type="module" src="/src/main.tsx"></script>
+ </body>
 </html>

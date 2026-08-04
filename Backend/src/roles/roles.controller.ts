@@ -30,6 +30,8 @@ export class RoleController {
   constructor(private readonly roleService: RoleService) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+  @RequirePermission('roles.create')
   @ApiOperation({
     summary: 'Create a new role',
     description: 'Creates a new role in the HR Management System.',

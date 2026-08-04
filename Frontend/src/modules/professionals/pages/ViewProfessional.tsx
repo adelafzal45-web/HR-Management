@@ -20,6 +20,7 @@ import DashboardLayout from "@/app/layouts/DashboardLayout";
 import BackButton from "@/components/common/BackButton";
 import EmptyState from "@/components/common/EmptyState";
 import StatusBadge from "@/components/common/StatusBadge";
+import EmployeeAvatar from "@/modules/employees/components/EmployeeAvatar";
 import { useToast } from "@/app/providers/ToastContext";
 import { professionalsApi, type Professional } from "@/modules/professionals/api/professionalApi";
 
@@ -115,10 +116,13 @@ export default function ViewProfessionalPage() {
         <div className="space-y-6">
           <div className="flex flex-col items-start gap-4 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
-              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-light text-xl font-semibold text-brand-dark">
-                {professional.firstName[0]}
-                {professional.lastName[0]}
-              </span>
+              <EmployeeAvatar
+                firstName={professional.firstName}
+                lastName={professional.lastName}
+                photo={professional.profileImageUrl}
+                thumb={professional.profileImageThumbUrl}
+                size={64}
+              />
               <div>
                 <p className="text-lg font-semibold text-gray-900">
                   {professional.firstName} {professional.lastName}

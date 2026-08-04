@@ -170,6 +170,7 @@ function fromApiUser(rawIn: Record<string, unknown> | null | undefined): Profess
     email: str(raw.email),
     phone: str(raw.phone),
     profileImageUrl: str(pick(raw.profileImageUrl, raw.profile_image)),
+    profileImageThumbUrl: str(pick(raw.profileImageThumbUrl, raw.profile_image_thumb)),
     dateOfBirth: str(pick(raw.dateOfBirth, raw.date_of_birth)),
     gender: (["male", "female", "other"].includes(gender) ? gender : "male") as Professional["gender"],
     address: str(raw.address),

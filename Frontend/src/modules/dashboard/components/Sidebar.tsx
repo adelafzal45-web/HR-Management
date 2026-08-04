@@ -1,91 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  LayoutDashboard,
-  ClipboardCheck,
-  CalendarX2,
-  Wallet,
-  Bell,
-  User,
-  X,
-  LogOut,
-  ChevronLeft,
-  ChevronRight,
-  Fingerprint,
-  Users,
-  UsersRound,
-  CalendarClock,
-  CalendarCheck,
-  ClipboardList,
-  BarChart3,
-  Banknote,
-  Settings as SettingsIcon,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronLeft, ChevronRight, LogOut, X, type LucideIcon } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
 import badge from "@/assets/badge.png";
 import { useAuth } from "@/app/providers/AuthContext";
 import { useBranding } from "@/app/providers/BrandingContext";
-
-type NavItem = {
-  key: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-};
-
-const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "attendance", label: "Attendance", icon: Fingerprint },
-  { key: "leave", label: "Leave", icon: CalendarX2 },
-  { key: "payroll", label: "Payroll", icon: Wallet },
-  { key: "appraisal", label: "Appraisal", icon: ClipboardCheck },
-  { key: "notification", label: "Notification", icon: Bell },
-  { key: "profile", label: "Profile", icon: User },
-];
-
-// Phase 2 — only shown to users whose session role is "team_lead"
-// (UC-13..UC-18). HR Manager / Administrator nav sections follow the same
-// pattern once those phases are built.
-const TEAM_LEAD_NAV_ITEMS: NavItem[] = [
-  { key: "team-members", label: "My Team", icon: Users },
-  { key: "team-attendance", label: "Team Attendance", icon: CalendarClock },
-  { key: "team-leaves", label: "Team Leaves", icon: CalendarX2 },
-  { key: "appraisal-criteria", label: "Appraisal Criteria", icon: ClipboardList },
-  { key: "team-reports", label: "Team Reports", icon: BarChart3 },
-];
-
-// Phase 2 — HR Manager / Administrator workspace: Settings (Company Details,
-// Departments, Designations, Roles, Permissions, Branding). Gated the same
-// way the Team Lead section is gated above.
-const ADMIN_NAV_ITEMS: NavItem[] = [
-  { key: "employees", label: "Employees", icon: UsersRound },
-  { key: "process-payroll", label: "Process Payroll", icon: Banknote },
-  { key: "attendance-records", label: "Attendance Records", icon: CalendarCheck },
-  { key: "leave-requests", label: "Leave Requests", icon: CalendarX2 },
-  { key: "settings", label: "Settings", icon: SettingsIcon },
-];
-
-// Every nav key now maps to a real route — nothing here should fall through
-// to the /coming-soon placeholder anymore (Phase 1 covers all of these).
-const ROUTE_BY_KEY: Record<string, string> = {
-  dashboard: "/dashboard",
-  attendance: "/attendance",
-  leave: "/leave",
-  payroll: "/payroll",
-  appraisal: "/appraisal",
-  notification: "/notifications",
-  profile: "/edit-profile",
-  "team-members": "/team",
-  "team-attendance": "/team/attendance",
-  "team-leaves": "/team/leaves",
-  "appraisal-criteria": "/team/appraisal-criteria",
-  "team-reports": "/team/reports",
-  employees: "/employees",
-  "process-payroll": "/payroll/process",
-  "attendance-records": "/attendance-records",
-  "leave-requests": "/leave-requests",
-  settings: "/settings",
-};
+import type { Role } from "@/constants/roles";
+import {
+  NAV_TREE,
+  isGroup,
+  canAccess,
+  resolveLeafPath,
+  pathMatchesLocation,
+  type NavNode,
+  type NavGroup,
+  type NavLeaf,
+} from "@/config/navigation";
 
 const COLLAPSE_STORAGE_KEY = "technocues:sidebar-collapsed";
 
@@ -96,31 +27,39 @@ type SidebarProps = {
   onRequestLogout: () => void;
 };
 
-// A single nav (or logout) button. When `collapsed` is true it shows just the
-// icon, and reveals the item's full title in a tooltip on hover — the
-// sidebar itself no longer expands on hover, only via the fold button.
-function SidebarItemButton({
+/** True if this leaf (or any leaf under this group) is the current route. */
+function isNodeActive(
+  node: NavNode,
+  pathname: string,
+  search: string,
+  activeKey: string | undefined,
+  role: Role | undefined,
+): boolean {
+  if (isGroup(node)) {
+    return node.children.some((child) => isNodeActive(child, pathname, search, activeKey, role));
+  }
+  if (activeKey && node.key === activeKey) return true;
+  return pathMatchesLocation(resolveLeafPath(node, role), pathname, search);
+}
+
+function SidebarLeafButton({
   icon: Icon,
   label,
   isActive,
   collapsed,
+  nested,
   onClick,
 }: {
-  icon: typeof LayoutDashboard;
+  icon: LucideIcon;
   label: string;
   isActive?: boolean;
   collapsed: boolean;
+  nested?: boolean;
   onClick: () => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
 
-  // The tooltip used to be `absolute` inside the scroll rail, which meant
-  // its width counted toward the rail's scrollable area — with the rail
-  // folded down to 80px, that overflow silently made the whole sidebar
-  // pannable left/right. Rendering it into a portal at a fixed viewport
-  // position keeps the rail's own box (and therefore its scroll extent)
-  // limited to its actual width.
   const showTooltip = () => {
     if (!collapsed || !wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
@@ -141,8 +80,9 @@ function SidebarItemButton({
         type="button"
         onClick={onClick}
         aria-label={label}
+        aria-current={isActive ? "page" : undefined}
         className={`flex items-center rounded-xl text-left text-[15px] font-medium transition-colors duration-150 ${
-          collapsed ? "mx-auto w-11 justify-center py-2.5" : "w-full px-4 py-3"
+          collapsed ? "mx-auto w-11 justify-center py-2.5" : `w-full py-3 ${nested ? "pl-11 pr-4" : "px-4"}`
         } ${
           isActive
             ? collapsed
@@ -151,16 +91,21 @@ function SidebarItemButton({
             : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"
         }`}
       >
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 ${
-            isActive ? "bg-brand text-white" : "bg-transparent text-gray-400"
-          }`}
-        >
-          <Icon size={18} />
-        </span>
+        {!nested && (
+          <span
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 ${
+              isActive ? "bg-brand text-white" : "bg-transparent text-gray-400"
+            }`}
+          >
+            <Icon size={18} />
+          </span>
+        )}
+        {nested && !collapsed && (
+          <span className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? "bg-brand" : "bg-gray-300"}`} />
+        )}
         {!collapsed && (
           <span
-            className={`ml-3 max-w-[160px] overflow-hidden truncate whitespace-nowrap opacity-100 ${
+            className={`${nested ? "" : "ml-3"} max-w-[160px] overflow-hidden truncate whitespace-nowrap opacity-100 ${
               isActive ? "text-brand font-semibold" : ""
             }`}
           >
@@ -169,11 +114,6 @@ function SidebarItemButton({
         )}
       </button>
 
-      {/* Tooltip — only relevant (and only rendered) when the rail is folded.
-          Shows the icon alongside the full title so the hover preview mirrors
-          exactly what the expanded item looks like. Portalled to <body> and
-          positioned with `fixed` coordinates so it can never affect the
-          sidebar rail's own layout or scroll size. */}
       {collapsed &&
         tooltipPos &&
         createPortal(
@@ -194,39 +134,173 @@ function SidebarItemButton({
   );
 }
 
+function SidebarGroup({
+  node,
+  pathname,
+  search,
+  activeKey,
+  role,
+  collapsed,
+  expandedKeys,
+  onToggleExpand,
+  onLeafClick,
+  onExpandFromCollapsed,
+}: {
+  node: NavGroup;
+  pathname: string;
+  search: string;
+  activeKey: string | undefined;
+  role: Role | undefined;
+  collapsed: boolean;
+  expandedKeys: Set<string>;
+  onToggleExpand: (key: string) => void;
+  onLeafClick: (leafNode: NavLeaf) => void;
+  onExpandFromCollapsed: (groupKey: string) => void;
+}) {
+  const visibleChildren = node.children.filter((child) => canAccess(child, role));
+  if (visibleChildren.length === 0) return null;
+
+  const active = isNodeActive(node, pathname, search, activeKey, role);
+  const isOpen = collapsed ? false : expandedKeys.has(node.key);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => (collapsed ? onExpandFromCollapsed(node.key) : onToggleExpand(node.key))}
+        aria-expanded={isOpen}
+        className={`flex items-center rounded-xl text-left text-[15px] font-medium transition-colors duration-150 ${
+          collapsed ? "mx-auto w-11 justify-center py-2.5" : "w-full px-4 py-3"
+        } ${active ? "text-brand" : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"}`}
+      >
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 ${
+            active ? "bg-brand text-white" : "bg-transparent text-gray-400"
+          }`}
+        >
+          <node.icon size={18} />
+        </span>
+        {!collapsed && (
+          <>
+            <span className={`ml-3 flex-1 truncate whitespace-nowrap ${active ? "text-brand font-semibold" : ""}`}>
+              {node.label}
+            </span>
+            <ChevronDown
+              size={15}
+              className={`shrink-0 text-gray-400 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+            />
+          </>
+        )}
+      </button>
+
+      {!collapsed && isOpen && (
+        <div className="mt-0.5 flex flex-col gap-0.5">
+          {visibleChildren.map((child) =>
+            isGroup(child) ? (
+              <SidebarGroup
+                key={child.key}
+                node={child}
+                pathname={pathname}
+                search={search}
+                activeKey={activeKey}
+                role={role}
+                collapsed={false}
+                expandedKeys={expandedKeys}
+                onToggleExpand={onToggleExpand}
+                onLeafClick={onLeafClick}
+                onExpandFromCollapsed={onExpandFromCollapsed}
+              />
+            ) : (
+              <SidebarLeafButton
+                key={child.key}
+                icon={child.icon}
+                label={child.label}
+                nested
+                collapsed={false}
+                isActive={isNodeActive(child, pathname, search, activeKey, role)}
+                onClick={() => onLeafClick(child)}
+              />
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SidebarContent({
-  activeKey = "dashboard",
+  activeKey,
   onNavigate,
   collapsed = false,
   onRequestLogout,
+  onExpandFromCollapsed,
 }: {
   activeKey?: string;
   onNavigate?: () => void;
   collapsed?: boolean;
   onRequestLogout: () => void;
+  onExpandFromCollapsed: (groupKey: string) => void;
 }) {
   const { isAuthenticated, user } = useAuth();
   const { branding } = useBranding();
   const navigate = useNavigate();
-  const isTeamLead = user?.role === "team_lead";
-  const isAdmin = user?.role === "hr_manager" || user?.role === "administrator";
+  const location = useLocation();
   const logoSrc = branding.logoUrl || logo;
-  const badgeSrc = branding.logoUrl || badge;
+  // The folded rail renders into a 36–40px circle, so the wide wordmark is the
+  // wrong asset there — it squashes to an unreadable smear. Prefer the dedicated
+  // collapsed logo, fall back to the wordmark only if no collapsed variant was
+  // configured, and to the bundled badge if branding is empty entirely.
+  const badgeSrc = branding.logoCollapsedUrl || branding.logoUrl || badge;
+  const role = user?.role;
+
+  // Auto-expand whichever group contains the active route, on top of
+  // whatever the person has manually opened, so the current page's section
+  // never looks collapsed on load or after a hard navigation.
+  const autoExpandedKey = useMemo(() => {
+    for (const node of NAV_TREE) {
+      if (isGroup(node) && isNodeActive(node, location.pathname, location.search, activeKey, role)) {
+        return node.key;
+      }
+    }
+    return null;
+  }, [location.pathname, location.search, activeKey, role]);
+
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
+    () => new Set(autoExpandedKey ? [autoExpandedKey] : []),
+  );
+
+  useEffect(() => {
+    if (autoExpandedKey) {
+      setExpandedKeys((prev) => (prev.has(autoExpandedKey) ? prev : new Set(prev).add(autoExpandedKey)));
+    }
+  }, [autoExpandedKey]);
+
+  const toggleExpand = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const handleLogoClick = () => {
     navigate(isAuthenticated ? "/dashboard" : "/login");
     onNavigate?.();
   };
 
-  const handleNavClick = (key: string, label: string) => {
-    const route = ROUTE_BY_KEY[key];
-    if (route) {
-      navigate(route);
-    } else {
-      navigate("/coming-soon", { state: { key, label } });
-    }
+  const handleLeafClick = (leafNode: NavLeaf) => {
+    const dest = resolveLeafPath(leafNode, role);
+    navigate(dest);
     onNavigate?.();
   };
+
+  const handleExpandFromCollapsed = (groupKey: string) => {
+    setExpandedKeys((prev) => new Set(prev).add(groupKey));
+    onExpandFromCollapsed(groupKey);
+  };
+
+  const visibleTree = NAV_TREE.filter((node) => canAccess(node, role));
 
   return (
     <>
@@ -258,62 +332,36 @@ function SidebarContent({
       </button>
 
       <nav className="flex flex-1 flex-col gap-1.5">
-        {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
-          <SidebarItemButton
-            key={key}
-            icon={Icon}
-            label={label}
-            isActive={key === activeKey}
-            collapsed={collapsed}
-            onClick={() => handleNavClick(key, label)}
-          />
-        ))}
-
-        {isTeamLead && (
-          <>
-            {!collapsed && (
-              <p className="mb-1 mt-4 px-4 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                Team Lead
-              </p>
-            )}
-            {collapsed && <div className="my-3 h-px bg-gray-100" />}
-            {TEAM_LEAD_NAV_ITEMS.map(({ key, label, icon: Icon }) => (
-              <SidebarItemButton
-                key={key}
-                icon={Icon}
-                label={label}
-                isActive={key === activeKey}
-                collapsed={collapsed}
-                onClick={() => handleNavClick(key, label)}
-              />
-            ))}
-          </>
-        )}
-
-        {isAdmin && (
-          <>
-            {!collapsed && (
-              <p className="mb-1 mt-4 px-4 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                Administration
-              </p>
-            )}
-            {collapsed && <div className="my-3 h-px bg-gray-100" />}
-            {ADMIN_NAV_ITEMS.map(({ key, label, icon: Icon }) => (
-              <SidebarItemButton
-                key={key}
-                icon={Icon}
-                label={label}
-                isActive={activeKey === key || (key === "settings" && !!activeKey?.startsWith("settings"))}
-                collapsed={collapsed}
-                onClick={() => handleNavClick(key, label)}
-              />
-            ))}
-          </>
+        {visibleTree.map((node) =>
+          isGroup(node) ? (
+            <SidebarGroup
+              key={node.key}
+              node={node}
+              pathname={location.pathname}
+              search={location.search}
+              activeKey={activeKey}
+              role={role}
+              collapsed={collapsed}
+              expandedKeys={expandedKeys}
+              onToggleExpand={toggleExpand}
+              onLeafClick={handleLeafClick}
+              onExpandFromCollapsed={handleExpandFromCollapsed}
+            />
+          ) : (
+            <SidebarLeafButton
+              key={node.key}
+              icon={node.icon}
+              label={node.label}
+              collapsed={collapsed}
+              isActive={isNodeActive(node, location.pathname, location.search, activeKey, role)}
+              onClick={() => handleLeafClick(node)}
+            />
+          ),
         )}
       </nav>
 
       <div className="mt-4">
-        <SidebarItemButton
+        <SidebarLeafButton
           icon={LogOut}
           label="Logout"
           collapsed={collapsed}
@@ -337,22 +385,26 @@ export default function Sidebar({ activeKey, mobileOpen, onClose, onRequestLogou
     window.localStorage.setItem(COLLAPSE_STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 
+  // Clicking a group while the rail is folded un-collapses the rail (the
+  // group then opens itself via SidebarContent's expandedKeys state)
+  // instead of silently doing nothing.
+  const expandFromCollapsed = () => setCollapsed(false);
+
   return (
     <>
-      {/* Desktop sidebar — a self-contained column, completely separate from
-          the main content area on the opposite side, each scrolling on its
-          own. Folds to an icon rail via the toggle button; individual icons
-          reveal their full title in a tooltip on hover while folded. */}
+      {/* Desktop sidebar */}
       <aside
         className={`relative z-30 hidden h-[100dvh] shrink-0 flex-col border-r border-gray-100 bg-white transition-[width] duration-200 ease-in-out lg:flex ${
-          collapsed ? "w-20" : "w-64"
+          collapsed ? "w-20" : "w-72"
         }`}
       >
-        {/* Scrollable, but the scrollbar itself is hidden — the rail still
-            scrolls with wheel/trackpad/touch when the nav list is taller
-            than the viewport, it just doesn't show a visible track. */}
         <div className="scroll-touch scrollbar-hide flex h-full flex-col overflow-y-auto overflow-x-hidden px-4 py-6">
-          <SidebarContent activeKey={activeKey} collapsed={collapsed} onRequestLogout={onRequestLogout} />
+          <SidebarContent
+            activeKey={activeKey}
+            collapsed={collapsed}
+            onRequestLogout={onRequestLogout}
+            onExpandFromCollapsed={expandFromCollapsed}
+          />
         </div>
 
         <button
@@ -371,13 +423,11 @@ export default function Sidebar({ activeKey, mobileOpen, onClose, onRequestLogou
         aria-hidden={!mobileOpen}
       >
         <div
-          className={`absolute inset-0 bg-black/40 transition-opacity ${
-            mobileOpen ? "opacity-100" : "opacity-0"
-          }`}
+          className={`absolute inset-0 bg-black/40 transition-opacity ${mobileOpen ? "opacity-100" : "opacity-0"}`}
           onClick={onClose}
         />
         <aside
-          className={`scroll-touch scrollbar-hide absolute inset-y-0 left-0 flex w-72 max-w-[80%] flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-white px-4 py-6 shadow-xl transition-transform duration-200 ${
+          className={`scroll-touch scrollbar-hide absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-white px-4 py-6 shadow-xl transition-transform duration-200 ${
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -391,7 +441,12 @@ export default function Sidebar({ activeKey, mobileOpen, onClose, onRequestLogou
               <X size={20} />
             </button>
           </div>
-          <SidebarContent activeKey={activeKey} onNavigate={onClose} onRequestLogout={onRequestLogout} />
+          <SidebarContent
+            activeKey={activeKey}
+            onNavigate={onClose}
+            onRequestLogout={onRequestLogout}
+            onExpandFromCollapsed={() => {}}
+          />
         </aside>
       </div>
     </>

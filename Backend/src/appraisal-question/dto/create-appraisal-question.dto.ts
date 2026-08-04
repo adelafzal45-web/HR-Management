@@ -1,6 +1,14 @@
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 import { ApiProperty } from '@nestjs/swagger';
+
+import { QuestionType } from '../appraisal-question.entity';
 
 export class CreateAppraisalQuestionDto {
   @ApiProperty({
@@ -12,12 +20,14 @@ export class CreateAppraisalQuestionDto {
   question_text!: string;
 
   @ApiProperty({
-    example: 'Rating',
-    description: 'Question type',
+    enum: QuestionType,
+    example: QuestionType.RATING,
+    description:
+      'Question type. Must be one of the five supported types; the database ' +
+      'CHECK constraint CHK_aq_question_type rejects anything else.',
   })
-  @IsString()
-  @IsNotEmpty()
-  question_type!: string;
+  @IsEnum(QuestionType)
+  question_type!: QuestionType;
 
   @ApiProperty({
     example: true,

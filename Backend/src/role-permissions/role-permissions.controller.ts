@@ -29,6 +29,8 @@ export class RolePermissionsController {
   constructor(private readonly rolePermissionService: RolePermissionsService) {}
 
   @Post()
+  @UseGuards(PermissionGuard)
+  @RequirePermission('roles.update')
   @ApiOperation({
     summary: 'Assign a permission to a role',
     description: 'Creates a new relationship between a role and a permission.',
@@ -62,7 +64,7 @@ export class RolePermissionsController {
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.update')
+  @RequirePermission('roles.update')
   @ApiOperation({
     summary: 'Update a role-permission mapping',
   })
@@ -84,7 +86,7 @@ export class RolePermissionsController {
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
-  @RequirePermission('employees.delete')
+  @RequirePermission('roles.update')
   @ApiOperation({
     summary: 'Remove a role-permission mapping',
   })

@@ -32,6 +32,17 @@ export class CreateShiftDto {
   end_time!: string;
 
   @ApiProperty({
+    example: 60,
+    description: 'Unpaid break within the shift, in minutes.',
+    required: false,
+    default: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  break_duration_minutes?: number;
+
+  @ApiProperty({
     example: 15,
   })
   @IsNumber()

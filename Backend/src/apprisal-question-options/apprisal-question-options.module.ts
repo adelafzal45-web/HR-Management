@@ -6,21 +6,16 @@ import { AppraisalQuestionOption } from './apprisal-question-options.entity';
 
 import { AppraisalQuestion } from '../appraisal-question/appraisal-question.entity';
 
-import { AppraisalQuestionOptionsController } from './apprisal-question-options.controller';
-
-import { AppraisalQuestionOptionsService } from './apprisal-question-options.service';
-import { AuthorizationModule } from '../authorization/authorization.module';
-
+/**
+ * Entity registration only. The controller and service were removed: option rows
+ * are read through the facade's question payloads, and the 3-role workflow rates
+ * questions on a numeric scale rather than by picking option rows, so nothing
+ * writes to this table any more. The entity stays because
+ * PerformanceReviewAnswerModule still registers it via forFeature.
+ */
 @Module({
   imports: [
     TypeOrmModule.forFeature([AppraisalQuestionOption, AppraisalQuestion]),
-    AuthorizationModule,
   ],
-
-  controllers: [AppraisalQuestionOptionsController],
-
-  providers: [AppraisalQuestionOptionsService],
-
-  exports: [AppraisalQuestionOptionsService],
 })
 export class AppraisalQuestionOptionsModule {}

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import BackButton from "@/components/common/BackButton";
-import BackendStatusBanner from "@/components/common/BackendStatusBanner";
+import LoadingOverlay from "@/components/common/LoadingOverlay";
 import { PrimaryButton } from "@/components/forms/FormField";
-import { useBackendStatus } from "@/hooks/useBackendStatus";
-import { teamApi, appraisalCriteriaApi, evaluationApi } from "@/modules/team/api/teamApi";
-import type { TeamMember, AppraisalQuestion, SubmittedEvaluation } from "@/modules/team/api/teamApi";
+import { useAuth } from "@/app/providers/AuthContext";
+import {
+  teamAppraisalApi,
+  type EvaluationForm,
+  type SubmittedEvaluation,
+} from "@/modules/appraisal/api/appraisalApi";
 
 function currentReviewPeriod() {
   const now = new Date();
@@ -16,60 +19,72 @@ function currentReviewPeriod() {
 }
 
 export default function EvaluateEmployee() {
-  const status = useBackendStatus();
   const navigate = useNavigate();
   const { employeeId } = useParams<{ employeeId: string }>();
+  const { hasPermission } = useAuth();
+  const canSubmit = hasPermission("appraisal.create");
 
-  const [member, setMember] = useState<TeamMember | null>(null);
-  const [criteria, setCriteria] = useState<AppraisalQuestion[]>([]);
-  const [existing, setExisting] = useState<SubmittedEvaluation | null>(null);
+  const [form, setForm] = useState<EvaluationForm | null>(null);
   const [scores, setScores] = useState<Record<string, number>>({});
+  const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [comments, setComments] = useState("");
   const [recommendation, setRecommendation] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<SubmittedEvaluation | null>(null);
 
   useEffect(() => {
     if (!employeeId) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const [members, criteriaList, prior] = await Promise.all([
-          teamApi.getTeamMembers(),
-          appraisalCriteriaApi.getCriteria(),
-          evaluationApi.getEvaluation(employeeId),
-        ]);
-        setMember(members.find((m) => m.employeeId === employeeId) ?? null);
-        setCriteria(criteriaList.filter((q) => q.isActive));
-        setExisting(prior);
-        if (prior) {
-          const initialScores: Record<string, number> = {};
-          prior.scores.forEach((s) => {
+    teamAppraisalApi
+      .getEvaluationForm(employeeId)
+      .then((data) => {
+        setForm(data);
+        const initialScores: Record<string, number> = {};
+        const initialRemarks: Record<string, string> = {};
+        if (data.existing) {
+          data.existing.scores.forEach((s) => {
             initialScores[s.questionId] = s.score;
+            if (s.remarks) initialRemarks[s.questionId] = s.remarks;
           });
-          setScores(initialScores);
-          setComments(prior.comments);
-          setRecommendation(prior.recommendation);
+          setComments(data.existing.comments);
+          setRecommendation(data.existing.recommendation);
+        } else {
+          // Start each question at the midpoint of its own configured scale.
+          data.questions.forEach((q) => {
+            initialScores[q.questionId] = Math.ceil(q.ratingScale / 2);
+          });
         }
-      } catch {
-        setMember(null);
-      } finally {
-        setLoading(false);
-      }
-    })();
+        setScores(initialScores);
+        setRemarks(initialRemarks);
+      })
+      .catch((err) =>
+        setLoadError(err instanceof Error ? err.message : "Could not load the evaluation form."),
+      )
+      .finally(() => setLoading(false));
   }, [employeeId]);
 
-  const weightedScore = useMemo(() => {
-    return (
-      Math.round(
-        criteria.reduce((sum, q) => sum + ((scores[q.questionId] ?? 0) * q.weightage) / 100, 0) * 10,
-      ) / 10
-    );
-  }, [criteria, scores]);
+  const activeQuestions = useMemo(
+    () => (form?.questions ?? []).filter((q) => q.isActive),
+    [form],
+  );
 
-  const allScored = criteria.length > 0 && criteria.every((q) => scores[q.questionId] != null);
+  // Mirrors the backend: each answer becomes score/scale*100, then a
+  // weight-weighted mean across questions.
+  const weightedTotal = useMemo(() => {
+    if (activeQuestions.length === 0) return 0;
+    const totalWeight = activeQuestions.reduce((sum, q) => sum + q.weightage, 0);
+    if (totalWeight === 0) return 0;
+    const weighted = activeQuestions.reduce((sum, q) => {
+      const raw = scores[q.questionId] ?? 0;
+      return sum + (raw / q.ratingScale) * 100 * q.weightage;
+    }, 0);
+    return Math.round((weighted / totalWeight) * 10) / 10;
+  }, [activeQuestions, scores]);
+
+  const allScored =
+    activeQuestions.length > 0 && activeQuestions.every((q) => scores[q.questionId] != null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -77,7 +92,7 @@ export default function EvaluateEmployee() {
 
     if (!employeeId) return;
     if (!allScored) {
-      setError("Please score every criterion before submitting.");
+      setError("Please score every question before submitting.");
       return;
     }
     if (!comments.trim() || !recommendation.trim()) {
@@ -87,12 +102,15 @@ export default function EvaluateEmployee() {
 
     setSubmitting(true);
     try {
-      const result = await evaluationApi.submitEvaluation({
-        employeeId,
+      const result = await teamAppraisalApi.submitEvaluation(employeeId, {
         reviewPeriod: currentReviewPeriod(),
         comments: comments.trim(),
         recommendation: recommendation.trim(),
-        scores: criteria.map((q) => ({ questionId: q.questionId, score: scores[q.questionId] })),
+        scores: activeQuestions.map((q) => ({
+          questionId: q.questionId,
+          score: scores[q.questionId],
+          remarks: remarks[q.questionId]?.trim() || undefined,
+        })),
       });
       setSubmitted(result);
     } catch (err) {
@@ -104,25 +122,27 @@ export default function EvaluateEmployee() {
 
   return (
     <DashboardLayout title="Evaluate Employee" activeKey="team-members">
-      <BackendStatusBanner status={status} />
+      <LoadingOverlay show={loading} label="Loading evaluation form…" />
 
       <BackButton fallback="/team" label="Back to My Team" className="mb-4" />
 
-      {loading ? (
-        <div className="h-64 animate-pulse rounded-2xl bg-gray-100" />
-      ) : !member ? (
+      {loadError ? (
         <div className="rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-gray-100">
-          <p className="text-sm font-semibold text-gray-900">Team member not found</p>
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500">
+            <AlertCircle size={26} />
+          </span>
+          <p className="mt-3 text-sm font-semibold text-gray-900">Evaluation unavailable</p>
+          <p className="mt-1 text-sm text-gray-500">{loadError}</p>
         </div>
-      ) : submitted ? (
+      ) : !loading && !form ? null : submitted ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-gray-100">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
             <CheckCircle2 size={26} />
           </span>
           <p className="text-lg font-semibold text-gray-900">Evaluation submitted</p>
           <p className="max-w-sm text-sm text-gray-500">
-            {member.firstName} {member.lastName}'s weighted appraisal score is{" "}
-            <strong className="text-gray-900">{submitted.totalScore} / 10</strong>.
+            {submitted.employeeName}'s weighted appraisal score is{" "}
+            <strong className="text-gray-900">{submitted.totalScore}%</strong>.
           </p>
           <button
             type="button"
@@ -133,95 +153,130 @@ export default function EvaluateEmployee() {
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">
-              {member.firstName} {member.lastName}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {member.designation} · {currentReviewPeriod()}
-            </p>
-            {existing && (
-              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                An evaluation already exists for this cycle — submitting again will overwrite it.
+        form && (
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">{form.employeeName}</h2>
+              <p className="text-sm text-gray-500">
+                {form.formName} · {form.evaluationType} · {currentReviewPeriod()}
               </p>
-            )}
-
-            <div className="mt-5 space-y-4">
-              {criteria.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No active appraisal criteria yet. Set them up under Appraisal Criteria first.
+              {form.existing && (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  An evaluation already exists for this cycle — submitting again will overwrite it.
                 </p>
-              ) : (
-                criteria.map((q) => (
-                  <div key={q.questionId} className="rounded-xl border border-gray-100 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-gray-900">{q.questionText}</p>
-                      <span className="shrink-0 text-xs text-gray-400">{q.weightage}% weight</span>
-                    </div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <input
-                        type="range"
-                        min={1}
-                        max={10}
-                        step={0.5}
-                        value={scores[q.questionId] ?? 5}
-                        onChange={(e) =>
-                          setScores((cur) => ({ ...cur, [q.questionId]: Number(e.target.value) }))
-                        }
-                        className="h-2 flex-1 cursor-pointer accent-brand-dark"
-                      />
-                      <span className="w-10 shrink-0 text-right text-sm font-semibold text-gray-900">
-                        {(scores[q.questionId] ?? 5).toFixed(1)}
-                      </span>
-                    </div>
-                  </div>
-                ))
               )}
+              {!canSubmit && (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  You don't have permission to submit evaluations. This form is read-only for you.
+                </p>
+              )}
+
+              <div className="mt-5 space-y-4">
+                {activeQuestions.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    This form has no active questions. Ask HR to configure it before evaluating.
+                  </p>
+                ) : (
+                  activeQuestions.map((q) => {
+                    const value = scores[q.questionId] ?? Math.ceil(q.ratingScale / 2);
+                    return (
+                      <div key={q.questionId} className="rounded-xl border border-gray-100 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-gray-900">{q.questionText}</p>
+                          <span className="shrink-0 text-xs text-gray-400">{q.weightage}% weight</span>
+                        </div>
+
+                        <div className="mt-3 flex items-center gap-3">
+                          <input
+                            type="range"
+                            min={1}
+                            max={q.ratingScale}
+                            step={1}
+                            value={value}
+                            disabled={!canSubmit}
+                            onChange={(e) =>
+                              setScores((cur) => ({ ...cur, [q.questionId]: Number(e.target.value) }))
+                            }
+                            aria-label={`Rating for ${q.questionText}`}
+                            className="h-2 flex-1 cursor-pointer accent-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                          <span className="w-14 shrink-0 text-right text-sm font-semibold text-gray-900">
+                            {value} / {q.ratingScale}
+                          </span>
+                        </div>
+
+                        {(q.minLabel || q.maxLabel) && (
+                          <div className="mt-1 flex justify-between text-xs text-gray-400">
+                            <span>{q.minLabel ?? "1"}</span>
+                            <span>{q.maxLabel ?? q.ratingScale}</span>
+                          </div>
+                        )}
+
+                        <input
+                          type="text"
+                          value={remarks[q.questionId] ?? ""}
+                          disabled={!canSubmit}
+                          onChange={(e) =>
+                            setRemarks((cur) => ({ ...cur, [q.questionId]: e.target.value }))
+                          }
+                          placeholder="Optional comment on this question"
+                          className="mt-3 w-full rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60 disabled:opacity-50"
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <label className="mt-5 block">
+                <span className="mb-2 block text-sm font-medium text-gray-900">Comments</span>
+                <textarea
+                  value={comments}
+                  disabled={!canSubmit}
+                  onChange={(e) => setComments(e.target.value)}
+                  rows={3}
+                  placeholder="Summarize overall performance for this period"
+                  className="w-full resize-none rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60 disabled:opacity-50"
+                />
+              </label>
+
+              <label className="mt-4 block">
+                <span className="mb-2 block text-sm font-medium text-gray-900">Recommendation</span>
+                <input
+                  type="text"
+                  value={recommendation}
+                  disabled={!canSubmit}
+                  onChange={(e) => setRecommendation(e.target.value)}
+                  placeholder="e.g. Recommended for a performance increment"
+                  className="w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60 disabled:opacity-50"
+                />
+              </label>
+
+              {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
             </div>
 
-            <label className="mt-5 block">
-              <span className="mb-2 block text-sm font-medium text-gray-900">Comments</span>
-              <textarea
-                value={comments}
-                onChange={(e) => setComments(e.target.value)}
-                rows={3}
-                placeholder="Summarize overall performance for this period"
-                className="w-full resize-none rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
-              />
-            </label>
+            <div className="h-fit rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+              <p className="text-sm font-medium text-gray-500">Weighted Score (live)</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight text-brand-dark">
+                {weightedTotal}
+                <span className="text-base font-normal text-gray-400">%</span>
+              </p>
+              <p className="mt-2 text-xs text-gray-400">
+                {allScored ? "All questions scored." : "Score every question to finalize."}
+              </p>
 
-            <label className="mt-4 block">
-              <span className="mb-2 block text-sm font-medium text-gray-900">Recommendation</span>
-              <input
-                type="text"
-                value={recommendation}
-                onChange={(e) => setRecommendation(e.target.value)}
-                placeholder="e.g. Recommended for a performance increment"
-                className="w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
-              />
-            </label>
-
-            {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
-          </div>
-
-          <div className="h-fit rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <p className="text-sm font-medium text-gray-500">Weighted Score (live)</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight text-brand-dark">
-              {weightedScore}
-              <span className="text-base font-normal text-gray-400"> / 10</span>
-            </p>
-            <p className="mt-2 text-xs text-gray-400">
-              {allScored ? "All criteria scored." : "Score every criterion to finalize."}
-            </p>
-
-            <div className="mt-5">
-              <PrimaryButton type="submit" loading={submitting} disabled={criteria.length === 0}>
-                Submit Evaluation
-              </PrimaryButton>
+              <div className="mt-5">
+                <PrimaryButton
+                  type="submit"
+                  loading={submitting}
+                  disabled={activeQuestions.length === 0 || !canSubmit}
+                >
+                  Submit Evaluation
+                </PrimaryButton>
+              </div>
             </div>
-          </div>
-        </form>
+          </form>
+        )
       )}
     </DashboardLayout>
   );

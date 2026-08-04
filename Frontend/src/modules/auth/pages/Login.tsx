@@ -5,9 +5,7 @@ import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import LoadingOverlay from "@/components/common/LoadingOverlay";
 import { FormField, PrimaryButton } from "@/components/forms/FormField";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
-import { authApi } from "@/api/client";
 import { useAuth } from "@/app/providers/AuthContext";
-import { DEV_LOGIN_ACCOUNTS } from "@/modules/auth/utils/devBypass";
 
 export default function Login() {
   const status = useBackendStatus();
@@ -26,8 +24,7 @@ export default function Login() {
 
     setLoading(true);
     try {
-      const result = await authApi.login(email, password);
-      login({ token: result.token, user: result.user });
+      await login(email, password);
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid email or password.");
@@ -48,29 +45,6 @@ export default function Login() {
       </p>
 
       <BackendStatusBanner status={status} />
-
-      {import.meta.env.DEV && (
-        <div className="mb-6 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-amber-700">
-            Dev only — skip login while the real backend is in progress
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {DEV_LOGIN_ACCOUNTS.map((account) => (
-              <button
-                key={account.label}
-                type="button"
-                onClick={() => {
-                  login(account.session);
-                  navigate("/dashboard");
-                }}
-                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100"
-              >
-                {account.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <form onSubmit={handleSubmit}>
         <FormField

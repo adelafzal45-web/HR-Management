@@ -17,10 +17,25 @@ import { AppraisalQuestion } from './appraisal-question/appraisal-question.entit
 import { AppraisalQuestionOption } from './apprisal-question-options/apprisal-question-options.entity';
 
 import { AppraisalForms } from './appraisal-forms/appraisal-forms.entity';
+import { AppraisalFormAssignment } from './appraisal-forms/appraisal-form-assignment.entity';
+import {
+  TeamLeadAssignment,
+  TeamLeadAssignmentMember,
+} from './appraisal-forms/team-lead-assignment.entity';
 import { AppraisalFormQuestion } from './appraisal-form-questions/appraisal-form-questions.entity';
 
 import { PerformanceReview } from './performance-review/performance-review.entity';
+import { ReviewApproval } from './performance-review/review-approval.entity';
 import { PerformanceReviewAnswer } from './performance-review-answer/performance-review-answer.entity';
+import { AppraisalNotification } from './appraisal-notifications/appraisal-notification.entity';
+
+import { RefreshToken } from './auth/refresh-token.entity';
+
+import { CompanySettings } from './company-settings/company-settings.entity';
+import { LeaveType } from './leave-types/leave-types.entity';
+import { WorkingDaySchedule } from './working-day-schedules/working-day-schedules.entity';
+import { UserLeaveBalance } from './users/user-leave-balance.entity';
+import { AuditLog } from './audit/audit-log.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -31,7 +46,7 @@ export const AppDataSource = new DataSource({
 
   username: 'postgres',
 
-  password: '123454321',
+  password: 'admin',
 
   database: 'HR',
 
@@ -53,9 +68,20 @@ export const AppDataSource = new DataSource({
     AppraisalQuestion,
     AppraisalQuestionOption,
     AppraisalForms,
+    AppraisalFormAssignment,
+    TeamLeadAssignment,
+    TeamLeadAssignmentMember,
     AppraisalFormQuestion,
     PerformanceReview,
+    ReviewApproval,
     PerformanceReviewAnswer,
+    AppraisalNotification,
+    RefreshToken,
+    CompanySettings,
+    LeaveType,
+    WorkingDaySchedule,
+    UserLeaveBalance,
+    AuditLog,
   ],
 
   migrations: ['src/migrations/*.ts'],

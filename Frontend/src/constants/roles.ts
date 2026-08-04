@@ -2,10 +2,10 @@
 // Keep this in sync with the roles issued by the backend's auth/JWT payload.
 
 export const ROLES = {
-  EMPLOYEE: "employee",
-  TEAM_LEAD: "team_lead",
-  HR_MANAGER: "hr_manager",
-  ADMINISTRATOR: "administrator",
+ EMPLOYEE: "employee",
+ TEAM_LEAD: "team_lead",
+ HR_MANAGER: "hr_manager",
+ ADMINISTRATOR: "administrator",
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
