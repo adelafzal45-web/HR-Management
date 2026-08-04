@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  CalendarClock,
+  BookmarkPlus,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -9,7 +9,6 @@ import {
   Copy,
   Eye,
   GripVertical,
-  Info,
   Layers,
   Library,
   Lock,
@@ -24,6 +23,7 @@ import {
 
 import Modal from "@/components/dialogs/Modal";
 import EmptyState from "@/components/common/EmptyState";
+import InfoTip from "@/components/common/InfoTip";
 import StatusBadge from "@/components/common/StatusBadge";
 import SearchableMultiSelect, {
   type SelectItem,
@@ -463,8 +463,11 @@ function QuestionCard({
   hasProblem,
   dragging,
   dragOver,
+  savingToBank,
   onToggleExpand,
   onPatch,
+  onDuplicate,
+  onSaveToBank,
   onRemove,
   onMove,
   onDragStart,
@@ -480,8 +483,11 @@ function QuestionCard({
   hasProblem: boolean;
   dragging: boolean;
   dragOver: boolean;
+  savingToBank: boolean;
   onToggleExpand: () => void;
   onPatch: (next: Partial<QuestionDraft>) => void;
+  onDuplicate: () => void;
+  onSaveToBank: () => void;
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
   onDragStart: () => void;
@@ -590,6 +596,34 @@ function QuestionCard({
           )}
           {!locked && (
             <>
+              {/*
+                * Save to bank is offered even on an unsaved question: the bank is
+                * a separate resource, and a reusable wording is usually spotted
+                * while it is being written, not after the form is finished.
+                */}
+              <button
+                type="button"
+                onClick={onSaveToBank}
+                disabled={savingToBank || !question.questionText.trim()}
+                aria-label={`Save question ${index + 1} to the question bank`}
+                title={
+                  question.questionText.trim()
+                    ? "Save this wording to the question bank so other forms can reuse it"
+                    : "Give the question a title first"
+                }
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-brand-dark disabled:opacity-25"
+              >
+                <BookmarkPlus size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={onDuplicate}
+                aria-label={`Duplicate question ${index + 1}`}
+                title="Insert a copy of this question below"
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+              >
+                <Copy size={15} />
+              </button>
               <button
                 type="button"
                 onClick={() => onMove(-1)}
@@ -1128,6 +1162,8 @@ export default function FormEditor({
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [bankOpen, setBankOpen] = useState(false);
+  /** localId of the question currently being written to the bank, if any. */
+  const [bankSaving, setBankSaving] = useState<string | null>(null);
   const [saving, setSaving] = useState<null | "draft" | "publish" | "duplicate">(null);
   const [showProblems, setShowProblems] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -1212,6 +1248,81 @@ export default function FormEditor({
     const draft = blankQuestion();
     setQuestions((prev) => [...prev, draft]);
     setExpanded((prev) => new Set(prev).add(draft.localId));
+  };
+
+  /**
+   * Copies a question in place, directly beneath the original.
+   *
+   * The copy is a fresh local row: no `questionId`, so the save writes a new
+   * link rather than overwriting the source, and no `bankQuestionId`, because a
+   * copy is about to be reworded and would otherwise claim to be the bank's
+   * wording. Weight is not halved — the footer's 100% gate will say so, and
+   * silently rewriting a number the user set is worse than flagging it.
+   */
+  const duplicateQuestion = (localId: string) => {
+    setQuestions((prev) => {
+      const index = prev.findIndex((q) => q.localId === localId);
+      if (index === -1) return prev;
+      const source = prev[index];
+      const copy: QuestionDraft = {
+        ...source,
+        localId: nextLocalId(),
+        questionId: undefined,
+        bankQuestionId: undefined,
+        isSnapshotted: false,
+        options: source.options.map((o) => ({
+          ...o,
+          localId: nextLocalId(),
+          optionId: undefined,
+        })),
+      };
+      const next = [...prev];
+      next.splice(index + 1, 0, copy);
+      return next;
+    });
+  };
+
+  /**
+   * Pushes this question's wording and options into the reusable bank.
+   *
+   * Writes immediately rather than on the next form save: the bank is a
+   * separate resource, and a question worth reusing is usually saved while it
+   * is being written, before the form itself is finished. The rating scale is
+   * deliberately not carried across — the bank stores wording, and the scale is
+   * a per-form decision made when the question is pulled back in.
+   */
+  const saveQuestionToBank = async (question: QuestionDraft) => {
+    const text = question.questionText.trim();
+    if (!text) {
+      onError(new Error("Give the question a title before saving it to the bank."), "");
+      return;
+    }
+
+    setBankSaving(question.localId);
+    try {
+      const meta = KIND_META[question.kind];
+      const result = await questionBankApi.create({
+        questionText: text,
+        questionType: meta.questionType,
+        isActive: true,
+        options: meta.hasOptions
+          ? question.options.map((o, i) => ({
+              optionText: o.optionText.trim(),
+              score: o.score,
+              displayOrder: i + 1,
+            }))
+          : undefined,
+      });
+      // The bank is a separate resource, so this row now has a source to track.
+      // Linking it keeps the two in step instead of leaving a lookalike that
+      // drifts the first time either side is reworded.
+      patchQuestion(question.localId, { bankQuestionId: result.question.questionId });
+      onNotice(`"${text}" is now in the question bank.`);
+    } catch (err) {
+      onError(err, "Could not save that question to the bank.");
+    } finally {
+      setBankSaving(null);
+    }
   };
 
   const addFromBank = (picked: BankQuestion[]) => {
@@ -1412,6 +1523,11 @@ export default function FormEditor({
         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900">
           <Layers size={15} className="text-gray-400" />
           Form Information
+          <InfoTip
+            side="bottom"
+            label="About this form's audience"
+            text="An evaluator with no team members can still submit their own evaluation against this form, provided their designation is selected below."
+          />
         </h3>
 
         <div className="space-y-4">
@@ -1445,7 +1561,14 @@ export default function FormEditor({
             />
           </label>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/*
+            * Audience and cadence sit on one row: they are read together ("who,
+            * and how often") and each is a single closed dropdown, so three
+            * stacked full-width controls wasted a screen of height to say what
+            * fits on a line. Collapses to one column below `lg`, where three
+            * dropdowns side by side would truncate every chip.
+            */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <SearchableMultiSelect
               label="Departments"
               placeholder="Whole organisation"
@@ -1479,52 +1602,34 @@ export default function FormEditor({
               }
               onChange={setDesignationIds}
             />
-          </div>
 
-          <p className="flex items-start gap-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            <Info size={12} className="mt-0.5 shrink-0 text-gray-400" />
-            An evaluator with no team members can still submit their own evaluation
-            against this form, provided their designation is selected above.
-          </p>
+            <SearchableMultiSelect
+              label="Evaluation type"
+              multiple={false}
+              hint="Evaluations are generated automatically on this cadence — there is nothing to schedule by hand."
+              items={SCHEDULE_ITEMS}
+              selected={evaluationType}
+              disabled={!editable}
+              emptyText="No schedules are available."
+              onChange={(type) => setEvaluationType(type as EvaluationType)}
+            />
+          </div>
         </div>
       </section>
 
-      {/* ---- 2. Evaluation schedule ---- */}
+      {/* ---- 2. Questions ---- */}
       <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
-        <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
-          <CalendarClock size={15} className="text-gray-400" />
-          Evaluation Schedule
-        </h3>
-        <p className="mb-4 text-xs text-gray-500">
-          Evaluations are generated automatically — there is nothing to schedule by
-          hand. Pick how often.
-        </p>
-
-        <SearchableMultiSelect
-          label="Frequency"
-          multiple={false}
-          items={SCHEDULE_ITEMS}
-          selected={evaluationType}
-          disabled={!editable}
-          emptyText="No schedules are available."
-          onChange={(type) => setEvaluationType(type as EvaluationType)}
-        />
-      </section>
-
-      {/* ---- 3. Questions ---- */}
-      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-              <Library size={15} className="text-gray-400" />
-              Questions{" "}
-              <span className="font-normal text-gray-400">({questions.length})</span>
-            </h3>
-            <p className="mt-1 text-xs text-gray-500">
-              Drag a card by its handle to reorder, or use the arrows. Click a card to
-              open it.
-            </p>
-          </div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <Library size={15} className="text-gray-400" />
+            Questions{" "}
+            <span className="font-normal text-gray-400">({questions.length})</span>
+            <InfoTip
+              side="bottom"
+              label="How to reorder questions"
+              text="Drag a card by its handle to reorder, or use the arrows. Click a card to open it."
+            />
+          </h3>
 
           {!questionsLocked && (
             <div className="flex flex-wrap gap-2">
@@ -1544,14 +1649,6 @@ export default function FormEditor({
                 className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition hover:border-brand/60 hover:text-brand-dark disabled:opacity-40"
               >
                 Even weights
-              </button>
-              <button
-                type="button"
-                onClick={addQuestion}
-                className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand to-brand-dark px-3 py-2 text-xs font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
-              >
-                <Plus size={13} />
-                Add question
               </button>
             </div>
           )}
@@ -1580,8 +1677,11 @@ export default function FormEditor({
                 hasProblem={showProblems && problemIds.has(question.localId)}
                 dragging={dragIndex === index}
                 dragOver={dragOverIndex === index && dragIndex !== index}
+                savingToBank={bankSaving === question.localId}
                 onToggleExpand={() => toggleExpand(question.localId)}
                 onPatch={(next) => patchQuestion(question.localId, next)}
+                onDuplicate={() => duplicateQuestion(question.localId)}
+                onSaveToBank={() => saveQuestionToBank(question)}
                 onRemove={() =>
                   setQuestions((prev) =>
                     prev.filter((q) => q.localId !== question.localId),
@@ -1602,6 +1702,23 @@ export default function FormEditor({
               />
             ))}
           </div>
+        )}
+
+        {/*
+          * Add sits under the list, where the next question will actually appear,
+          * rather than in the header beside two secondary actions. On a long form
+          * that also keeps it within reach of the end of the list instead of a
+          * full scroll away.
+          */}
+        {!questionsLocked && (
+          <button
+            type="button"
+            onClick={addQuestion}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-gray-500 transition hover:border-brand hover:bg-brand-light/20 hover:text-brand-dark"
+          >
+            <Plus size={15} />
+            Add question
+          </button>
         )}
       </section>
 

@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { KeyRound, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Plus, Pencil, Trash2 } from "lucide-react";
 import SettingsLayout from "@/modules/settings/pages/SettingsLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import Modal from "@/components/dialogs/Modal";
 import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
 import { FormField, PrimaryButton } from "@/components/forms/FormField";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
+import InfoTip from "@/components/common/InfoTip";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useToast } from "@/app/providers/ToastContext";
 import { permissionsApi, type Permission } from "@/modules/settings/api/settingsApi";
@@ -26,6 +27,7 @@ export default function PermissionsPage() {
  const [pageSize, setPageSize] = useState(10);
 
  const [modalOpen, setModalOpen] = useState(false);
+ const [editing, setEditing] = useState<Permission | null>(null);
  const [form, setForm] = useState<FormState>(EMPTY_FORM);
  const [formError, setFormError] = useState<string | null>(null);
  const [saving, setSaving] = useState(false);
@@ -53,7 +55,15 @@ export default function PermissionsPage() {
  useEffect(() => setPage(1), [search, pageSize]);
 
  const openCreate = () => {
+ setEditing(null);
  setForm(EMPTY_FORM);
+ setFormError(null);
+ setModalOpen(true);
+ };
+
+ const openEdit = (permission: Permission) => {
+ setEditing(permission);
+ setForm({ name: permission.name, description: permission.description });
  setFormError(null);
  setModalOpen(true);
  };
@@ -67,8 +77,13 @@ export default function PermissionsPage() {
  setSaving(true);
  setFormError(null);
  try {
+ if (editing) {
+ await permissionsApi.update(editing.permissionId, form);
+ toast.showSuccess("Permission updated.");
+ } else {
  await permissionsApi.create(form);
  toast.showSuccess("Permission created.");
+ }
  setModalOpen(false);
  load();
  } catch (err) {
@@ -138,6 +153,14 @@ export default function PermissionsPage() {
  <div className="flex items-center justify-end gap-1.5">
  <button
  type="button"
+ onClick={() => openEdit(p)}
+ aria-label={`Edit ${p.name}`}
+ className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+ >
+ <Pencil size={15} />
+ </button>
+ <button
+ type="button"
  onClick={() => setDeleteTarget(p)}
  aria-label={`Delete ${p.name}`}
  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
@@ -148,7 +171,16 @@ export default function PermissionsPage() {
  )}
  />
 
- <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add Permission" description="Define a new granular permission.">
+ <Modal
+ open={modalOpen}
+ onClose={() => setModalOpen(false)}
+ title={editing ? "Edit Permission" : "Add Permission"}
+ description={
+ editing
+ ? "Rename this permission or reword its description."
+ : "Define a new granular permission."
+ }
+ >
  <form onSubmit={handleSubmit}>
  <FormField
  label="Permission Key"
@@ -157,6 +189,16 @@ export default function PermissionsPage() {
  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
  required
  />
+ {editing && (
+ <p className="-mt-3 mb-5 flex items-start gap-1.5 text-xs text-amber-700">
+ <span>Renaming revokes access wherever the old key is still checked.</span>
+ <InfoTip
+ side="bottom"
+ label="What renaming a permission key affects"
+ text="The backend compares this exact string against the key each route requires. Rename it and any route still asking for the old key will refuse every role that held it, until the route is updated too."
+ />
+ </p>
+ )}
  <label className="mb-6 block">
  <span className="mb-2 block text-[15px] font-medium text-gray-900">Description</span>
  <textarea
@@ -180,7 +222,7 @@ export default function PermissionsPage() {
  </button>
  <div className="flex-1">
  <PrimaryButton type="submit" loading={saving}>
- Create Permission
+ {editing ? "Save Changes" : "Create Permission"}
  </PrimaryButton>
  </div>
  </div>

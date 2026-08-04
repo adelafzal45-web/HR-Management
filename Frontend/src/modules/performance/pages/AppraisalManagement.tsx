@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Plus, Pencil, Trash2, Eye, Building2, IdCard,
   CheckCircle2, AlertTriangle, BarChart3, FileText,
-  TrendingUp, Table2, GitCompare, Library, UserCog
+  TrendingUp, Table2, GitCompare, Library, Zap, ClipboardCheck
 } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import Modal from "@/components/dialogs/Modal";
 import EmptyState from "@/components/common/EmptyState";
+import InfoTip from "@/components/common/InfoTip";
 import StatusBadge from "@/components/common/StatusBadge";
 import LoadingOverlay from "@/components/common/LoadingOverlay";
+import SearchableMultiSelect from "@/modules/performance/components/SearchableMultiSelect";
 import AppraisalStatsTab from "@/modules/performance/components/AppraisalStatsTab";
 import AppraisalResultsTab from "@/modules/performance/components/AppraisalResultsTab";
 import AppraisalCompareTab from "@/modules/performance/components/AppraisalCompareTab";
 import QuestionBankTab from "@/modules/performance/components/QuestionBankTab";
-import TeamLeadAssignmentsTab from "@/modules/performance/components/TeamLeadAssignmentsTab";
 import FormEditor from "@/modules/performance/components/FormEditor";
 import FilterPanel, {
   type FilterValues,
@@ -22,7 +24,8 @@ import { useAuth } from "@/app/providers/AuthContext";
 import {
   formsApi, appraisalReportsApi,
   type AppraisalForm, type AppraisalFormDetail,
-  type Analytics, type SubmittedEvaluation,
+  type Analytics, type EvaluationType, type FormStatus,
+  type SubmittedEvaluation,
 } from "@/modules/appraisal/api/appraisalApi";
 import {
   departmentsApi, designationsApi,
@@ -39,16 +42,24 @@ import { formatDisplayDate } from "@/utils/formatDate";
  * There is no Assignments tab: a form's audience is a department + designation
  * rule set on the form itself, so a separate screen for it only ever showed the
  * same rows a second time.
+ *
+ * There is no Form Editor tab either. The editor is not a peer of the other
+ * screens — it is always *about* one form — so a tab for it was either disabled
+ * (before a form was opened) or a second way to reach what the Forms row
+ * actions already open. It is now a full-page takeover launched from those
+ * actions, which is also what lets it use the full width.
+ *
+ * Team Lead Access is gone for the same reason it stopped mattering: HR Admin
+ * now evaluates org-wide, so per-lead rosters no longer gate the Admin path.
+ * Rosters are managed through the API.
  */
 type Tab =
   | "forms"
-  | "builder"
   | "analytics"
   | "stats"
   | "results"
   | "compare"
-  | "bank"
-  | "leads";
+  | "bank";
 
 export default function AppraisalManagement() {
   const [tab, setTab] = useState<Tab>("forms");
@@ -84,7 +95,13 @@ export default function AppraisalManagement() {
   const canStats = hasPermission("appraisal.stats");
   const canCompare = hasPermission("appraisal.compare");
   const canManageQuestions = hasPermission("appraisal-forms.questions.manage");
-  const canAssignLeads = hasPermission("appraisal.teamlead.assign");
+  /*
+   * The admin's way into the roster. `/team` used to be Team-Lead-only, so an
+   * HR Admin holding this key had no link to the one screen that spends it.
+   * The backend resolves their roster to every active employee, so this reads
+   * "evaluate anyone", not "evaluate my reports".
+   */
+  const canEvaluate = hasPermission("appraisal.create");
 
   // Set when Results hands a selection to Compare, so the ids survive the tab
   // switch without a URL param.
@@ -139,6 +156,14 @@ export default function AppraisalManagement() {
       .catch((err) => showError(err, "Could not load analytics."));
   }, [tab, canViewAll, analytics, showError]);
 
+  /*
+   * The editor is a full-page takeover rather than a tab, so opening one is
+   * purely a matter of having a form loaded (or a pending create). `tab` is
+   * left where it is: closing the editor returns to whichever screen launched
+   * it, which is always Forms today but need not stay that way.
+   */
+  const editorOpen = formDetail !== null || creating;
+
   const openBuilder = async (formId: string, readOnly = false) => {
     setBusy(true);
     try {
@@ -147,7 +172,6 @@ export default function AppraisalManagement() {
       setViewOnly(readOnly);
       setError(null);
       setNotice(null);
-      setTab("builder");
     } catch (err) {
       showError(err, "Could not open that form.");
     } finally {
@@ -163,10 +187,12 @@ export default function AppraisalManagement() {
     setViewOnly(false);
     setError(null);
     setNotice(null);
-    setTab("builder");
   };
 
   const closeEditor = () => {
+    // Clearing the detail is what closes the takeover — without it the editor
+    // would stay mounted over the list it just returned to.
+    setFormDetail(null);
     setCreating(false);
     setViewOnly(false);
     setTab("forms");
@@ -180,45 +206,8 @@ export default function AppraisalManagement() {
     await loadForms();
   };
 
-  return (
-    <DashboardLayout title="Evaluation Forms" activeKey="appraisal">
-      <LoadingOverlay show={loading} label="Loading evaluation forms…" />
-
-      <div className="mb-5 flex flex-wrap gap-1.5 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-gray-100 xs:gap-2">
-        {([
-          ["forms", "Forms", FileText, true],
-          ["builder", viewOnly ? "Form Preview" : "Form Editor", Pencil, true],
-          ["bank", "Question Bank", Library, canManageQuestions],
-          ["leads", "Team Lead Access", UserCog, canAssignLeads],
-          ["stats", "Statistics", TrendingUp, canStats],
-          ["results", "Results", Table2, canStats],
-          ["compare", "Compare", GitCompare, canCompare],
-          ["analytics", "Analytics", BarChart3, canViewAll],
-        ] as const)
-          // Tabs are filtered out, not disabled: a visible-but-dead tab still
-          // advertises a screen this user's token can never load.
-          .filter(([, , , allowed]) => allowed)
-          .map(([id, label, Icon]) => {
-            // The editor tab is reachable for an unsaved new form, but not
-            // before anything at all has been opened.
-            const needsForm = id === "builder" && !formDetail && !creating;
-            return (
-              <button
-                key={id}
-                onClick={() => setTab(id)}
-                disabled={needsForm}
-                title={needsForm ? "Open a form from the Forms tab first" : undefined}
-                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-40 xs:gap-2 xs:px-4 xs:py-2.5 xs:text-sm ${
-                  tab === id ? "bg-brand-light text-brand-dark" : "text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                <Icon size={16} className="shrink-0" />
-                <span className="whitespace-nowrap">{label}</span>
-              </button>
-            );
-          })}
-      </div>
-
+  const banners = (
+    <>
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
@@ -231,25 +220,19 @@ export default function AppraisalManagement() {
           <span>{notice}</span>
         </div>
       )}
+    </>
+  );
 
-      {tab === "forms" && (
-        <FormsTab
-          forms={forms}
-          busy={busy}
-          departments={departments}
-          designations={designations}
-          canCreate={canCreate}
-          canUpdate={canUpdate}
-          canDelete={canDelete}
-          onOpen={openBuilder}
-          onCreate={openCreate}
-          onReload={loadForms}
-          onError={showError}
-          onNotice={showNotice}
-        />
-      )}
-
-      {tab === "builder" && (formDetail || creating) && (
+  /*
+   * The editor replaces the workspace instead of sitting beside it. A form is a
+   * single subject with its own header, footer and unsaved state — leaving the
+   * tab bar on screen invited a mid-edit tab switch that silently discarded it.
+   * The banners stay, because a failed save reports through them.
+   */
+  if (editorOpen) {
+    return (
+      <DashboardLayout title="Evaluation Forms" activeKey="appraisal">
+        {banners}
         <FormEditor
           /*
            * Remounts when the editor swaps forms — including the moment a new
@@ -272,16 +255,82 @@ export default function AppraisalManagement() {
           onError={showError}
           onNotice={showNotice}
         />
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout title="Evaluation Forms" activeKey="appraisal">
+      <LoadingOverlay show={loading} label="Loading evaluation forms…" />
+
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-gray-100">
+        <div className="flex flex-wrap gap-1.5 xs:gap-2">
+        {([
+          ["forms", "Forms", FileText, true],
+          ["bank", "Question Bank", Library, canManageQuestions],
+          ["stats", "Statistics", TrendingUp, canStats],
+          ["results", "Results", Table2, canStats],
+          ["compare", "Compare", GitCompare, canCompare],
+          ["analytics", "Analytics", BarChart3, canViewAll],
+        ] as const)
+          // Tabs are filtered out, not disabled: a visible-but-dead tab still
+          // advertises a screen this user's token can never load.
+          .filter(([, , , allowed]) => allowed)
+          .map(([id, label, Icon]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium xs:gap-2 xs:px-4 xs:py-2.5 xs:text-sm ${
+                tab === id ? "bg-brand-light text-brand-dark" : "text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              <Icon size={16} className="shrink-0" />
+              <span className="whitespace-nowrap">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/*
+          * A link, not a tab: evaluating happens on `/team`, which is a real
+          * route with its own roster, filters and per-employee form. Copying it
+          * in here as a seventh tab would be a second implementation of the one
+          * screen Team Leads already use.
+          */}
+        {canEvaluate && (
+          <Link
+            to="/team"
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-brand-dark transition hover:bg-brand-light/50 xs:px-4 xs:py-2.5 xs:text-sm"
+          >
+            <ClipboardCheck size={16} className="shrink-0" />
+            <span className="whitespace-nowrap">Evaluate employees</span>
+          </Link>
+        )}
+      </div>
+
+      {banners}
+
+      {tab === "forms" && (
+        <FormsTab
+          forms={forms}
+          busy={busy}
+          departments={departments}
+          designations={designations}
+          canCreate={canCreate}
+          canUpdate={canUpdate}
+          canAssign={canAssign}
+          canDelete={canDelete}
+          onOpen={openBuilder}
+          onCreate={openCreate}
+          onReload={loadForms}
+          onError={showError}
+          onNotice={showNotice}
+        />
       )}
 
       {tab === "analytics" && canViewAll && <AnalyticsTab analytics={analytics} onError={showError} />}
 
       {tab === "bank" && canManageQuestions && (
         <QuestionBankTab onError={showError} onNotice={showNotice} />
-      )}
-
-      {tab === "leads" && canAssignLeads && (
-        <TeamLeadAssignmentsTab onError={showError} onNotice={showNotice} />
       )}
 
       {tab === "stats" && canStats && <AppraisalStatsTab onError={showError} />}
@@ -461,6 +510,7 @@ type FormsTabProps = {
   designations: Designation[];
   canCreate: boolean;
   canUpdate: boolean;
+  canAssign: boolean;
   canDelete: boolean;
   onOpen: (formId: string, readOnly?: boolean) => void;
   onCreate: () => void;
@@ -483,14 +533,272 @@ const FORM_STATUS_OPTIONS = [
   { value: "Archived", label: "Archived" },
 ];
 
+// ============================================================================
+// QUICK EDIT — the four fields that change after a form is written
+// ============================================================================
+
+/**
+ * Audience, cadence and status in a dialog, without opening the editor.
+ *
+ * These four are the fields that get revised long after a form is finished — a
+ * new department joins the review, a lead's designation is renamed, a monthly
+ * form moves to weekly — and each was a full editor round trip for a one-field
+ * change. Questions are deliberately absent: they are the reason the editor
+ * exists, and they freeze on publish.
+ *
+ * The current audience is fetched rather than read off the table row: the list
+ * endpoint returns department *names* for display, and saving needs ids.
+ */
+function QuickEditModal({
+  form,
+  departments,
+  designations,
+  canAssign,
+  onClose,
+  onSaved,
+  onError,
+  onNotice,
+}: {
+  form: AppraisalForm;
+  departments: Department[];
+  designations: Designation[];
+  canAssign: boolean;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  onError: (err: unknown, msg: string) => void;
+  onNotice: (msg: string) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+  const [designationIds, setDesignationIds] = useState<string[]>([]);
+  const [evaluationType, setEvaluationType] = useState<EvaluationType>(
+    form.evaluationType,
+  );
+  // What the user *wants* the status to be. Applied as a publish call on save,
+  // because status is not a writable column on the update endpoint.
+  const [status, setStatus] = useState<FormStatus>(form.status);
+
+  useEffect(() => {
+    let alive = true;
+    formsApi
+      .get(form.formId)
+      .then((detail) => {
+        if (!alive) return;
+        setDepartmentIds(
+          detail.assignments
+            .filter((a) => a.targetType === "department")
+            .map((a) => a.targetId),
+        );
+        setDesignationIds(
+          detail.assignments
+            .filter((a) => a.targetType === "designation")
+            .map((a) => a.targetId),
+        );
+      })
+      .catch((err) => onError(err, "Could not load this form's audience."))
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [form.formId, onError]);
+
+  // Same client-side scoping as the editor: a designation outside the chosen
+  // departments would be saved but never shown.
+  const visibleDesignations = useMemo(() => {
+    if (departmentIds.length === 0) return designations;
+    const allowed = new Set(departmentIds);
+    return designations.filter((d) => allowed.has(d.departmentId));
+  }, [designations, departmentIds]);
+
+  const isDraft = form.status === "Draft";
+  const publishReady = form.activeWeightTotal === 100 && form.questionCount > 0;
+  const willPublish = isDraft && status === "Published";
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await formsApi.update(form.formId, {
+        evaluationType,
+        // Omitted entirely when this user cannot set the audience — an empty
+        // array would read as "clear it" rather than "leave it alone".
+        ...(canAssign ? { departmentIds, designationIds } : {}),
+      });
+      if (willPublish) await formsApi.publish(form.formId);
+      onNotice(
+        willPublish
+          ? `Updated and published "${form.formName}".`
+          : `Updated "${form.formName}".`,
+      );
+      await onSaved();
+      onClose();
+    } catch (err) {
+      onError(err, "Could not save those changes.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Quick Edit — ${form.formName}`}>
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <SearchableMultiSelect
+              label="Departments"
+              placeholder="Whole organisation"
+              hint="Only employees in the selected departments take part. Leave empty to apply across the whole organisation."
+              items={departments.map((d) => ({ id: d.departmentId, label: d.name }))}
+              selected={departmentIds}
+              disabled={!canAssign}
+              emptyText="No departments have been set up yet."
+              onChange={(ids) => {
+                setDepartmentIds(ids);
+                // Drop designations that just fell out of scope, so what is
+                // saved matches what is on screen.
+                const allowed = new Set(ids);
+                setDesignationIds((prev) =>
+                  ids.length === 0
+                    ? prev
+                    : prev.filter((id) =>
+                        designations.some(
+                          (d) =>
+                            d.designationId === id && allowed.has(d.departmentId),
+                        ),
+                      ),
+                );
+              }}
+            />
+
+            <SearchableMultiSelect
+              label="Evaluator designations"
+              placeholder="Any designation"
+              hint="Team Lead is the usual choice, but any designation can evaluate."
+              items={visibleDesignations.map((d) => ({
+                id: d.designationId,
+                label: d.name,
+                sublabel: d.departmentName,
+              }))}
+              selected={designationIds}
+              disabled={!canAssign}
+              emptyText={
+                departmentIds.length > 0
+                  ? "No designations exist in the selected departments."
+                  : "No designations have been set up yet."
+              }
+              onChange={setDesignationIds}
+            />
+          </div>
+
+          <SearchableMultiSelect
+            label="Evaluation type"
+            multiple={false}
+            hint="Evaluations are generated automatically on this cadence."
+            items={QUICK_SCHEDULE_ITEMS}
+            selected={evaluationType}
+            emptyText="No schedules are available."
+            onChange={(type) => setEvaluationType(type as EvaluationType)}
+          />
+
+          <div>
+            <span className="mb-1.5 flex items-center gap-1 text-sm font-medium text-gray-900">
+              Status
+              <InfoTip
+                text="Publishing freezes the questions so already-submitted reviews stay consistent. It cannot be undone — duplicate the form to rework its questions."
+                label="About publishing"
+              />
+            </span>
+            <div className="flex gap-2">
+              {(["Draft", "Published"] as const).map((option) => {
+                /*
+                 * Draft → Published is a publish. The reverse has no endpoint
+                 * and no safe meaning: unpublishing would strip the snapshots
+                 * that in-flight reviews are scored against. So the option is
+                 * shown and disabled, with the reason on it, rather than hidden
+                 * — the current state still needs to be legible.
+                 */
+                const disabled =
+                  form.status !== "Draft" ||
+                  (option === "Published" && !publishReady);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setStatus(option)}
+                    disabled={disabled}
+                    title={
+                      form.status !== "Draft"
+                        ? `This form is ${form.status} and cannot go back to Draft.`
+                        : option === "Published" && !publishReady
+                          ? "Active question weights must total exactly 100% first."
+                          : undefined
+                    }
+                    className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      status === option
+                        ? "border-brand bg-brand-light/50 text-brand-dark"
+                        : "border-gray-200 text-gray-600 hover:border-brand/60"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+            {form.status === "Archived" && (
+              <p className="mt-1.5 text-xs text-gray-500">
+                This form is archived. It generates no new evaluations.
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-2 border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="flex-1 rounded-xl bg-brand px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-dark disabled:opacity-50"
+            >
+              {saving ? "Saving…" : willPublish ? "Save & Publish" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/** The three cadences, as picker rows. Mirrors the editor's own list. */
+const QUICK_SCHEDULE_ITEMS = [
+  { id: "Daily", label: "Daily", detail: "Generated every working day, before the shift starts." },
+  { id: "Weekly", label: "Weekly", detail: "Generated on the last working day of each week." },
+  { id: "Monthly", label: "Monthly", detail: "Generated on the last working day of each month." },
+];
+
 function FormsTab({
   forms, busy, departments, designations,
-  canCreate, canUpdate, canDelete,
+  canCreate, canUpdate, canAssign, canDelete,
   onOpen, onCreate, onReload, onError, onNotice,
 }: FormsTabProps) {
   const [filters, setFilters] = useState<FilterValues>({});
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [targetForm, setTargetForm] = useState<AppraisalForm | null>(null);
+  const [quickEditForm, setQuickEditForm] = useState<AppraisalForm | null>(null);
 
   const visible = useMemo(() => {
     /*
@@ -676,6 +984,23 @@ function FormsTab({
                         >
                           <Pencil size={16} />
                         </button>
+                        {/*
+                          * Quick Edit covers audience, cadence and status — the
+                          * fields that get revised after a form is finished —
+                          * without the full editor. Questions are not among them,
+                          * so it is offered for published forms too.
+                          */}
+                        {canUpdate && (
+                          <button
+                            onClick={() => setQuickEditForm(form)}
+                            disabled={busy}
+                            title="Quick edit audience, schedule and status"
+                            aria-label={`Quick edit ${form.formName}`}
+                            className="rounded-lg p-1.5 text-gray-600 transition hover:bg-gray-100 disabled:opacity-40"
+                          >
+                            <Zap size={16} />
+                          </button>
+                        )}
                         {canUpdate && form.status === "Draft" && (
                           <button
                             onClick={() => handlePublish(form)}
@@ -708,6 +1033,21 @@ function FormsTab({
           </div>
         )}
       </div>
+
+      {quickEditForm && (
+        <QuickEditModal
+          // Remounts per form so the fetched audience never leaks between rows.
+          key={quickEditForm.formId}
+          form={quickEditForm}
+          departments={departments}
+          designations={designations}
+          canAssign={canAssign}
+          onClose={() => setQuickEditForm(null)}
+          onSaved={onReload}
+          onError={onError}
+          onNotice={onNotice}
+        />
+      )}
 
       {deleteModalOpen && targetForm && (
         <Modal

@@ -342,6 +342,14 @@ export const mockPermissionsApi = {
  permissions = [record, ...permissions];
  return record;
  },
+ async update(id: string, payload: Pick<Permission, "name" | "module" | "description">): Promise<Permission> {
+ await delay();
+ const existing = permissions.find((p) => p.permissionId === id);
+ if (!existing) throw new Error("Permission not found");
+ const record: Permission = { ...existing, ...payload };
+ permissions = permissions.map((p) => (p.permissionId === id ? record : p));
+ return record;
+ },
  async remove(id: string): Promise<{ permissionId: string }> {
  await delay();
  permissions = permissions.filter((p) => p.permissionId !== id);

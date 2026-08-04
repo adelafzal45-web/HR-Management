@@ -74,6 +74,18 @@ export const ENDPOINTS = {
  attendance: {
  base: "/attendance",
  byId: (id: string) => `/attendance/${id}`,
+ // Self-service. The server takes the employee from the JWT, stamps its
+ // own clock, decides Late from the assigned shift's start time and grace
+ // period, and derives the hours — none of which the browser may supply.
+ // `base` and `byId` are the HR correction path and need attendance.view /
+ // .update; these four need only a valid token, which is why the Employee
+ // role (which holds no attendance permissions) can use them.
+ me: {
+ today: "/attendance/me/today",
+ history: "/attendance/me",
+ checkIn: "/attendance/check-in",
+ checkOut: "/attendance/check-out",
+ },
  },
 
  leaveRequests: {

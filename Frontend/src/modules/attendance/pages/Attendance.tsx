@@ -8,7 +8,7 @@ import SectionTabs from "@/components/common/SectionTabs";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useAuth } from "@/app/providers/AuthContext";
 import { getAttendanceTabs } from "@/config/featureTabs";
-import { attendanceApi, type AttendanceRecord } from "@/api/hrApi";
+import { attendanceApi, type AttendanceRecord, type TodayAttendance } from "@/api/hrApi";
 
 const now = new Date();
 
@@ -21,7 +21,10 @@ export default function Attendance() {
  const { user } = useAuth();
  const tabs = getAttendanceTabs(user?.role);
 
- const [today, setToday] = useState<AttendanceRecord | null>(null);
+ // The whole status object, not just the row: `canCheckIn`/`canCheckOut` are
+ // the server's decision and are what the two buttons are enabled from.
+ const [todayStatus, setTodayStatus] = useState<TodayAttendance | null>(null);
+ const today = todayStatus?.attendance ?? null;
  const [history, setHistory] = useState<AttendanceRecord[]>([]);
  const [month, setMonth] = useState(now.getMonth() + 1);
  const [year, setYear] = useState(now.getFullYear());
@@ -34,10 +37,9 @@ export default function Attendance() {
  const loadToday = async () => {
  setLoadingToday(true);
  try {
- const rec = await attendanceApi.getToday();
- setToday(rec);
+ setTodayStatus(await attendanceApi.getToday());
  } catch {
- setToday(null);
+ setTodayStatus(null);
  } finally {
  setLoadingToday(false);
  }
@@ -69,8 +71,11 @@ export default function Attendance() {
  setError(null);
  setActionLoading("in");
  try {
- const rec = await attendanceApi.checkIn();
- setToday(rec);
+ await attendanceApi.checkIn();
+ // Refetch rather than folding the returned row into state: the two
+ // can-do flags are the server's call, and re-deriving them here is how
+ // the old screen ended up disagreeing with it.
+ await loadToday();
  loadHistory(month, year);
  } catch (err) {
  setError(err instanceof Error ? err.message : "Couldn't check in. Please try again.");
@@ -83,8 +88,8 @@ export default function Attendance() {
  setError(null);
  setActionLoading("out");
  try {
- const rec = await attendanceApi.checkOut();
- setToday(rec);
+ await attendanceApi.checkOut();
+ await loadToday();
  loadHistory(month, year);
  } catch (err) {
  setError(err instanceof Error ? err.message : "Couldn't check out. Please try again.");
@@ -148,12 +153,20 @@ export default function Attendance() {
  {today?.workingHours != null ? `${today.workingHours}h` : "—"}
  </span>
  </div>
- {today?.shiftName && (
+ {/* The shift comes from the status object, so it shows before the first
+ check-in too — it's the employee's assigned shift, not just whatever
+ shift happens to be stamped on today's row. */}
+ {(today?.shiftName ?? todayStatus?.shiftName) && (
  <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
  <span className="flex items-center gap-2 text-sm text-gray-500">
  <CalendarDays size={16} /> Shift
  </span>
- <span className="text-sm font-semibold text-gray-900">{today.shiftName}</span>
+ <span className="text-sm font-semibold text-gray-900">
+ {today?.shiftName ?? todayStatus?.shiftName}
+ {todayStatus?.shiftStart && todayStatus?.shiftEnd
+ ? ` · ${todayStatus.shiftStart}–${todayStatus.shiftEnd}`
+ : ""}
+ </span>
  </div>
  )}
  {today?.isOvertime && (
@@ -167,13 +180,22 @@ export default function Attendance() {
  </div>
  )}
 
+ {/* Not a blocker — checking in on a non-working day is allowed (weekend
+ cover, callout) and the server permits it. This only explains why the
+ day won't count as an absence if nothing is recorded. */}
+ {!loadingToday && todayStatus && !todayStatus.isWorkingDay && (
+ <p className="mt-4 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-700">
+ Today isn't a working day on your schedule. You can still check in if you're working.
+ </p>
+ )}
+
  {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
 
  <div className="mt-6 flex gap-3">
  <button
  type="button"
  onClick={handleCheckIn}
- disabled={!!today?.checkIn || actionLoading !== null}
+ disabled={!todayStatus?.canCheckIn || actionLoading !== null}
  className="flex-1 rounded-full bg-gradient-to-r from-brand to-brand-dark py-3 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
  >
  {actionLoading === "in" ? "Checking in…" : "Check In"}
@@ -181,7 +203,7 @@ export default function Attendance() {
  <button
  type="button"
  onClick={handleCheckOut}
- disabled={!today?.checkIn || !!today?.checkOut || actionLoading !== null}
+ disabled={!todayStatus?.canCheckOut || actionLoading !== null}
  className="flex-1 rounded-full border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
  >
  {actionLoading === "out" ? "Checking out…" : "Check Out"}

@@ -106,6 +106,44 @@ function notifyAuthFailure() {
   }
 }
 
+/**
+ * Shape of the non-token fields `/auth/refresh` returns alongside the new
+ * access token. Kept loose (not imported from the auth module) to avoid a
+ * circular import between this transport layer and `modules/auth/api`.
+ */
+type SessionRefreshPayload = { user: unknown; permissions: string[] };
+type SessionRefreshListener = (payload: SessionRefreshPayload) => void;
+const sessionRefreshListeners = new Set<SessionRefreshListener>();
+
+/**
+ * Notified whenever a silent access-token refresh succeeds, with the `user`
+ * and `permissions` the backend returned alongside the new token.
+ *
+ * `/auth/refresh` re-reads the caller's role/permissions from the database on
+ * every call (see AuthService.refresh) specifically so a grant changed
+ * mid-session takes effect at the next refresh. If nothing forwards that
+ * payload into app state, the refresh still succeeds but the UI keeps acting
+ * on the permission set from login — a revoked permission would still show
+ * its buttons/menus, or a newly-granted one would stay hidden, until the user
+ * hard-reloads and `/auth/me` re-fetches them.
+ */
+export function onSessionRefresh(listener: SessionRefreshListener): () => void {
+  sessionRefreshListeners.add(listener);
+  return () => {
+    sessionRefreshListeners.delete(listener);
+  };
+}
+
+function notifySessionRefresh(payload: SessionRefreshPayload) {
+  for (const listener of sessionRefreshListeners) {
+    try {
+      listener(payload);
+    } catch {
+      // A broken listener must not take down the request path with it.
+    }
+  }
+}
+
 async function requestNewAccessToken(): Promise<string> {
   let res: Response;
   try {
@@ -121,12 +159,24 @@ async function requestNewAccessToken(): Promise<string> {
     throw new ApiError(res.status, "Session expired. Please log in again.");
   }
 
-  const data = (await res.json().catch(() => null)) as { token?: string } | null;
+  const data = (await res.json().catch(() => null)) as {
+    token?: string;
+    user?: unknown;
+    permissions?: string[];
+  } | null;
   if (!data?.token) {
     throw new ApiError(500, "Refresh response did not include a token.");
   }
 
   setToken(data.token);
+
+  // Forward the live user/permissions the backend just re-read from the
+  // database, so app state (AuthContext) stays in sync instead of coasting
+  // on whatever was current at login.
+  if (data.user && data.permissions) {
+    notifySessionRefresh({ user: data.user, permissions: data.permissions });
+  }
+
   return data.token;
 }
 
@@ -456,6 +506,16 @@ export const ENDPOINTS = {
     // Working-day flags per calendar day, so reports can shade non-working
     // days instead of reimplementing the fallback ladder client-side.
     workingDayCalendar: "/attendance/working-day-calendar",
+    // Self-service. The server takes the employee from the JWT, stamps its own
+    // clock and decides Late from the assigned shift — none of which the
+    // browser is allowed to supply. Declared before `:id` on the controller,
+    // so `me/today` is never parsed as an attendance id.
+    me: {
+      today: "/attendance/me/today",
+      history: "/attendance/me",
+      checkIn: "/attendance/check-in",
+      checkOut: "/attendance/check-out",
+    },
   },
   leaveRequests: { base: "/leave-requests", byId: (id: string) => `/leave-requests/${id}` },
   payroll: { base: "/payroll", byId: (id: string) => `/payroll/${id}` },

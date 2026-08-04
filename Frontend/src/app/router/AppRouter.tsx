@@ -4,7 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "@/components/common/ProtectedRoute";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import LoadingOverlay from "@/components/common/LoadingOverlay";
-import { TEAM_LEAD_ROLES, HR_ADMIN_ROLES } from "@/constants/roles";
+import { TEAM_LEAD_ROLES, HR_ADMIN_ROLES, EVALUATOR_ROLES } from "@/constants/roles";
 
 // Permission-driven dashboard — driven by the live JWT session (AuthContext)
 const RbacDashboard = lazy(() => import("@/modules/dashboard/pages/RbacDashboard"));
@@ -167,7 +167,7 @@ export function AppRouter() {
  <Route
  path="/team"
  element={withSuspense(
- <ProtectedRoute roles={TEAM_LEAD_ROLES}>
+ <ProtectedRoute roles={EVALUATOR_ROLES}>
  <TeamMembers />
  </ProtectedRoute>,
  )}
@@ -199,7 +199,7 @@ export function AppRouter() {
  <Route
  path="/team/evaluate/:employeeId"
  element={withSuspense(
- <ProtectedRoute roles={TEAM_LEAD_ROLES}>
+ <ProtectedRoute roles={EVALUATOR_ROLES}>
  <EvaluateEmployee />
  </ProtectedRoute>,
  )}
@@ -454,8 +454,8 @@ export function AppRouter() {
  new tabs did not get routes of their own. Each tab is additionally gated on
  its own permission inside the page, since this role gate admits HR Admin,
  HR Manager and Administrator alike and they do not hold the same keys.
- Team Leads review from /team, not from here — deliberately outside this
- role gate. */}
+ Evaluations are written from /team, not from here — by Team Leads over
+ their roster and by admins over the whole organisation. */}
  <Route
  path="/performance/forms"
  element={withSuspense(

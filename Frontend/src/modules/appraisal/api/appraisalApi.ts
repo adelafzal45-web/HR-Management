@@ -116,10 +116,16 @@ export type EvaluationScore = {
   scoreId: string;
   questionId: string;
   criteriaName: string;
+  questionType: QuestionType;
   weightage: number;
   ratingScale: number;
+  /** Raw rating on the question's own scale. Always 0 for non-rating types. */
   score: number;
+  /** Normalised 0–100, which is what every aggregate is computed from. */
   scorePercentage: number;
+  /** Option-based answers only; null for rating and text_feedback. */
+  selectedOptionId: string | null;
+  selectedOptionText: string | null;
   remarks: string | null;
 };
 
@@ -147,6 +153,15 @@ export type EvaluationForm = {
   formId: string;
   formName: string;
   evaluationType: EvaluationType;
+  /**
+   * The period this submission belongs to, named by the form's own cadence —
+   * "2026-08-04" for Daily, "2026-W32" for Weekly, "2026-08" for Monthly.
+   *
+   * Always send this back verbatim. It is part of the review's unique key and
+   * is how the backend finds the Draft the scheduler already generated; a label
+   * invented on the client creates a second review instead of filling that one.
+   */
+  reviewPeriod: string;
   questions: FormQuestion[];
   existing: SubmittedEvaluation | null;
 };
@@ -311,13 +326,29 @@ export const teamAppraisalApi = {
     api.get<EvaluationForm>(ENDPOINTS.appraisal.evaluate(employeeId)),
 
   /** `appraisal.create` — re-submitting the same period overwrites */
+  /**
+   * Which field carries the answer depends on the question's type, and the
+   * server validates the pairing rather than guessing:
+   *
+   *  - `rating`                                  → `score`, 0..ratingScale
+   *  - `yes_no` / `multiple_choice` / `dropdown` → `selectedOptionId`
+   *  - `text_feedback`                           → `remarks` only; unscored
+   *
+   * Sending the wrong one for a type is a 400 naming the question, not a
+   * silent zero.
+   */
   submitEvaluation: (
     employeeId: string,
     payload: {
       reviewPeriod: string;
       comments: string;
       recommendation: string;
-      scores: Array<{ questionId: string; score: number; remarks?: string }>;
+      scores: Array<{
+        questionId: string;
+        score?: number;
+        selectedOptionId?: string;
+        remarks?: string;
+      }>;
     },
   ) =>
     api.post<SubmittedEvaluation>(

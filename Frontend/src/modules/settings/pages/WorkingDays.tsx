@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Info, RotateCcw } from "lucide-react";
 import SettingsLayout from "@/modules/settings/pages/SettingsLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
+import InfoTip from "@/components/common/InfoTip";
 import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
 import { PrimaryButton } from "@/components/forms/FormField";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
@@ -166,10 +167,13 @@ export default function WorkingDaysPage() {
  <SettingsLayout activeTab="/settings/working-days">
  <BackendStatusBanner status={status} />
 
- <p className="mb-4 text-sm text-gray-500">
- Set the company-wide default working week, then override it for a specific department, or for a designation
- within a department. Any day not marked as working counts as a weekend or holiday — attendance excludes those
- days from absences and shades them in reports.
+ <p className="mb-4 flex items-start gap-1.5 text-sm text-gray-500">
+ <span>Set the company-wide default working week, then override it per department or designation.</span>
+ <InfoTip
+ side="bottom"
+ label="How working days are used"
+ text="A designation override wins over its department's, which wins over the company default. Any day not marked as working counts as a weekend or holiday — attendance excludes those days from absences and shades them in reports."
+ />
  </p>
 
  <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]">

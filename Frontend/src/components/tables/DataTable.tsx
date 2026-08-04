@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
  Search,
@@ -13,7 +13,6 @@ import {
  X,
 } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
-import Modal from "@/components/dialogs/Modal";
 
 /** Options for a column's dropdown filter. */
 export type DataTableFilterOption = {
@@ -218,6 +217,28 @@ export default function DataTable<T>({
  sortOptions,
 }: DataTableProps<T>) {
  const [panelOpen, setPanelOpen] = useState(false);
+ const panelAnchorRef = useRef<HTMLDivElement>(null);
+
+ // Outside-click and Escape dismissal for the filter popover. Without it the
+ // only way out is the trigger, which reads as stuck.
+ useEffect(() => {
+  if (!panelOpen) return;
+
+  const onDown = (event: MouseEvent) => {
+   if (!panelAnchorRef.current?.contains(event.target as Node)) setPanelOpen(false);
+  };
+  const onKey = (event: KeyboardEvent) => {
+   if (event.key === "Escape") setPanelOpen(false);
+  };
+
+  document.addEventListener("mousedown", onDown);
+  document.addEventListener("keydown", onKey);
+  return () => {
+   document.removeEventListener("mousedown", onDown);
+   document.removeEventListener("keydown", onKey);
+  };
+ }, [panelOpen]);
+
  const totalPages = Math.max(1, Math.ceil(total / pageSize));
  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
  const rangeEnd = Math.min(page * pageSize, total);
@@ -274,10 +295,12 @@ export default function DataTable<T>({
  <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
  {unifiedFilter ? (
  <div className="flex items-center gap-2">
+ <div ref={panelAnchorRef} className="relative">
  <button
  type="button"
- onClick={() => setPanelOpen(true)}
+ onClick={() => setPanelOpen((prev) => !prev)}
  aria-label="Open filters"
+ aria-expanded={panelOpen}
  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
  unifiedCount > 0
  ? "border-brand/60 bg-brand-light/40 text-brand-dark"
@@ -292,6 +315,131 @@ export default function DataTable<T>({
  </span>
  )}
  </button>
+
+ {/*
+  * Anchored popover rather than a centred modal, so the rows stay
+  * visible while filters change and the effect of a change can be
+  * seen without dismissing anything first. Capped height with its own
+  * scroll keeps the footer reachable on short viewports.
+  */}
+ {panelOpen && (
+ <div className="absolute left-0 top-full z-40 mt-2 max-h-[min(70vh,32rem)] w-[min(92vw,34rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-xl">
+ <div className="mb-3 flex items-center justify-between gap-3">
+ <h4 className="text-sm font-semibold text-gray-900">Filters</h4>
+ <button
+ type="button"
+ onClick={() => setPanelOpen(false)}
+ aria-label="Close filters"
+ className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+ >
+ <X size={15} />
+ </button>
+ </div>
+
+ <div className="space-y-3">
+ <label className="block">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+ Search
+ </span>
+ <input
+ type="search"
+ value={search}
+ onChange={(e) => onSearchChange(e.target.value)}
+ placeholder={searchPlaceholder}
+ className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ />
+ </label>
+
+ <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+ {sortOptions && sortOptions.length > 0 && onSortChange && (
+ <>
+ <label className="block">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+ Sort by
+ </span>
+ <select
+ value={sortKey ?? ""}
+ onChange={(e) => onSortChange(e.target.value, sortDir ?? "DESC")}
+ className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ >
+ {sortOptions.map((opt) => (
+ <option key={opt.value} value={opt.value}>
+ {opt.label}
+ </option>
+ ))}
+ </select>
+ </label>
+ <label className="block">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+ Direction
+ </span>
+ <select
+ value={sortDir ?? "DESC"}
+ onChange={(e) =>
+ onSortChange(sortKey ?? sortOptions[0].value, e.target.value as SortDirection)
+ }
+ className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ >
+ <option value="DESC">Descending</option>
+ <option value="ASC">Ascending</option>
+ </select>
+ </label>
+ </>
+ )}
+
+ {filterColumns.map((col) => (
+ <label key={col.key} className="block">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+ {col.label}
+ </span>
+ <select
+ value={filters?.[col.key] ?? ""}
+ onChange={(e) => onFiltersChange?.({ ...(filters ?? {}), [col.key]: e.target.value })}
+ className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ >
+ <option value="">{col.filterPlaceholder ?? `All ${col.label.toLowerCase()}`}</option>
+ {col.filterOptions?.map((opt) => (
+ <option key={opt.value} value={opt.value}>
+ {opt.label}
+ </option>
+ ))}
+ </select>
+ </label>
+ ))}
+ </div>
+
+ <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
+ <span className="text-xs text-gray-500">
+ {unifiedCount === 0
+ ? "No filters applied"
+ : `${unifiedCount} filter${unifiedCount === 1 ? "" : "s"} active`}
+ </span>
+ <div className="flex gap-2">
+ {unifiedCount > 0 && (
+ <button
+ type="button"
+ onClick={() => {
+ onSearchChange("");
+ onFiltersChange?.({});
+ }}
+ className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+ >
+ Clear all
+ </button>
+ )}
+ <button
+ type="button"
+ onClick={() => setPanelOpen(false)}
+ className="rounded-lg bg-gradient-to-r from-brand to-brand-dark px-3 py-2 text-xs font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+ >
+ Done
+ </button>
+ </div>
+ </div>
+ </div>
+ </div>
+ )}
+ </div>
  {unifiedCount > 0 && (
  <button
  type="button"
@@ -475,118 +623,6 @@ export default function DataTable<T>({
 
  <Pagination page={page} totalPages={totalPages} onPageChange={onPageChange} />
  </div>
- )}
-
- {unifiedFilter && (
- <Modal
- open={panelOpen}
- title="Filters"
- description="Narrow this table down. Everything here applies together."
- onClose={() => setPanelOpen(false)}
- maxWidth="max-w-2xl"
- >
- <div className="space-y-4">
- <label className="block">
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
- Search
- </span>
- <input
- type="search"
- value={search}
- onChange={(e) => onSearchChange(e.target.value)}
- placeholder={searchPlaceholder}
- className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
- />
- </label>
-
- <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
- {sortOptions && sortOptions.length > 0 && onSortChange && (
- <>
- <label className="block">
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
- Sort by
- </span>
- <select
- value={sortKey ?? ""}
- onChange={(e) => onSortChange(e.target.value, sortDir ?? "DESC")}
- className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
- >
- {sortOptions.map((opt) => (
- <option key={opt.value} value={opt.value}>
- {opt.label}
- </option>
- ))}
- </select>
- </label>
- <label className="block">
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
- Direction
- </span>
- <select
- value={sortDir ?? "DESC"}
- onChange={(e) =>
- onSortChange(sortKey ?? sortOptions[0].value, e.target.value as SortDirection)
- }
- className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
- >
- <option value="DESC">Descending</option>
- <option value="ASC">Ascending</option>
- </select>
- </label>
- </>
- )}
-
- {filterColumns.map((col) => (
- <label key={col.key} className="block">
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
- {col.label}
- </span>
- <select
- value={filters?.[col.key] ?? ""}
- onChange={(e) => onFiltersChange?.({ ...(filters ?? {}), [col.key]: e.target.value })}
- className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
- >
- <option value="">{col.filterPlaceholder ?? `All ${col.label.toLowerCase()}`}</option>
- {col.filterOptions?.map((opt) => (
- <option key={opt.value} value={opt.value}>
- {opt.label}
- </option>
- ))}
- </select>
- </label>
- ))}
- </div>
-
- <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
- <span className="text-sm text-gray-500">
- {unifiedCount === 0
- ? "No filters applied"
- : `${unifiedCount} filter${unifiedCount === 1 ? "" : "s"} active`}
- </span>
- <div className="flex gap-2">
- {unifiedCount > 0 && (
- <button
- type="button"
- onClick={() => {
- onSearchChange("");
- onFiltersChange?.({});
- }}
- className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
- >
- Clear all
- </button>
- )}
- <button
- type="button"
- onClick={() => setPanelOpen(false)}
- className="rounded-lg bg-gradient-to-r from-brand to-brand-dark px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
- >
- Done
- </button>
- </div>
- </div>
- </div>
- </Modal>
  )}
  </div>
  );

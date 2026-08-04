@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Info, Search, X } from "lucide-react";
 
+import InfoTip from "@/components/common/InfoTip";
+
 export type SelectItem = {
   id: string;
   label: string;
@@ -138,13 +140,19 @@ export default function SearchableMultiSelect(props: Props) {
   return (
     <div ref={wrapperRef} className="relative">
       <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-sm font-medium text-gray-900">
+        <span className="flex items-center gap-1 text-sm font-medium text-gray-900">
           {label}
           {isMulti && (
-            <span className="ml-1 font-normal text-gray-400">
+            <span className="font-normal text-gray-400">
               ({selectedIds.length} selected)
             </span>
           )}
+          {/*
+           * The explanation moved off the page and behind the ⓘ. Three pickers
+           * each carrying two lines of prose pushed the questions below the
+           * fold, and the text is only ever read once — on a first visit.
+           */}
+          {hint && <InfoTip text={hint} label={`About ${label}`} />}
         </span>
         {isMulti && selectedIds.length > 0 && !disabled && (
           <button
@@ -296,10 +304,15 @@ export default function SearchableMultiSelect(props: Props) {
         </div>
       )}
 
-      {(hint || chosenDetail) && (
+      {/*
+        * `detail` stays inline: it describes the *current* choice ("generates on
+        * the last working day of the month"), so it changes as the selection
+        * changes and is worth seeing without a hover.
+        */}
+      {chosenDetail && (
         <p className="mt-1.5 flex items-start gap-1.5 text-xs text-gray-500">
           <Info size={12} className="mt-0.5 shrink-0 text-gray-400" />
-          <span>{chosenDetail ?? hint}</span>
+          <span>{chosenDetail}</span>
         </p>
       )}
     </div>

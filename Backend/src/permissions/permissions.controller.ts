@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+} from '@nestjs/common';
 
 import {
   ApiTags,
@@ -10,6 +19,8 @@ import {
 
 import { PermissionsService } from './permissions.service';
 import { CreatePermissionDto } from './dto/create-permission.dto';
+import { UpdatePermissionDto } from './dto/update-permission.dto';
+import { SettingsListQueryDto } from '../common/dto/settings-list-query.dto';
 import { UseGuards } from '@nestjs/common';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
@@ -44,13 +55,15 @@ export class PermissionsController {
   @Get()
   @ApiOperation({
     summary: 'Get all permissions',
+    description:
+      'Supports `?search=`, `?page=` and `?pageSize=`. Omit `pageSize` to get every permission — which is what the Roles screen does to build its checkbox tree.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Returns all permissions.',
+    description: 'Returns `{ data, total }`.',
   })
-  findAll() {
-    return this.permissionService.findAll();
+  findAll(@Query() query: SettingsListQueryDto) {
+    return this.permissionService.findAll(query);
   }
 
   @Get(':id')
@@ -72,6 +85,34 @@ export class PermissionsController {
   })
   findOne(@Param('id') id: string) {
     return this.permissionService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('permissions.update')
+  @ApiOperation({
+    summary: 'Update a permission',
+    description:
+      'Renames a permission or edits its description. Renaming changes the key every `@RequirePermission` compares against, so it will revoke access anywhere the old key is still hard-coded in a controller.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Permission UUID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Permission updated successfully.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Permission not found.',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Another permission already uses that name.',
+  })
+  update(@Param('id') id: string, @Body() dto: UpdatePermissionDto) {
+    return this.permissionService.update(id, dto);
   }
 
   @Delete(':id')

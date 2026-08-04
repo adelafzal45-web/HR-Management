@@ -27,7 +27,7 @@
 // above that block for its specific shape.
 
 import { apiRequest, withDemoFallback } from "@/api/client";
-import { parseAttendanceRow, computeHours } from "@/modules/attendance/api/attendanceAdapter";
+import { parseAttendanceRow } from "@/modules/attendance/api/attendanceAdapter";
 import { parseLeaveRow } from "@/modules/leave/api/leaveAdapter";
 import { parsePayrollRow, type ParsedPayrollRow } from "@/modules/payroll/api/payrollAdapter";
 import { ENDPOINTS } from "@/app/config/endpoints";
@@ -82,99 +82,108 @@ function adaptAttendanceRow(row: any): AttendanceRecord {
  };
 }
 
-// The live `GET /attendance` route takes no query params (findAll() ignores
-// them — same as `/users`), so every filter below (by employee, by date, by
-// month) has to happen client-side after fetching the full list.
-async function fetchAllAttendance(): Promise<AttendanceRecord[]> {
- return toArray(await apiRequest<any>(ENDPOINTS.attendance.base)).map(adaptAttendanceRow);
+// What `GET /attendance/me/today` returns. The three flags are the server's
+// answer to "what may this employee do right now", which is what the buttons
+// render from — see the comment on `getToday` below.
+export type TodayAttendance = {
+ date: string;
+ isWorkingDay: boolean;
+ canCheckIn: boolean;
+ canCheckOut: boolean;
+ attendance: AttendanceRecord | null;
+ shiftName: string | null;
+ shiftStart: string | null;
+ shiftEnd: string | null;
+};
+
+function adaptTodayStatus(res: any): TodayAttendance {
+ const shift = res?.shift ?? null;
+ return {
+ date: String(res?.date ?? new Date().toISOString().slice(0, 10)),
+ isWorkingDay: res?.is_working_day !== false,
+ canCheckIn: res?.can_check_in === true,
+ canCheckOut: res?.can_check_out === true,
+ attendance: res?.attendance ? adaptAttendanceRow(res.attendance) : null,
+ shiftName: shift?.shift_name ?? null,
+ shiftStart: shift?.start_time ? String(shift.start_time).slice(0, 5) : null,
+ shiftEnd: shift?.end_time ? String(shift.end_time).slice(0, 5) : null,
+ };
 }
 
-// ---- Attendance — full CRUD at /attendance ---------------------------------
+// A demo-mode stand-in, so the fallback path answers the same shape. The mock
+// has no shift and no working-day calendar, so it infers the flags from the
+// stamps exactly as the old UI did — that inference is only ever correct here,
+// where there is no server to ask.
+async function mockTodayStatus(): Promise<TodayAttendance> {
+ const rec = await mockAttendanceApi.getToday();
+ return {
+ date: new Date().toISOString().slice(0, 10),
+ isWorkingDay: true,
+ canCheckIn: !rec?.checkIn,
+ canCheckOut: !!rec?.checkIn && !rec?.checkOut,
+ attendance: rec,
+ shiftName: rec?.shiftName ?? null,
+ shiftStart: null,
+ shiftEnd: null,
+ };
+}
+
+// ---- Attendance ------------------------------------------------------------
+// The four self-service calls below hit dedicated routes rather than the
+// generic CRUD table. That is not cosmetic: `POST /attendance` needs
+// `attendance.create` and `GET /attendance` needs `attendance.view`, neither of
+// which the Employee role holds — so the old flow 403'd, `withDemoFallback`
+// swallowed it, and the button appeared to work while writing nothing. The
+// `/attendance/me/*` and `/attendance/check-*` routes need only a valid token
+// and scope themselves to that token's employee.
+//
+// They also move four decisions server-side that the browser had no business
+// making: the clock (a client could post any time), the employee (`user_id`
+// used to be supplied by the caller, so anyone with `attendance.create` could
+// punch someone else's clock), Late vs Present (was a hardcoded 09:15; is now
+// the employee's own shift start plus its grace period), and working/overtime
+// hours (were computed client-side and submitted, i.e. trivially forgeable).
 export const attendanceApi = {
+ // Returns the whole status object, not just the row: the buttons need
+ // `canCheckIn`/`canCheckOut` from the server. Inferring them from the stamps
+ // gets the common case right but silently disagrees with the server about
+ // every edge case it guards — a row created by an absence sweep, an account
+ // deactivated mid-day, a second tab that already checked in.
  getToday: () =>
- withDemoFallback<AttendanceRecord | null>(
- async () => {
- const employeeId = currentEmployeeId();
- const today = new Date().toISOString().slice(0, 10);
- const rows = await fetchAllAttendance();
- return rows.find((r) => r.employeeId === employeeId && r.attendanceDate === today) ?? null;
- },
- () => mockAttendanceApi.getToday(),
+ withDemoFallback<TodayAttendance>(
+ async () => adaptTodayStatus(await apiRequest<any>(ENDPOINTS.attendance.me.today)),
+ () => mockTodayStatus(),
  ),
 
  checkIn: () =>
  withDemoFallback<AttendanceRecord>(
- async () => {
- const employeeId = currentEmployeeId();
- const now = new Date();
- const hh = String(now.getHours()).padStart(2, "0");
- const mm = String(now.getMinutes()).padStart(2, "0");
-
- // No shift is stored on the session — reuse the employee's most
- // recent attendance row's shift, if one exists, so the FK isn't
- // dropped on every check-in.
- const priorRows = await fetchAllAttendance();
- const mine = priorRows.filter((r) => r.employeeId === employeeId).sort((a, b) => (a.attendanceDate < b.attendanceDate ? 1 : -1));
- const shiftId = mine[0]?.shiftId || undefined;
-
- const created = await apiRequest<any>(ENDPOINTS.attendance.base, {
- method: "POST",
- body: {
- user_id: employeeId,
- attendance_date: now.toISOString().slice(0, 10),
- check_in: `${hh}:${mm}:00`,
- attendance_status: now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15) ? "Late" : "Present",
- ...(shiftId ? { shiftId } : {}),
- },
- });
- return adaptAttendanceRow(created);
- },
+ async () =>
+ adaptAttendanceRow(
+ await apiRequest<any>(ENDPOINTS.attendance.me.checkIn, { method: "POST" }),
+ ),
  () => mockAttendanceApi.checkIn(),
  ),
 
  checkOut: () =>
  withDemoFallback<AttendanceRecord>(
- async () => {
- const today = await attendanceApi.getToday();
- if (!today) throw new Error("No check-in found for today.");
- const now = new Date();
- const hh = String(now.getHours()).padStart(2, "0");
- const mm = String(now.getMinutes()).padStart(2, "0");
- const checkOut = `${hh}:${mm}`;
- // The live backend doesn't compute working/overtime hours itself
- // (its seed data shows `working_hours` unrelated to check-in/out),
- // so derive them here and send them along with the check-out time.
- const { workingHours, overtimeHours, isOvertime } = today.checkIn
- ? computeHours(today.checkIn, checkOut)
- : { workingHours: null, overtimeHours: null, isOvertime: false };
- const updated = await apiRequest<any>(ENDPOINTS.attendance.byId(today.attendanceId), {
- method: "PATCH",
- body: {
- check_out: `${checkOut}:00`,
- working_hours: workingHours,
- overtime_hours: overtimeHours,
- is_overtime: isOvertime,
- },
- });
- return adaptAttendanceRow(updated);
- },
+ async () =>
+ adaptAttendanceRow(
+ await apiRequest<any>(ENDPOINTS.attendance.me.checkOut, { method: "POST" }),
+ ),
  () => mockAttendanceApi.checkOut(),
  ),
 
- // The live API has no `?month=&year=` filter, so pull every record and
- // narrow to this employee + the requested month client-side.
+ // Narrowed server-side by employee and month, so this no longer pulls the
+ // entire organisation's attendance down to filter it in the browser.
  getHistory: (params: { month: number; year: number }) =>
  withDemoFallback<AttendanceRecord[]>(
  async () => {
- const employeeId = currentEmployeeId();
- const rows = await fetchAllAttendance();
- return rows
- .filter((r) => r.employeeId === employeeId)
- .filter((r) => {
- const d = new Date(r.attendanceDate);
- return d.getMonth() + 1 === params.month && d.getFullYear() === params.year;
- })
- .sort((a, b) => (a.attendanceDate < b.attendanceDate ? 1 : -1));
+ const rows = toArray(
+ await apiRequest<any>(
+ `${ENDPOINTS.attendance.me.history}?month=${params.month}&year=${params.year}`,
+ ),
+ );
+ return rows.map(adaptAttendanceRow);
  },
  () => mockAttendanceApi.getHistory(params),
  ),

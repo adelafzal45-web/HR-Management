@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users, Mail, ClipboardCheck, AlertCircle, CheckCircle2, XCircle, TrendingUp,
@@ -9,7 +9,7 @@ import EmptyState from "@/components/common/EmptyState";
 import StatusBadge from "@/components/common/StatusBadge";
 import LoadingOverlay from "@/components/common/LoadingOverlay";
 import EmployeeAvatar from "@/modules/employees/components/EmployeeAvatar";
-import AppraisalNotificationsPanel from "@/modules/appraisal/components/AppraisalNotificationsPanel";
+import { useAuth } from "@/app/providers/AuthContext";
 import {
   teamAppraisalApi, appraisalDashboardApi,
   type TeamMember, type TeamStats, type TeamLeadDashboard,
@@ -39,16 +39,22 @@ const EMPTY_FILTERS: Filters = {
 
 export default function TeamMembers() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  /*
+   * The same screen serves two scopes. `GET /appraisal/my-team` returns a Team
+   * Lead's roster or, for an `appraisal.viewAll` holder, every active employee —
+   * so the wording has to follow the response rather than assume a roster.
+   * Calling an admin's org-wide list "your team" would misstate what they are
+   * about to score.
+   */
+  const orgWide = hasPermission("appraisal.viewAll");
+  const noun = orgWide ? "employee" : "member";
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [stats, setStats] = useState<TeamStats | null>(null);
   const [dashboard, setDashboard] = useState<TeamLeadDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-
-  const showError = useCallback((err: unknown, fallback: string) => {
-    setError(err instanceof Error ? err.message : fallback);
-  }, []);
 
   useEffect(() => {
     teamAppraisalApi
@@ -111,8 +117,8 @@ export default function TeamMembers() {
   const firstPending = pendingOnRoster[0];
 
   return (
-    <DashboardLayout title="My Team" activeKey="employees">
-      <LoadingOverlay show={loading} label="Loading your team…" />
+    <DashboardLayout title={orgWide ? "Evaluate Employees" : "My Team"} activeKey="employees">
+      <LoadingOverlay show={loading} label={orgWide ? "Loading employees…" : "Loading your team…"} />
 
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -209,10 +215,6 @@ export default function TeamMembers() {
         </div>
       )}
 
-      <div className="mb-5">
-        <AppraisalNotificationsPanel onError={showError} compact />
-      </div>
-
       {/* ---------------- Roster filters ---------------- */}
       <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
         <div className="flex flex-wrap items-end gap-3">
@@ -293,27 +295,33 @@ export default function TeamMembers() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-gray-900">Team Members</h2>
+        <h2 className="text-base font-semibold text-gray-900">
+          {orgWide ? "Employees" : "Team Members"}
+        </h2>
         <span className="text-sm text-gray-500">
           {loading
             ? "…"
             : activeFilterCount > 0
-              ? `${visible.length} of ${members.length} member${members.length === 1 ? "" : "s"}`
-              : `${members.length} member${members.length === 1 ? "" : "s"}`}
+              ? `${visible.length} of ${members.length} ${noun}${members.length === 1 ? "" : "s"}`
+              : `${members.length} ${noun}${members.length === 1 ? "" : "s"}`}
         </span>
       </div>
 
       {!loading && members.length === 0 && !error ? (
         <EmptyState
           icon={Users}
-          title="No team members assigned"
-          description="You don't have any team members assigned to you yet. HR controls this from Team Lead Assignments."
+          title={orgWide ? "No employees to evaluate" : "No team members assigned"}
+          description={
+            orgWide
+              ? "There are no active employees on record yet."
+              : "You don't have any team members assigned to you yet. Ask HR to update your team assignment."
+          }
         />
       ) : !loading && visible.length === 0 ? (
         <EmptyState
           icon={Search}
           title="No matches"
-          description="No team member matches the current filters."
+          description={`No ${noun} matches the current filters.`}
           actionLabel="Clear filters"
           onAction={() => setFilters(EMPTY_FILTERS)}
         />

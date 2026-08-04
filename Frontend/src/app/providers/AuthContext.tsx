@@ -19,7 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import { authApi, type LoginResult, type MeResult } from "@/modules/auth/api";
-import { ApiError, getToken, onAuthFailure } from "@/lib/apiClient";
+import { ApiError, getToken, onAuthFailure, onSessionRefresh } from "@/lib/apiClient";
 
 export type AuthUser = {
   firstName: string;
@@ -107,6 +107,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setPermissions([]);
       setError("Session expired. Please log in again.");
+    });
+  }, []);
+
+  // apiClient silently refreshes the access token roughly every 15 minutes
+  // (its lifetime) for as long as the tab stays open. The backend re-reads the
+  // caller's role/permissions from the database on every refresh, so a grant
+  // change made mid-session (an admin adding or revoking a permission) takes
+  // effect soon after — but only if that payload actually reaches this
+  // context. Without this listener, `user`/`permissions` stayed frozen at
+  // whatever they were at login (or the last full page load), so a revoked
+  // permission would keep showing its UI, and a newly-granted one would stay
+  // hidden, until the user manually reloaded.
+  useEffect(() => {
+    return onSessionRefresh(({ user: refreshedUser, permissions: refreshedPermissions }) => {
+      setUser(refreshedUser as AuthUser);
+      setPermissions(refreshedPermissions);
     });
   }, []);
 

@@ -4,7 +4,6 @@ import SettingsLayout from "@/modules/settings/pages/SettingsLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import Modal from "@/components/dialogs/Modal";
 import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
-import StatusBadge from "@/components/common/StatusBadge";
 import { FormField, PrimaryButton } from "@/components/forms/FormField";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
@@ -219,7 +218,6 @@ export default function RolesPage() {
  render: (r) => <span className="text-xs text-gray-500">{r.permissionIds.length} assigned</span>,
  hideBelow: "lg",
  },
- { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
  ];
 
  return (

@@ -19,8 +19,8 @@
 //
 // Route inventory, verified against the controllers (not just Swagger):
 //   full CRUD  /designations, /job-categories, /shifts, /leave-requests,
-//              /attendance, /leave-types
-//   no PATCH   /departments, /roles, /permissions  (see notes below)
+//              /attendance, /leave-types, /roles, /permissions
+//   no PATCH   /departments  (see notes below)
 //   join table /role-permissions — POST/GET/DELETE :id only
 //   singleton  /company-settings — GET, GET /branding (@Public), PATCH. No :id:
 //              one global row pinned to id = 1, no multi-tenancy.
@@ -45,10 +45,12 @@
 // grace_period_minutes, break_duration_minutes).
 // - POST /roles body: { role_name, description } — no status and
 // no permissions in the DTO; permission assignment is a separate join
-// table (see below).
+// table (see below). PATCH /roles/:id takes the same two fields, both
+// optional.
 // - POST /permissions body: { permission_name, description } — no
 // `module`/grouping field at all; the UI's "module" grouping is derived
 // client-side from `permission_name` and never sent to the backend.
+// PATCH /permissions/:id takes the same two fields, both optional.
 // - POST /role-permissions body: { roleId, permissionId } — camelCase,
 // unlike role_name/permission_name above. This is the real join table
 // behind the Roles screen's permission checkboxes: create/update there
@@ -570,6 +572,16 @@ export const permissionsApi = {
  () => mockPermissionsApi.create({ ...payload, module: deriveModule(payload.name) }),
  ),
 
+ update: (id: string, payload: Pick<Permission, "name" | "description">) =>
+ withDemoFallback<Permission>(
+ () =>
+ apiRequest<ApiPermission>(`/permissions/${id}`, {
+ method: "PATCH",
+ body: toApiPermissionPayload(payload),
+ }).then(fromApiPermission),
+ () => mockPermissionsApi.update(id, { ...payload, module: deriveModule(payload.name) }),
+ ),
+
  remove: (id: string) =>
  withDemoFallback<{ permissionId: string }>(
  () => apiRequest<{ permissionId: string }>(`/permissions/${id}`, { method: "DELETE" }),
@@ -677,14 +689,22 @@ export const rolesApi = {
  () => mockRolesApi.create(payload),
  ),
 
- // No PATCH /roles route is documented, so this only reconciles the
- // role-permission join table (which is real and confirmed) against the
- // desired permissionIds. role_name/description edits made here won't
- // persist against a live backend until it gains an update route.
+ // The role row and its permission grants are two different resources, so this
+ // is two requests: PATCH /roles/:id for the name and description, then a diff
+ // of the role's current /role-permissions rows against the desired set.
+ //
+ // The PATCH used to be missing entirely — this function only ever reconciled
+ // the join table, on a stale note claiming no update route existed. It does
+ // (RoleController.update, `roles.update`), so renaming a role or editing its
+ // description silently did nothing: the modal closed, the toast said "Role
+ // updated", and the table reloaded the unchanged row.
  update: (id: string, payload: Pick<Role, "name" | "description" | "status" | "permissionIds">) =>
  withDemoFallback<Role>(
  async () => {
- const [role, rolePermissions] = await Promise.all([apiRequest<ApiRole>(`/roles/${id}`), fetchRolePermissions()]);
+ const [role, rolePermissions] = await Promise.all([
+ apiRequest<ApiRole>(`/roles/${id}`, { method: "PATCH", body: toApiRolePayload(payload) }),
+ fetchRolePermissions(),
+ ]);
  const existingForRole = rolePermissions.filter((rp) => rpRoleId(rp) === id);
  const existingPermissionIds = existingForRole.map(rpPermissionId);
  const toAdd = payload.permissionIds.filter((pid) => !existingPermissionIds.includes(pid));

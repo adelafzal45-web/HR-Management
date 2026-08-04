@@ -36,6 +36,7 @@ import { PerformanceReviewService } from '../performance-review/performance-revi
 import { AppraisalQuestionOption } from '../apprisal-question-options/apprisal-question-options.entity';
 import { AppraisalNotification } from '../appraisal-notifications/appraisal-notification.entity';
 import { AuditService } from '../audit/audit.service';
+import { AuthorizationService } from '../authorization/authorization.service';
 import { Department } from '../department/department.entity';
 import { Designation } from '../designation/designation.entity';
 
@@ -47,6 +48,7 @@ import {
   CreateTeamLeadAssignmentDto,
   UpdateTeamLeadAssignmentMembersDto,
 } from './dto/team-lead-assignment.dto';
+import { cadenceFor } from './evaluation-cadence';
 
 // ---------------------------------------------------------------------------
 // Frontend-facing shapes (camelCase).
@@ -209,6 +211,17 @@ export interface EvaluationFormDto {
   formId: string;
   formName: string;
   evaluationType: string;
+  /**
+   * The period this submission belongs to, as the cadence names it — "2026-08-04"
+   * for Daily, "2026-W32" for Weekly, "2026-08" for Monthly.
+   *
+   * Sent because the client must not invent it. `review_period` is part of
+   * `UQ_pr_reviewee_form_period` and is how `submitEvaluation` finds the row the
+   * scheduler already generated. A client-side label that disagrees with
+   * `cadence.periodKey` silently creates a second review and leaves the
+   * scheduler's Draft pending forever.
+   */
+  reviewPeriod: string;
   questions: FormQuestionDto[];
   existing: SubmittedEvaluationDto | null;
 }
@@ -298,6 +311,8 @@ export class AppraisalFacadeService {
     private readonly questionBank: AppraisalQuestionBankService,
 
     private readonly audit: AuditService,
+
+    private readonly authorization: AuthorizationService,
   ) {}
 
   /** Wording for error messages — snapshot first, since that is what the reviewer sees. */
@@ -1331,7 +1346,8 @@ export class AppraisalFacadeService {
    * The employees one Team Lead may see and evaluate.
    *
    * This is the single authority for that question. `getMyTeam` and
-   * `assertCanReview` both route through it, and they must: scoping only the
+   * `assertCanReview` both route through it via
+   * `resolveEvaluableEmployeeIds`, and they must: scoping only the
    * roster read would hide an employee from the list while `POST
    * /appraisal/evaluate/:employeeId` still accepted them, which is a worse bug
    * than no scoping at all — it looks enforced and is not.
@@ -1409,6 +1425,56 @@ export class AppraisalFacadeService {
     return visible;
   }
 
+  /**
+   * The employees a given reviewer may evaluate — the roster for a Team Lead,
+   * the whole active organisation for an administrator.
+   *
+   * `appraisal.viewAll` is the test. It is the key that already means "this
+   * person's remit is the entire company" everywhere else in the module
+   * (`GET /appraisal/evaluations`, `/analytics`, and the `scope: 'all'` branch
+   * of the stats service), so reusing it keeps one answer to "who is an
+   * administrator here" instead of inventing a second one that would drift.
+   *
+   * An administrator has no `team_lead_assignments` row and never will — HR does
+   * not put their own name on a roster — so without this they resolve to an
+   * empty set and can evaluate nobody at all, which is the restriction this
+   * removes.
+   *
+   * Self is still excluded. Falling through to `resolveVisibleEmployeeIds` for
+   * everyone else is what keeps a Team Lead scoped: the bypass is a widening for
+   * one permission, not a new code path around the roster check.
+   *
+   * Like the roster resolver this is the single authority for its question:
+   * `getMyTeam` and `assertCanReview` both call it, so the list a reviewer sees
+   * and the set the guard accepts cannot disagree.
+   */
+  async resolveEvaluableEmployeeIds(
+    reviewerId: string,
+    manager?: EntityManager,
+  ): Promise<Set<string>> {
+    const orgWide = await this.authorization.hasPermission(
+      reviewerId,
+      'appraisal.viewAll',
+    );
+    if (!orgWide) {
+      return this.resolveVisibleEmployeeIds(reviewerId, manager);
+    }
+
+    const userRepo = manager ? manager.getRepository(User) : this.userRepository;
+
+    // Active only, matching the roster resolver: a deactivated account has
+    // nothing to evaluate, and an administrator is not an exception to that.
+    const everyone = await userRepo.find({
+      where: { status: true },
+      select: { user_id: true },
+    });
+
+    const visible = new Set(everyone.map((u) => u.user_id));
+    visible.delete(reviewerId);
+
+    return visible;
+  }
+
   async getMyTeam(requesterId: string): Promise<TeamMemberDto[]> {
     const requester = await this.userRepository.findOne({
       where: { user_id: requesterId },
@@ -1418,7 +1484,7 @@ export class AppraisalFacadeService {
       throw new NotFoundException('Authenticated user not found');
     }
 
-    const visibleIds = await this.resolveVisibleEmployeeIds(requesterId);
+    const visibleIds = await this.resolveEvaluableEmployeeIds(requesterId);
 
     // An evaluator with nobody to evaluate still owes their own evaluation,
     // provided HR named their designation on the form. Without this the roster
@@ -1844,14 +1910,15 @@ export class AppraisalFacadeService {
   // ==========================================================================
 
   /**
-   * A reviewer may only touch employees on their own resolved roster, and never
+   * A reviewer may only touch employees they can evaluate, and never
    * themselves.
    *
-   * Authority comes from `team_lead_assignments` via
-   * `resolveVisibleEmployeeIds`, not from department co-membership. The
-   * difference matters in the case the assignment table exists to serve: two
-   * leads in one department, each owning a subset of it. Under the old
-   * same-department check either lead could evaluate any of the other's reports.
+   * Authority comes from `resolveEvaluableEmployeeIds`: `team_lead_assignments`
+   * for a lead, every active employee for an `appraisal.viewAll` holder. Not
+   * from department co-membership — the difference matters in the case the
+   * assignment table exists to serve: two leads in one department, each owning a
+   * subset of it. Under the old same-department check either lead could evaluate
+   * any of the other's reports.
    */
   private async assertCanReview(
     reviewerId: string,
@@ -1876,11 +1943,23 @@ export class AppraisalFacadeService {
       throw new NotFoundException('Employee not found');
     }
 
-    const visibleIds = await this.resolveVisibleEmployeeIds(reviewerId, manager);
+    const visibleIds = await this.resolveEvaluableEmployeeIds(
+      reviewerId,
+      manager,
+    );
 
     if (reviewerId === employeeId) {
       await this.assertCanSelfReview(reviewer, visibleIds, manager);
       return { reviewer, reviewee };
+    }
+
+    if (!reviewee.status) {
+      // Truthful for both an administrator and a lead, and it discloses nothing
+      // new: the `Employee not found` branch above already confirms whether an
+      // id exists.
+      throw new ForbiddenException(
+        'This employee is deactivated and cannot be evaluated.',
+      );
     }
 
     if (!visibleIds.has(employeeId)) {
@@ -2002,6 +2081,15 @@ export class AppraisalFacadeService {
       form.form_id,
     );
 
+    // The cadence names the period, and the client is told rather than asked to
+    // guess. Scoping `existing` to it matters as much as returning it: the
+    // previous lookup took the newest review for this reviewer/employee/form
+    // regardless of period, so on a Daily form yesterday's submission was
+    // prefilled into today's blank one under a banner promising an overwrite
+    // that `submitEvaluation` — which keys on `review_period` — would never
+    // perform.
+    const reviewPeriod = cadenceFor(form.evaluation_type).periodKey(new Date());
+
     const existingReview = await this.dataSource
       .getRepository(PerformanceReview)
       .findOne({
@@ -2009,6 +2097,7 @@ export class AppraisalFacadeService {
           reviewer: { user_id: reviewerId },
           reviewee: { user_id: employeeId },
           appraisalForm: { form_id: form.form_id },
+          review_period: reviewPeriod,
         },
         relations: {
           reviewee: true,
@@ -2025,6 +2114,7 @@ export class AppraisalFacadeService {
       formId: form.form_id,
       formName: form.form_name,
       evaluationType: form.evaluation_type,
+      reviewPeriod,
       questions: questions
         .filter((fq) => this.isLinkActive(fq))
         .map((fq) => this.toFormQuestion(fq)),

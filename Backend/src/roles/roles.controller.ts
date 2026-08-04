@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
 } from '@nestjs/common';
 
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -17,6 +18,8 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
+
+import { SettingsListQueryDto } from '../common/dto/settings-list-query.dto';
 
 import { RoleService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
@@ -54,13 +57,15 @@ export class RoleController {
   @Get()
   @ApiOperation({
     summary: 'Get all roles',
+    description:
+      'Supports `?search=`, `?page=` and `?pageSize=`. Omit `pageSize` to get every role.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Returns all roles.',
+    description: 'Returns `{ data, total }`.',
   })
-  findAll() {
-    return this.roleService.findAll();
+  findAll(@Query() query: SettingsListQueryDto) {
+    return this.roleService.findAll(query);
   }
 
   @Get(':id')
