@@ -34,6 +34,7 @@ import { WorkingDaySchedulesModule } from './working-day-schedules/working-day-s
 import { AuditModule } from './audit/audit.module';
 import { MailModule } from './mail/mail.module';
 import { AppraisalNotificationsModule } from './appraisal-notifications/appraisal-notifications.module';
+import { PublicHolidaysModule } from './public-holidays/public-holidays.module';
 
 @Module({
   imports: [
@@ -132,6 +133,8 @@ import { AppraisalNotificationsModule } from './appraisal-notifications/appraisa
     // reopen notices). Registered so the entity loads; the behaviour lives in
     // the facade and the appraisal scheduler.
     AppraisalNotificationsModule,
+
+    PublicHolidaysModule,
   ],
 
   controllers: [AppController],

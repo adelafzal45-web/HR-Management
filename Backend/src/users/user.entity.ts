@@ -385,8 +385,11 @@ export class User {
   @OneToMany(() => Payroll, (payroll) => payroll.user)
   payrolls!: Payroll[];
 
-  @OneToMany(() => Notification, (notification) => notification.createdBy)
+  @OneToMany(() => Notification, (notification) => notification.user)
   notifications!: Notification[];
+
+  @OneToMany(() => Notification, (notification) => notification.createdBy)
+  createdNotifications!: Notification[];
 
   @OneToMany(
     () => PerformanceReview,

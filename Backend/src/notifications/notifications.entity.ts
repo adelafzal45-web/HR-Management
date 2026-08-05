@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  CreateDateColumn,
 } from 'typeorm';
 
 import { User } from '../users/user.entity';
@@ -24,18 +25,30 @@ export class Notification {
   })
   message!: string;
 
-  @Column({
-    type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
-  })
+  @CreateDateColumn()
   created_at!: Date;
 
-  @ManyToOne(() => User, {
+  /**
+   * Employee who receives notification
+   */
+  @ManyToOne(() => User, (user) => user.notifications, {
     nullable: false,
-    eager: true,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({
+    name: 'user_id',
+  })
+  user!: User;
+
+  /**
+   * HR/Admin who created the notification
+   */
+  @ManyToOne(() => User, (user) => user.createdNotifications, {
+    nullable: true,
+    onDelete: 'SET NULL',
   })
   @JoinColumn({
     name: 'created_by',
   })
-  createdBy!: User;
+  createdBy?: User;
 }
