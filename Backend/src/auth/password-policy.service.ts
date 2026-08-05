@@ -157,9 +157,7 @@ export class PasswordPolicyService {
       .from(PasswordHistory)
       .where('user_id = :userId', { userId })
       .andWhere(
-        keep.length > 0
-          ? 'password_history_id NOT IN (:...keep)'
-          : '1 = 1',
+        keep.length > 0 ? 'password_history_id NOT IN (:...keep)' : '1 = 1',
         keep.length > 0
           ? { keep: keep.map((row) => row.password_history_id) }
           : {},

@@ -92,7 +92,7 @@ export class UserController {
   @ApiOperation({
     summary: 'Roles the current user may assign',
     description:
-      'Returns only roles whose permission set is a subset of the caller\'s own, so a user cannot create an account more privileged than themselves.',
+      "Returns only roles whose permission set is a subset of the caller's own, so a user cannot create an account more privileged than themselves.",
   })
   @ApiResponse({ status: 200, description: 'Assignable roles.' })
   async assignableRoles(@CurrentUser() user: JwtUser) {
@@ -126,39 +126,39 @@ export class UserController {
 
   @Get('me/profile')
   @ApiOperation({
-    summary: 'The signed-in employee\'s own profile',
+    summary: "The signed-in employee's own profile",
     description:
       'No permission required beyond authentication — every employee may read their own record. Backs the /profile route.',
   })
-  @ApiResponse({ status: 200, description: 'The caller\'s profile.' })
+  @ApiResponse({ status: 200, description: "The caller's profile." })
   findOwnProfile(@CurrentUser() user: JwtUser) {
     return this.userService.findOne(user.user_id);
   }
 
   @Get('me/leave-balances')
-  @ApiOperation({ summary: 'The signed-in employee\'s leave balances' })
-  @ApiResponse({ status: 200, description: 'Allocated, used and remaining days.' })
+  @ApiOperation({ summary: "The signed-in employee's leave balances" })
+  @ApiResponse({
+    status: 200,
+    description: 'Allocated, used and remaining days.',
+  })
   findOwnLeaveBalances(@CurrentUser() user: JwtUser) {
     return this.userService.findLeaveBalances(user.user_id);
   }
 
   @Get('me/team')
   @ApiOperation({
-    summary: 'The signed-in Team Lead\'s direct reports',
+    summary: "The signed-in Team Lead's direct reports",
     description:
       'Backs the "My Team" section. Returns an empty page for a user who leads nobody.',
   })
   @ApiResponse({ status: 200, description: 'Paginated team members.' })
-  findOwnTeam(
-    @CurrentUser() user: JwtUser,
-    @Query() query: EmployeeQueryDto,
-  ) {
+  findOwnTeam(@CurrentUser() user: JwtUser, @Query() query: EmployeeQueryDto) {
     return this.userService.findTeamMembers(user.user_id, query);
   }
 
   @Patch('me/profile')
   @ApiOperation({
-    summary: 'Update the signed-in employee\'s own profile',
+    summary: "Update the signed-in employee's own profile",
     description:
       'Accepts only photo, phone, address, emergency contact and (policy permitting) personal email. Any other field in the body is discarded — HR-controlled data cannot be self-edited. Backs /profile/edit.',
   })
@@ -190,7 +190,7 @@ export class UserController {
 
   @Post('me/change-password')
   @ApiOperation({
-    summary: 'Change the signed-in employee\'s own password',
+    summary: "Change the signed-in employee's own password",
     description:
       'Requires the current password. Rejected when password changes are disabled on the account.',
   })
@@ -215,7 +215,7 @@ export class UserController {
   )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Upload the signed-in employee\'s own photo',
+    summary: "Upload the signed-in employee's own photo",
     description: `Accepts ${ALLOWED_IMAGE_MIME_TYPES.join(', ')} up to ${MAX_PHOTO_BYTES / (1024 * 1024)} MB. Contents are checked against the declared type.`,
   })
   @ApiBody({
@@ -239,7 +239,7 @@ export class UserController {
   }
 
   @Delete('me/photo')
-  @ApiOperation({ summary: 'Remove the signed-in employee\'s own photo' })
+  @ApiOperation({ summary: "Remove the signed-in employee's own photo" })
   @ApiResponse({ status: 200, description: 'Photo removed.' })
   removeOwnPhoto(@CurrentUser() user: JwtUser, @Req() request: Request) {
     return this.userService.removePhoto(
@@ -266,9 +266,13 @@ export class UserController {
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
   @ApiResponse({
     status: 403,
-    description: 'Missing employees.create, or the role is not assignable by the caller.',
+    description:
+      'Missing employees.create, or the role is not assignable by the caller.',
   })
-  @ApiResponse({ status: 409, description: 'Email or employee code already in use.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Email or employee code already in use.',
+  })
   async create(
     @Body() createUserDto: CreateUserDto,
     @CurrentUser() user: JwtUser,
@@ -304,7 +308,8 @@ export class UserController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Paginated employees in the standard { data, total, page, limit, totalPages } envelope.',
+    description:
+      'Paginated employees in the standard { data, total, page, limit, totalPages } envelope.',
   })
   findAll(@Query() query: EmployeeQueryDto) {
     return this.userService.findAll(query);
@@ -329,7 +334,7 @@ export class UserController {
   @UseGuards(PermissionGuard)
   @RequirePermission('employees.team.view')
   @ApiOperation({
-    summary: 'A Team Lead\'s direct reports',
+    summary: "A Team Lead's direct reports",
     description:
       'Paginated and searchable. Backs the expandable member list on the Team Leads tab.',
   })
@@ -346,9 +351,12 @@ export class UserController {
   @Get(':id/leave-balances')
   @UseGuards(PermissionGuard)
   @RequirePermission('employees.view')
-  @ApiOperation({ summary: 'An employee\'s leave balances' })
+  @ApiOperation({ summary: "An employee's leave balances" })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Allocated, used and remaining days.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Allocated, used and remaining days.',
+  })
   findLeaveBalances(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.findLeaveBalances(id);
   }
@@ -369,7 +377,10 @@ export class UserController {
   @ApiBody({ type: UpdateUserDto })
   @ApiResponse({ status: 200, description: 'Employee updated.' })
   @ApiResponse({ status: 404, description: 'Employee not found.' })
-  @ApiResponse({ status: 409, description: 'Email or employee code already in use.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Email or employee code already in use.',
+  })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateUserDto: UpdateUserDto,
@@ -399,7 +410,7 @@ export class UserController {
   @ApiOperation({
     summary: 'Update account state toggles',
     description:
-      'Login enabled, password-reset allowed, web/mobile/API/multi-device access, remote and biometric attendance, overtime, and employment status. Feature-module access is governed by the employee\'s role, not here.',
+      "Login enabled, password-reset allowed, web/mobile/API/multi-device access, remote and biometric attendance, overtime, and employment status. Feature-module access is governed by the employee's role, not here.",
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({ type: UpdateAccountSettingsDto })
@@ -422,14 +433,17 @@ export class UserController {
   @UseGuards(PermissionGuard)
   @RequirePermission('employees.leave.assign')
   @ApiOperation({
-    summary: 'Set an employee\'s allowed leave types and balances',
+    summary: "Set an employee's allowed leave types and balances",
     description:
       'Replaces the whole set: types omitted from the payload are removed. Allocations for types already assigned are updated in place, so consumed days are preserved.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({ type: AssignLeaveTypesDto })
   @ApiResponse({ status: 200, description: 'Leave types assigned.' })
-  @ApiResponse({ status: 400, description: 'Unknown leave type, or used days exceed the allocation.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Unknown leave type, or used days exceed the allocation.',
+  })
   assignLeaveTypes(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AssignLeaveTypesDto,
@@ -447,14 +461,17 @@ export class UserController {
   @UseGuards(PermissionGuard)
   @RequirePermission('employees.password.reset')
   @ApiOperation({
-    summary: 'Reset an employee\'s password',
+    summary: "Reset an employee's password",
     description:
       'Administrative reset — no current password required. Refused when the account has password resets disabled. The new password is hashed; only the fact of the reset is audited.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({ type: ResetPasswordDto })
   @ApiResponse({ status: 201, description: 'Password reset.' })
-  @ApiResponse({ status: 403, description: 'Password resets are disabled for this account.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Password resets are disabled for this account.',
+  })
   resetPassword(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ResetPasswordDto,

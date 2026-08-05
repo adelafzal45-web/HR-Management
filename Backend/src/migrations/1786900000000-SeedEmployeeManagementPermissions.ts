@@ -47,11 +47,17 @@ export class SeedEmployeeManagementPermissions1786900000000
     ['employees.payroll.edit', 'Change employee bank and payroll details'],
 
     // Leave
-    ['employees.leave.assign', 'Assign leave types and balances to an employee'],
+    [
+      'employees.leave.assign',
+      'Assign leave types and balances to an employee',
+    ],
 
     // Access control
-    ['employees.role.assign', "Assign a role to an employee"],
-    ['employees.login.manage', 'Enable or disable account access and login channels'],
+    ['employees.role.assign', 'Assign a role to an employee'],
+    [
+      'employees.login.manage',
+      'Enable or disable account access and login channels',
+    ],
     ['employees.password.reset', "Reset another employee's password"],
     [
       'employees.profile.email.edit',
@@ -169,8 +175,10 @@ export class SeedEmployeeManagementPermissions1786900000000
   };
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    for (const [name, description] of SeedEmployeeManagementPermissions1786900000000
-      .PERMISSIONS) {
+    for (const [
+      name,
+      description,
+    ] of SeedEmployeeManagementPermissions1786900000000.PERMISSIONS) {
       await queryRunner.query(
         `INSERT INTO "permissions" ("permission_name", "description")
          VALUES ($1, $2)
@@ -217,9 +225,10 @@ export class SeedEmployeeManagementPermissions1786900000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    const names = SeedEmployeeManagementPermissions1786900000000.PERMISSIONS.map(
-      ([name]) => name,
-    );
+    const names =
+      SeedEmployeeManagementPermissions1786900000000.PERMISSIONS.map(
+        ([name]) => name,
+      );
 
     await queryRunner.query(
       `DELETE FROM "role_permissions" rp

@@ -108,7 +108,11 @@ export class PasswordResetService {
         `Password reset requested for ${normalized}, but resets are disabled on that account.`,
       );
       await this.auditService.record({
-        actor: { user_id: user.user_id, email: normalized, ip: ip ?? undefined },
+        actor: {
+          user_id: user.user_id,
+          email: normalized,
+          ip: ip ?? undefined,
+        },
         action: 'employee.password.reset_link.blocked',
         entityType: 'User',
         entityId: user.user_id,
@@ -169,7 +173,11 @@ export class PasswordResetService {
         // Otherwise a user who clicks "resend" three times holds three valid
         // keys, and revoking the one that leaked would not be enough.
         await tokens.update(
-          { user_id: user.user_id, used_at: IsNull(), invalidated_at: IsNull() },
+          {
+            user_id: user.user_id,
+            used_at: IsNull(),
+            invalidated_at: IsNull(),
+          },
           { invalidated_at: new Date() },
         );
 
@@ -327,10 +335,12 @@ export class PasswordResetService {
     const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
 
     await this.dataSource.transaction(async (manager) => {
-      await manager.getRepository(PasswordResetToken).update(
-        { password_reset_token_id: record.password_reset_token_id },
-        { used_at: new Date() },
-      );
+      await manager
+        .getRepository(PasswordResetToken)
+        .update(
+          { password_reset_token_id: record.password_reset_token_id },
+          { used_at: new Date() },
+        );
 
       // Every other outstanding link dies with this redemption.
       await manager.getRepository(PasswordResetToken).update(

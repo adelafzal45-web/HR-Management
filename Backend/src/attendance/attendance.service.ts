@@ -317,7 +317,10 @@ export class AttendanceService {
       .leftJoinAndSelect('user.designation', 'designation')
       .leftJoinAndSelect('attendance.shift', 'shift')
       .where('user.user_id = :userId', { userId })
-      .andWhere('attendance.attendance_date BETWEEN :from AND :to', { from, to })
+      .andWhere('attendance.attendance_date BETWEEN :from AND :to', {
+        from,
+        to,
+      })
       .orderBy('attendance.attendance_date', 'DESC')
       .getMany();
 
@@ -368,12 +371,7 @@ export class AttendanceService {
         user: { user_id: userId },
         attendance_date: date as unknown as Date,
       },
-      relations: [
-        'user',
-        'user.department',
-        'user.designation',
-        'shift',
-      ],
+      relations: ['user', 'user.department', 'user.designation', 'shift'],
     });
   }
 
@@ -467,7 +465,8 @@ export class AttendanceService {
         'shift',
         'performanceReviews',
       ],
-    });if (!attendance) {
+    });
+    if (!attendance) {
       throw new NotFoundException('Attendance record not found');
     }
 

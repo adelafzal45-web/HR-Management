@@ -235,9 +235,7 @@ export class AppraisalFacadeController {
   @ApiOperation({ summary: 'Remove an assignment' })
   @ApiParam({ name: 'assignmentId', description: 'Assignment UUID' })
   @ApiResponse({ status: 200, description: 'Assignment removed.' })
-  deleteAssignment(
-    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
-  ) {
+  deleteAssignment(@Param('assignmentId', ParseUUIDPipe) assignmentId: string) {
     return this.appraisalFacadeService.deleteAssignment(assignmentId);
   }
 
@@ -345,7 +343,8 @@ export class AppraisalFacadeController {
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.viewAll')
   @ApiOperation({
-    summary: 'Org-wide averages, distribution, and department/designation splits',
+    summary:
+      'Org-wide averages, distribution, and department/designation splits',
   })
   @ApiResponse({ status: 200, description: 'Analytics retrieved.' })
   getAnalytics() {
@@ -444,37 +443,52 @@ export class AppraisalFacadeController {
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.teamlead.assign')
   @ApiOperation({ summary: 'List all Team Lead roster assignments' })
-  @ApiQuery({ name: 'teamLeadId', required: false, description: 'Filter by lead UUID' })
+  @ApiQuery({
+    name: 'teamLeadId',
+    required: false,
+    description: 'Filter by lead UUID',
+  })
   @ApiResponse({ status: 200, description: 'Assignments retrieved.' })
-  listTeamLeadAssignments(
-    @Query('teamLeadId') teamLeadId?: string,
-  ) {
+  listTeamLeadAssignments(@Query('teamLeadId') teamLeadId?: string) {
     return this.appraisalFacadeService.listTeamLeadAssignments(teamLeadId);
   }
 
   @Post('team-lead-assignments')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.teamlead.assign')
-  @ApiOperation({ summary: 'Create a Team Lead assignment (DEPARTMENT or MEMBERS mode)' })
+  @ApiOperation({
+    summary: 'Create a Team Lead assignment (DEPARTMENT or MEMBERS mode)',
+  })
   @ApiBody({ type: CreateTeamLeadAssignmentDto })
   @ApiResponse({ status: 201, description: 'Assignment created.' })
   @ApiResponse({ status: 400, description: 'Invalid mode/field combination.' })
-  @ApiResponse({ status: 409, description: 'A department-wide assignment already exists for this lead.' })
+  @ApiResponse({
+    status: 409,
+    description: 'A department-wide assignment already exists for this lead.',
+  })
   createTeamLeadAssignment(
     @CurrentUser() user: JwtUser,
     @Body() dto: CreateTeamLeadAssignmentDto,
   ) {
-    return this.appraisalFacadeService.createTeamLeadAssignment(dto, user.user_id);
+    return this.appraisalFacadeService.createTeamLeadAssignment(
+      dto,
+      user.user_id,
+    );
   }
 
   @Put('team-lead-assignments/:assignmentId/members')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.teamlead.assign')
-  @ApiOperation({ summary: 'Replace the member list of a MEMBERS-mode assignment' })
+  @ApiOperation({
+    summary: 'Replace the member list of a MEMBERS-mode assignment',
+  })
   @ApiParam({ name: 'assignmentId', description: 'Assignment UUID' })
   @ApiBody({ type: UpdateTeamLeadAssignmentMembersDto })
   @ApiResponse({ status: 200, description: 'Members updated.' })
-  @ApiResponse({ status: 400, description: 'Assignment is not in MEMBERS mode.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Assignment is not in MEMBERS mode.',
+  })
   updateTeamLeadAssignmentMembers(
     @CurrentUser() user: JwtUser,
     @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
@@ -515,7 +529,10 @@ export class AppraisalFacadeController {
   @ApiParam({ name: 'reviewId', description: 'Review UUID' })
   @ApiBody({ type: WorkflowActionDto })
   @ApiResponse({ status: 200, description: 'Review approved.' })
-  @ApiResponse({ status: 409, description: 'Review is not in Submitted status.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Review is not in Submitted status.',
+  })
   approveReview(
     @CurrentUser() user: JwtUser,
     @Param('reviewId', ParseUUIDPipe) reviewId: string,
@@ -533,7 +550,10 @@ export class AppraisalFacadeController {
   @ApiBody({ type: WorkflowActionDto })
   @ApiResponse({ status: 200, description: 'Review rejected.' })
   @ApiResponse({ status: 400, description: 'Comment is required.' })
-  @ApiResponse({ status: 409, description: 'Review is not in Submitted status.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Review is not in Submitted status.',
+  })
   rejectReview(
     @CurrentUser() user: JwtUser,
     @Param('reviewId', ParseUUIDPipe) reviewId: string,
@@ -546,7 +566,9 @@ export class AppraisalFacadeController {
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reopen a locked review for editing (comment required)' })
+  @ApiOperation({
+    summary: 'Reopen a locked review for editing (comment required)',
+  })
   @ApiParam({ name: 'reviewId', description: 'Review UUID' })
   @ApiBody({ type: WorkflowActionDto })
   @ApiResponse({ status: 200, description: 'Review reopened.' })
@@ -631,7 +653,10 @@ export class AppraisalFacadeController {
   @RequirePermission('appraisal.compare')
   @ApiOperation({ summary: 'Side-by-side comparison of 2–6 employees' })
   @ApiResponse({ status: 200, description: 'Comparison retrieved.' })
-  @ApiResponse({ status: 400, description: 'Fewer than 2 or more than 6 employees.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Fewer than 2 or more than 6 employees.',
+  })
   compareStats(
     @CurrentUser() user: JwtUser,
     @Query() query: CompareStatsQueryDto,
@@ -699,7 +724,9 @@ export class AppraisalFacadeController {
   @Get('dashboard/team-lead')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.view')
-  @ApiOperation({ summary: 'Team Lead dashboard: counts + roster + pending alerts' })
+  @ApiOperation({
+    summary: 'Team Lead dashboard: counts + roster + pending alerts',
+  })
   @ApiResponse({ status: 200, description: 'Dashboard retrieved.' })
   getTeamLeadDashboard(@CurrentUser() user: JwtUser) {
     return this.appraisalFacadeService.getTeamLeadDashboard(user.user_id);

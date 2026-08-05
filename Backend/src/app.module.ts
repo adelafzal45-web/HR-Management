@@ -46,7 +46,7 @@ import { AppraisalNotificationsModule } from './appraisal-notifications/appraisa
 
       username: 'postgres',
 
-      password: 'admin',
+      password: '123454321',
 
       database: 'HR',
 

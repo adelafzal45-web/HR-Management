@@ -11,9 +11,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Fixed id = 1 by design — no multi-tenancy. The seed below ensures exactly
  * one row exists; the controller enforces GET/PATCH against id=1 only.
  */
-export class CreateCompanySettings1786200000000
-  implements MigrationInterface
-{
+export class CreateCompanySettings1786200000000 implements MigrationInterface {
   name = 'CreateCompanySettings1786200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

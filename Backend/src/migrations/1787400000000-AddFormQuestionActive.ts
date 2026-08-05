@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * Gives each form↔question link its own active flag.
@@ -15,7 +15,7 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  *   - `appraisal_form_questions.is_active` — is it live on this particular form
  */
 export class AddFormQuestionActive1787400000000 implements MigrationInterface {
-  name = "AddFormQuestionActive1787400000000";
+  name = 'AddFormQuestionActive1787400000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`

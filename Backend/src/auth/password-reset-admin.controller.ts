@@ -85,8 +85,14 @@ export class PasswordResetAdminController {
     description:
       'Per-employee outcome. Always 200 when the request itself was well formed — a partial failure is reported in the body, not as an error status, because "3 of 5 sent" is not something a single status code can express.',
   })
-  @ApiResponse({ status: 400, description: 'Empty, oversized, or duplicated id list.' })
-  @ApiResponse({ status: 403, description: 'Missing employees.password.reset.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Empty, oversized, or duplicated id list.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing employees.password.reset.',
+  })
   async sendResetLinks(
     @Body() dto: BulkPasswordResetDto,
     @CurrentUser() currentUser: JwtUser,

@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
@@ -218,10 +223,9 @@ export class MailQueueProcessor {
     attemptNumber: number,
     error: unknown,
   ): Promise<void> {
-    const detail = (error instanceof Error ? error.message : String(error)).slice(
-      0,
-      2000,
-    );
+    const detail = (
+      error instanceof Error ? error.message : String(error)
+    ).slice(0, 2000);
 
     const exhausted = attemptNumber >= row.max_attempts;
 
@@ -250,7 +254,8 @@ export class MailQueueProcessor {
       return;
     }
 
-    const delay = BACKOFF_MS[Math.min(attemptNumber - 1, BACKOFF_MS.length - 1)];
+    const delay =
+      BACKOFF_MS[Math.min(attemptNumber - 1, BACKOFF_MS.length - 1)];
 
     await this.queue.update(row.email_queue_id, {
       status: 'pending',
@@ -308,7 +313,9 @@ export class MailQueueProcessor {
   // ---- Admin surface ----
 
   /** Paginated delivery log, newest first. */
-  async findAll(query: EmailQueueQueryDto): Promise<PaginatedResult<EmailQueue>> {
+  async findAll(
+    query: EmailQueueQueryDto,
+  ): Promise<PaginatedResult<EmailQueue>> {
     const qb = this.queue.createQueryBuilder('email');
 
     if (query.status) {

@@ -46,7 +46,7 @@ export const AppDataSource = new DataSource({
 
   username: 'postgres',
 
-  password: 'admin',
+  password: '123454321',
 
   database: 'HR',
 

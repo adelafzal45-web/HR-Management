@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 
 import {
@@ -14,19 +15,24 @@ import {
   ApiResponse,
   ApiParam,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 
 import { LeaveRequestsService } from './leave-requests.service';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
-import { UseGuards } from '@nestjs/common';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
+@ApiBearerAuth()
 @ApiTags('Leave Requests')
 @Controller('leave-requests')
 export class LeaveRequestsController {
   constructor(private readonly leaveRequestsService: LeaveRequestsService) {}
+
+  // ==========================================
+  // CREATE
+  // ==========================================
 
   @Post()
   @UseGuards(PermissionGuard)
@@ -46,23 +52,44 @@ export class LeaveRequestsController {
     status: 400,
     description: 'Invalid request body.',
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-request.create permission.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Employee or leave type not found.',
+  })
   create(@Body() createLeaveRequestDto: CreateLeaveRequestDto) {
     return this.leaveRequestsService.create(createLeaveRequestDto);
   }
+
+  // ==========================================
+  // GET ALL
+  // ==========================================
 
   @Get()
   @UseGuards(PermissionGuard)
   @RequirePermission('leave-request.view')
   @ApiOperation({
     summary: 'Get all leave requests',
+    description: 'Returns all leave requests.',
   })
   @ApiResponse({
     status: 200,
     description: 'Returns all leave requests.',
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-request.view permission.',
+  })
   findAll() {
     return this.leaveRequestsService.findAll();
   }
+
+  // ==========================================
+  // GET ONE
+  // ==========================================
 
   @Get(':id')
   @UseGuards(PermissionGuard)
@@ -80,12 +107,20 @@ export class LeaveRequestsController {
     description: 'Leave request found.',
   })
   @ApiResponse({
+    status: 403,
+    description: 'Missing leave-request.view permission.',
+  })
+  @ApiResponse({
     status: 404,
     description: 'Leave request not found.',
   })
   findOne(@Param('id') id: string) {
     return this.leaveRequestsService.findOne(id);
   }
+
+  // ==========================================
+  // UPDATE
+  // ==========================================
 
   @Patch(':id')
   @UseGuards(PermissionGuard)
@@ -106,6 +141,14 @@ export class LeaveRequestsController {
     description: 'Leave request updated successfully.',
   })
   @ApiResponse({
+    status: 400,
+    description: 'Invalid update data.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-request.update permission.',
+  })
+  @ApiResponse({
     status: 404,
     description: 'Leave request not found.',
   })
@@ -115,6 +158,10 @@ export class LeaveRequestsController {
   ) {
     return this.leaveRequestsService.update(id, updateLeaveRequestDto);
   }
+
+  // ==========================================
+  // DELETE
+  // ==========================================
 
   @Delete(':id')
   @UseGuards(PermissionGuard)
@@ -130,6 +177,10 @@ export class LeaveRequestsController {
   @ApiResponse({
     status: 200,
     description: 'Leave request deleted successfully.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-request.delete permission.',
   })
   @ApiResponse({
     status: 404,

@@ -25,7 +25,11 @@ export type EnqueueOutcome =
   | { queued: true; emailQueueId: string }
   | {
       queued: false;
-      reason: 'no-recipient' | 'template-missing' | 'template-disabled' | 'render-failed';
+      reason:
+        | 'no-recipient'
+        | 'template-missing'
+        | 'template-disabled'
+        | 'render-failed';
     };
 
 /**

@@ -10,9 +10,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * All steps are idempotent / guarded so a re-run is safe, and fully reversible.
  */
-export class AppraisalVerticalFixes1785500000000
-  implements MigrationInterface
-{
+export class AppraisalVerticalFixes1785500000000 implements MigrationInterface {
   name = 'AppraisalVerticalFixes1785500000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

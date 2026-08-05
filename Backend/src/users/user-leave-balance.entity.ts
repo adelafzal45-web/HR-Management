@@ -6,27 +6,21 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 
 import { User } from './user.entity';
 import { LeaveType } from '../leave-types/leave-types.entity';
 
-/**
- * Which leave types an employee is entitled to, and how much of each.
- *
- * Replaces the old "one leave type per employee" idea: an employee is granted
- * several types (Casual, Sick, Annual…), each with its own allocation. One row
- * per (user, leave_type), enforced by a unique constraint — assigning the same
- * type twice is a data error, not two allocations to be summed.
- *
- * `remaining_days` is a getter, not a column, so allocated/used can never
- * drift out of sync with a stored total.
- */
 @Entity('user_leave_balances')
+@Unique('UQ_user_leave_type_year', ['user_id', 'leave_type_id', 'year'])
 export class UserLeaveBalance {
   @PrimaryGeneratedColumn('uuid')
   user_leave_balance_id!: string;
 
+  /**
+   * Employee relation
+   */
   @ManyToOne(() => User, (user) => user.leaveBalances, {
     nullable: false,
     onDelete: 'CASCADE',
@@ -41,15 +35,25 @@ export class UserLeaveBalance {
   })
   user_id!: string;
 
-  @ManyToOne(() => LeaveType, {
+  /**
+   * Leave Type relation
+   *
+   * Example:
+   *
+   * User: Nouman
+   * Leave Type: Annual Leave
+   * Year: 2026
+   * Balance: 14 days
+   */
+  @ManyToOne(() => LeaveType, (leaveType) => leaveType.user_leave_balances, {
     nullable: false,
-    onDelete: 'CASCADE',
     eager: true,
+    onDelete: 'CASCADE',
   })
   @JoinColumn({
     name: 'leave_type_id',
   })
-  leaveType!: LeaveType;
+  leave_type!: LeaveType;
 
   @Column({
     type: 'uuid',
@@ -57,11 +61,19 @@ export class UserLeaveBalance {
   leave_type_id!: string;
 
   /**
-   * Days granted for the current cycle.
+   * Leave entitlement year.
    *
-   * `numeric` columns come back from pg as strings, so the transformer parses
-   * on read — otherwise every consumer would have to remember to Number() it,
-   * and `allocated - used` would silently concatenate instead of subtract.
+   * Example:
+   * 2026
+   * 2027
+   */
+  @Column({
+    type: 'int',
+  })
+  year!: number;
+
+  /**
+   * Total allocated leave for this year.
    */
   @Column({
     type: 'numeric',
@@ -75,6 +87,9 @@ export class UserLeaveBalance {
   })
   allocated_days!: number;
 
+  /**
+   * Total approved leave already consumed.
+   */
   @Column({
     type: 'numeric',
     precision: 6,
@@ -87,29 +102,34 @@ export class UserLeaveBalance {
   })
   used_days!: number;
 
+  /**
+   * Remaining leave balance.
+   *
+   * Formula:
+   *
+   * allocated_days - used_days
+   *
+   * Example:
+   *
+   * Allocated = 14
+   * Used = 5
+   *
+   * Remaining = 9
+   */
+  get remaining_days(): number {
+    return Math.max(0, this.allocated_days - this.used_days);
+  }
+
   @CreateDateColumn()
   created_at!: Date;
 
   @UpdateDateColumn()
   updated_at!: Date;
 
-  /** Derived, never stored. Clamped at 0 so an over-drawn balance reads as 0. */
-  get remaining_days(): number {
-    return Math.max(0, this.allocated_days - this.used_days);
-  }
-
-  /**
-   * Puts `remaining_days` into the serialised payload.
-   *
-   * The getter lives on the prototype, and `JSON.stringify` copies only own
-   * enumerable properties — so every endpoint returning a balance silently
-   * dropped the field, leaving the UI unable to show how much leave is left.
-   * Serialising through `toJSON` fixes all of those paths at once (the
-   * standalone balances route, the leave-type assignment response, and the
-   * nested `leaveBalances` on an employee record) while keeping the getter as
-   * the single definition of the arithmetic.
-   */
-  toJSON(): UserLeaveBalance & { remaining_days: number } {
-    return { ...this, remaining_days: this.remaining_days };
+  toJSON() {
+    return {
+      ...this,
+      remaining_days: this.remaining_days,
+    };
   }
 }

@@ -38,7 +38,10 @@ export class AuditController {
   @ApiQuery({ name: 'action', required: false, example: 'employee.update' })
   @ApiResponse({ status: 200, description: 'Audit entries retrieved.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
-  @ApiResponse({ status: 403, description: 'Missing audit-logs.view permission.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing audit-logs.view permission.',
+  })
   findAll(
     @Query() query: PaginationQueryDto,
     @Query('entityType') entityType?: string,

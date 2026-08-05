@@ -27,10 +27,7 @@ export class SeedAppraisalWorkflowPermissions1787300000000
 
   private static readonly PERMISSIONS: Array<[string, string]> = [
     ['appraisal.submit', 'Submit an evaluation for an assigned employee'],
-    [
-      'appraisal.approve',
-      'Approve, reject or reopen a submitted evaluation',
-    ],
+    ['appraisal.approve', 'Approve, reject or reopen a submitted evaluation'],
     ['appraisal.stats', 'View appraisal statistics and dashboards'],
     ['appraisal.compare', 'Compare appraisal statistics across employees'],
     ['appraisal.export', 'Export appraisal data to PDF or Excel'],
@@ -87,8 +84,10 @@ export class SeedAppraisalWorkflowPermissions1787300000000
   };
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    for (const [name, description] of SeedAppraisalWorkflowPermissions1787300000000
-      .PERMISSIONS) {
+    for (const [
+      name,
+      description,
+    ] of SeedAppraisalWorkflowPermissions1787300000000.PERMISSIONS) {
       await queryRunner.query(
         `INSERT INTO "permissions" ("permission_name", "description")
          VALUES ($1, $2)

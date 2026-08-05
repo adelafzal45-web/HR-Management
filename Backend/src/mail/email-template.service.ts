@@ -155,7 +155,8 @@ export class EmailTemplateService {
       if (dto.subject !== undefined) existing.subject = dto.subject;
       if (dto.body_html !== undefined) existing.body_html = dto.body_html;
       if (dto.name !== undefined) existing.name = dto.name;
-      if (dto.description !== undefined) existing.description = dto.description || null;
+      if (dto.description !== undefined)
+        existing.description = dto.description || null;
       if (dto.enabled !== undefined) existing.enabled = dto.enabled;
 
       if (contentChanged) {
@@ -184,9 +185,10 @@ export class EmailTemplateService {
 
     await this.audit.record({
       actor: actor ?? {},
-      action: dto.enabled !== undefined && !contentChanged
-        ? 'email.template.toggle'
-        : 'email.template.update',
+      action:
+        dto.enabled !== undefined && !contentChanged
+          ? 'email.template.toggle'
+          : 'email.template.update',
       entityType: 'email_template',
       entityId: updated.email_template_id,
       // Only the fields that changed, and never the full body: a template body is
@@ -284,7 +286,10 @@ export class EmailTemplateService {
    * enough that it no longer renders needs a way back that does not involve a
    * migration re-run.
    */
-  async resetToDefault(templateKey: string, actor?: AuditActor): Promise<EmailTemplate> {
+  async resetToDefault(
+    templateKey: string,
+    actor?: AuditActor,
+  ): Promise<EmailTemplate> {
     const shipped = DEFAULT_TEMPLATE_BY_KEY.get(templateKey);
 
     if (!shipped) {

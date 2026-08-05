@@ -115,7 +115,9 @@ export class PerformanceReviewService {
     const attendanceDate =
       attendance.attendance_date instanceof Date
         ? attendance.attendance_date
-        : new Date(`${String(attendance.attendance_date).slice(0, 10)}T00:00:00Z`);
+        : new Date(
+            `${String(attendance.attendance_date).slice(0, 10)}T00:00:00Z`,
+          );
 
     const review = this.performanceReviewRepository.create({
       appraisalForm,

@@ -161,8 +161,10 @@ export class SeedThreeRoleRbac1785600000000 implements MigrationInterface {
     // ------------------------------------------------------------------
     // 2. Permissions
     // ------------------------------------------------------------------
-    for (const [name, description] of SeedThreeRoleRbac1785600000000
-      .PERMISSIONS) {
+    for (const [
+      name,
+      description,
+    ] of SeedThreeRoleRbac1785600000000.PERMISSIONS) {
       await queryRunner.query(
         `INSERT INTO "permissions" ("permission_name", "description")
          VALUES ($1, $2)

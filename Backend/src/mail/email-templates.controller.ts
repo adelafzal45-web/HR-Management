@@ -72,7 +72,7 @@ export class EmailTemplatesController {
   @ApiOperation({
     summary: 'The placeholder vocabulary',
     description:
-      'Every token a template may use, grouped for the editor\'s insert menu. Anything outside this list is left as literal text at render time.',
+      "Every token a template may use, grouped for the editor's insert menu. Anything outside this list is left as literal text at render time.",
   })
   @ApiResponse({ status: 200, description: 'Placeholders retrieved.' })
   placeholders() {
@@ -96,7 +96,8 @@ export class EmailTemplatesController {
   @ApiParam({ name: 'key', example: 'password_reset' })
   @ApiOperation({
     summary: 'Version history for a template',
-    description: 'Newest first. Append-only — versions are never rewritten or removed.',
+    description:
+      'Newest first. Append-only — versions are never rewritten or removed.',
   })
   @ApiResponse({ status: 200, description: 'Versions retrieved.' })
   @ApiResponse({ status: 404, description: 'Template not found.' })
@@ -153,7 +154,7 @@ export class EmailTemplatesController {
   @ApiOperation({
     summary: 'Restore an earlier version',
     description:
-      'Re-applies the chosen version\'s content as a NEW version. History is append-only, so the restore itself is recorded rather than erasing the versions in between.',
+      "Re-applies the chosen version's content as a NEW version. History is append-only, so the restore itself is recorded rather than erasing the versions in between.",
   })
   @ApiResponse({ status: 200, description: 'Version restored.' })
   @ApiResponse({ status: 404, description: 'Template or version not found.' })
@@ -163,7 +164,11 @@ export class EmailTemplatesController {
     @CurrentUser() user: JwtUser,
     @Req() request: Request,
   ) {
-    return this.templates.restoreVersion(key, dto.version, actorFrom(user, request));
+    return this.templates.restoreVersion(
+      key,
+      dto.version,
+      actorFrom(user, request),
+    );
   }
 
   @Post(':key/reset')

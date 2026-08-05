@@ -114,9 +114,6 @@ export class RevokeLeadAuthoringGrants1785900000000
     const C = RevokeLeadAuthoringGrants1785900000000;
 
     await queryRunner.query(C.GRANT_SQL, [['Team Lead'], C.LEAD_REVOKE]);
-    await queryRunner.query(C.REVOKE_SQL, [
-      C.LEGACY_HR_ROLES,
-      C.LEGACY_HR_ADD,
-    ]);
+    await queryRunner.query(C.REVOKE_SQL, [C.LEGACY_HR_ROLES, C.LEGACY_HR_ADD]);
   }
 }

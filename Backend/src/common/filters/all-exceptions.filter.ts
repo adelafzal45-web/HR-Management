@@ -49,8 +49,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = res;
         error = exception.name;
       } else if (res && typeof res === 'object') {
-        const { message: rawMessage, error: rawError, statusCode: _ignored, ...rest } =
-          res as Record<string, unknown>;
+        const {
+          message: rawMessage,
+          error: rawError,
+          statusCode: _ignored,
+          ...rest
+        } = res as Record<string, unknown>;
         message = (rawMessage as string | string[]) ?? exception.message;
         error = (rawError as string) ?? exception.name;
         // Anything else the thrower attached is carried through rather than

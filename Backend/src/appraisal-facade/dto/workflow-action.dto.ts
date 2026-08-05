@@ -12,7 +12,8 @@ import { IsOptional, IsString, MaxLength } from 'class-validator';
  */
 export class WorkflowActionDto {
   @ApiPropertyOptional({
-    example: 'Scores look inconsistent with the attendance record — please revisit.',
+    example:
+      'Scores look inconsistent with the attendance record — please revisit.',
     maxLength: 2000,
   })
   @IsOptional()

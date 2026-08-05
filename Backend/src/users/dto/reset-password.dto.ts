@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 import { PASSWORD_REGEX, PASSWORD_MESSAGE } from './validation.constants';
 
@@ -41,7 +48,7 @@ export class ResetPasswordDto {
  * machine could lock the real owner out of their account.
  */
 export class ChangeOwnPasswordDto {
-  @ApiProperty({ description: 'The account holder\'s current password.' })
+  @ApiProperty({ description: "The account holder's current password." })
   @IsString()
   @IsNotEmpty({ message: 'Current password is required' })
   @MaxLength(128)

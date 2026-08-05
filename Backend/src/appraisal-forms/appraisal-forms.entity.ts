@@ -112,10 +112,7 @@ export class AppraisalForms {
   // Assignments (department / designation / employee)
   // ==========================================
 
-  @OneToMany(
-    () => AppraisalFormAssignment,
-    (assignment) => assignment.form,
-  )
+  @OneToMany(() => AppraisalFormAssignment, (assignment) => assignment.form)
   assignments!: AppraisalFormAssignment[];
 
   // ==========================================

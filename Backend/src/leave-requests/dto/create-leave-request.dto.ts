@@ -5,9 +5,17 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  IsEnum,
 } from 'class-validator';
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export enum LeaveDurationType {
+  FIRST_HALF = 'FIRST_HALF',
+  SECOND_HALF = 'SECOND_HALF',
+  FULL_DAY = 'FULL_DAY',
+  MULTIPLE_DAYS = 'MULTIPLE_DAYS',
+}
 
 export class CreateLeaveRequestDto {
   @ApiProperty({
@@ -20,6 +28,15 @@ export class CreateLeaveRequestDto {
   leave_type!: string;
 
   @ApiProperty({
+    enum: LeaveDurationType,
+    example: LeaveDurationType.FULL_DAY,
+    description:
+      'Leave duration type (FIRST_HALF, SECOND_HALF, FULL_DAY, MULTIPLE_DAYS)',
+  })
+  @IsEnum(LeaveDurationType)
+  duration_type!: LeaveDurationType;
+
+  @ApiProperty({
     example: '2026-08-15',
     description: 'Leave start date.',
   })
@@ -28,7 +45,8 @@ export class CreateLeaveRequestDto {
 
   @ApiProperty({
     example: '2026-08-18',
-    description: 'Leave end date.',
+    description:
+      'Leave end date. For FIRST_HALF, SECOND_HALF and FULL_DAY this should be the same as start_date.',
   })
   @IsDateString()
   end_date!: Date;

@@ -27,7 +27,8 @@ import {
  */
 export class SettingsListQueryDto {
   @ApiPropertyOptional({
-    description: 'Free-text search, matched case-insensitively against name and description.',
+    description:
+      'Free-text search, matched case-insensitively against name and description.',
   })
   @IsOptional()
   @IsString()

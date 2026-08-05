@@ -73,7 +73,10 @@ export class PermissionTaxonomyAndHrAdminGrants1786000000000
     // ------------------------------------------------------------------
     // 1. Create the new permission rows.
     // ------------------------------------------------------------------
-    for (const [name, description] of PermissionTaxonomyAndHrAdminGrants1786000000000.NEW_PERMISSIONS) {
+    for (const [
+      name,
+      description,
+    ] of PermissionTaxonomyAndHrAdminGrants1786000000000.NEW_PERMISSIONS) {
       await queryRunner.query(
         `INSERT INTO "permissions" ("permission_name", "description")
          VALUES ($1, $2)
@@ -128,7 +131,9 @@ export class PermissionTaxonomyAndHrAdminGrants1786000000000
            WHERE rp."role_id" = r."role_id"
              AND rp."permission_id" = p."permission_id"
          )`,
-      [PermissionTaxonomyAndHrAdminGrants1786000000000.HR_ADMIN_ADDITIONAL_VIEWS],
+      [
+        PermissionTaxonomyAndHrAdminGrants1786000000000.HR_ADMIN_ADDITIONAL_VIEWS,
+      ],
     );
   }
 

@@ -59,7 +59,9 @@ export const ALLOWED_PLACEHOLDERS = [
 export type PlaceholderKey = (typeof ALLOWED_PLACEHOLDERS)[number];
 
 /** Values supplied per-send. Branding keys are filled in by the renderer. */
-export type TemplateContext = Partial<Record<PlaceholderKey, string | number | null | undefined>>;
+export type TemplateContext = Partial<
+  Record<PlaceholderKey, string | number | null | undefined>
+>;
 
 /**
  * Placeholders whose value is a URL rather than text.
@@ -153,7 +155,8 @@ export class TemplateRendererService {
     try {
       const settings = await this.companySettings.get();
       return {
-        company_name: settings.company_name || settings.legal_company_name || 'HRMS',
+        company_name:
+          settings.company_name || settings.legal_company_name || 'HRMS',
         company_address: settings.address ?? '',
         company_website: settings.website ?? '',
         company_phone: settings.phone ?? '',
@@ -190,10 +193,9 @@ export class TemplateRendererService {
     if (!logoUrl) return '';
     if (/^https?:\/\//i.test(logoUrl)) return logoUrl;
 
-    const apiBase = (process.env.API_PUBLIC_URL ?? 'http://localhost:3000').replace(
-      /\/+$/,
-      '',
-    );
+    const apiBase = (
+      process.env.API_PUBLIC_URL ?? 'http://localhost:3000'
+    ).replace(/\/+$/, '');
     return `${apiBase}${logoUrl.startsWith('/') ? '' : '/'}${logoUrl}`;
   }
 
@@ -226,10 +228,15 @@ export class TemplateRendererService {
    * sentence that reads as if a value were legitimately missing.
    */
   private substitute(template: string, values: Record<string, string>): string {
-    return template.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (match, rawKey: string) => {
-      const key = rawKey.toLowerCase();
-      return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match;
-    });
+    return template.replace(
+      /\{\{\s*([a-z0-9_]+)\s*\}\}/gi,
+      (match, rawKey: string) => {
+        const key = rawKey.toLowerCase();
+        return Object.prototype.hasOwnProperty.call(values, key)
+          ? values[key]
+          : match;
+      },
+    );
   }
 
   /**
@@ -277,7 +284,9 @@ export class TemplateRendererService {
     const lines: string[] = [];
 
     if (values.company_address) {
-      lines.push(`<div style="margin-bottom:4px;">${values.company_address}</div>`);
+      lines.push(
+        `<div style="margin-bottom:4px;">${values.company_address}</div>`,
+      );
     }
 
     const inline: string[] = [];
@@ -337,7 +346,10 @@ export class TemplateRendererService {
       ...values,
       email_subject: escapeHtml(subject),
       email_body: body,
-      logo_block: this.logoBlock(values.logo_url ?? '', values.company_name ?? ''),
+      logo_block: this.logoBlock(
+        values.logo_url ?? '',
+        values.company_name ?? '',
+      ),
       footer_contact_block: this.footerContactBlock(values),
     });
 

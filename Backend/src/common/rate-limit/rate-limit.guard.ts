@@ -9,10 +9,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
 
-import {
-  RATE_LIMIT_KEY,
-  type RateLimitOptions,
-} from './rate-limit.decorator';
+import { RATE_LIMIT_KEY, type RateLimitOptions } from './rate-limit.decorator';
 
 /** How often the idle-bucket sweep is allowed to run. */
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -93,9 +90,7 @@ export class RateLimitGuard implements CanActivate {
     // which is when a slot actually frees up. Computed before the array is
     // trimmed below, and reported instead of the full window length because the
     // latter would overstate the wait for a caller only marginally over.
-    const retryAfterMs = rejected
-      ? recent[0] + options.windowMs - now
-      : 0;
+    const retryAfterMs = rejected ? recent[0] + options.windowMs - now : 0;
 
     // The rejected attempt is counted too. Without this, a caller parked at the
     // limit is admitted again the instant one timestamp ages out, turning a hard
@@ -121,7 +116,10 @@ export class RateLimitGuard implements CanActivate {
       // The RFC 6585 header as well as the body field. HTTP clients, proxies and
       // fetch wrappers look for `Retry-After` and will never find a JSON key, so
       // omitting it leaves the standard signal unsent.
-      context.switchToHttp().getResponse<Response>().setHeader('Retry-After', retryAfter);
+      context
+        .switchToHttp()
+        .getResponse<Response>()
+        .setHeader('Retry-After', retryAfter);
 
       throw new HttpException(
         {

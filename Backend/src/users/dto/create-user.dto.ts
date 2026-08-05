@@ -59,7 +59,10 @@ export class LeaveAssignmentDto {
   })
   @IsOptional()
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'allocated_days must be a number' })
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'allocated_days must be a number' },
+  )
   @Min(0, { message: 'allocated_days cannot be negative' })
   allocated_days?: number;
 
@@ -102,7 +105,9 @@ export class CreateUserDto {
   @Trim()
   @IsString()
   @MaxLength(20)
-  @Matches(EMPLOYEE_CODE_REGEX, { message: `employee_code ${EMPLOYEE_CODE_MESSAGE}` })
+  @Matches(EMPLOYEE_CODE_REGEX, {
+    message: `employee_code ${EMPLOYEE_CODE_MESSAGE}`,
+  })
   employee_code?: string;
 
   @ApiProperty({ example: 'Ali' })

@@ -6,7 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  FindOptionsWhere,
+  In,
+  Repository,
+} from 'typeorm';
 
 import { User } from '../users/user.entity';
 import {
@@ -517,9 +523,7 @@ export class AppraisalFacadeService {
         where: { form_name: name },
       });
       if (duplicate && duplicate.form_id !== formId) {
-        throw new ConflictException(
-          `A form named "${name}" already exists.`,
-        );
+        throw new ConflictException(`A form named "${name}" already exists.`);
       }
       form.form_name = name;
     }
@@ -856,7 +860,9 @@ export class AppraisalFacadeService {
    * the form is archived instead, so historical evaluations keep resolving
    * their questions and weights.
    */
-  async deleteForm(formId: string): Promise<{ archived: boolean; message: string }> {
+  async deleteForm(
+    formId: string,
+  ): Promise<{ archived: boolean; message: string }> {
     const form = await this.formRepository.findOne({
       where: { form_id: formId },
     });
@@ -958,10 +964,7 @@ export class AppraisalFacadeService {
 
         const type = question.question_type;
 
-        if (
-          type === QuestionType.TEXT_FEEDBACK &&
-          Number(item.weightage) > 0
-        ) {
+        if (type === QuestionType.TEXT_FEEDBACK && Number(item.weightage) > 0) {
           throw new BadRequestException(
             `"${question.question_text}" is a text feedback question, so its weight must be 0% — there is nothing to score.`,
           );
@@ -1192,9 +1195,11 @@ export class AppraisalFacadeService {
     formId: string,
     dto: CreateAssignmentDto,
   ): Promise<AssignmentDto> {
-    const targets = [dto.departmentId, dto.designationId, dto.employeeId].filter(
-      Boolean,
-    );
+    const targets = [
+      dto.departmentId,
+      dto.designationId,
+      dto.employeeId,
+    ].filter(Boolean);
     if (targets.length !== 1) {
       throw new BadRequestException(
         'Provide exactly one of departmentId, designationId, or employeeId.',
@@ -1297,7 +1302,9 @@ export class AppraisalFacadeService {
     const repo = manager
       ? manager.getRepository(AppraisalFormAssignment)
       : this.assignmentRepository;
-    const userRepo = manager ? manager.getRepository(User) : this.userRepository;
+    const userRepo = manager
+      ? manager.getRepository(User)
+      : this.userRepository;
 
     const employee = await userRepo.findOne({
       where: { user_id: employeeId },
@@ -1380,7 +1387,9 @@ export class AppraisalFacadeService {
     const assignmentRepo = manager
       ? manager.getRepository(TeamLeadAssignment)
       : this.dataSource.getRepository(TeamLeadAssignment);
-    const userRepo = manager ? manager.getRepository(User) : this.userRepository;
+    const userRepo = manager
+      ? manager.getRepository(User)
+      : this.userRepository;
 
     const assignments = await assignmentRepo.find({
       where: { teamLead: { user_id: leadId } },
@@ -1460,7 +1469,9 @@ export class AppraisalFacadeService {
       return this.resolveVisibleEmployeeIds(reviewerId, manager);
     }
 
-    const userRepo = manager ? manager.getRepository(User) : this.userRepository;
+    const userRepo = manager
+      ? manager.getRepository(User)
+      : this.userRepository;
 
     // Active only, matching the roster resolver: a deactivated account has
     // nothing to evaluate, and an administrator is not an exception to that.
@@ -2337,16 +2348,18 @@ export class AppraisalFacadeService {
   // ==========================================================================
 
   async getMyEvaluations(employeeId: string): Promise<MyEvaluationsDto> {
-    const reviews = await this.dataSource.getRepository(PerformanceReview).find({
-      where: { reviewee: { user_id: employeeId } },
-      relations: {
-        reviewee: true,
-        reviewer: true,
-        appraisalForm: true,
-        answers: { formQuestion: { question: true }, selectedOption: true },
-      },
-      order: { review_date: 'DESC', created_at: 'DESC' },
-    });
+    const reviews = await this.dataSource
+      .getRepository(PerformanceReview)
+      .find({
+        where: { reviewee: { user_id: employeeId } },
+        relations: {
+          reviewee: true,
+          reviewer: true,
+          appraisalForm: true,
+          answers: { formQuestion: { question: true }, selectedOption: true },
+        },
+        order: { review_date: 'DESC', created_at: 'DESC' },
+      });
 
     const evaluations = reviews.map((r) => this.toSubmittedEvaluation(r));
 
@@ -2400,26 +2413,30 @@ export class AppraisalFacadeService {
   // ==========================================================================
 
   async getAllEvaluations(): Promise<SubmittedEvaluationDto[]> {
-    const reviews = await this.dataSource.getRepository(PerformanceReview).find({
-      relations: {
-        reviewee: true,
-        reviewer: true,
-        appraisalForm: true,
-        answers: { formQuestion: { question: true }, selectedOption: true },
-      },
-      order: { review_date: 'DESC', created_at: 'DESC' },
-    });
+    const reviews = await this.dataSource
+      .getRepository(PerformanceReview)
+      .find({
+        relations: {
+          reviewee: true,
+          reviewer: true,
+          appraisalForm: true,
+          answers: { formQuestion: { question: true }, selectedOption: true },
+        },
+        order: { review_date: 'DESC', created_at: 'DESC' },
+      });
 
     return reviews.map((r) => this.toSubmittedEvaluation(r));
   }
 
   async getAnalytics(): Promise<AnalyticsDto> {
-    const reviews = await this.dataSource.getRepository(PerformanceReview).find({
-      relations: {
-        reviewee: { department: true, designation: true },
-      },
-      order: { review_date: 'ASC' },
-    });
+    const reviews = await this.dataSource
+      .getRepository(PerformanceReview)
+      .find({
+        relations: {
+          reviewee: { department: true, designation: true },
+        },
+        order: { review_date: 'ASC' },
+      });
 
     const scores = reviews.map((r) => Number(r.total_score_percentage));
     const average =
@@ -2464,9 +2481,7 @@ export class AppraisalFacadeService {
       ).size,
       averageScore: average,
       distribution: this.toDistribution(scores),
-      byDepartment: group(
-        (r) => r.reviewee?.department?.department_name ?? '',
-      ),
+      byDepartment: group((r) => r.reviewee?.department?.department_name ?? ''),
       byDesignation: group((r) => r.reviewee?.designation?.title ?? ''),
       trend: [...trendBuckets.entries()].map(([period, b]) => ({
         period,
@@ -2620,32 +2635,34 @@ export class AppraisalFacadeService {
   private toSubmittedEvaluation(
     review: PerformanceReview,
   ): SubmittedEvaluationDto {
-    const scores: EvaluationScoreDto[] = (review.answers ?? []).map((answer) => {
-      const fq = answer.formQuestion;
-      const scale = fq?.rating_scale ?? 10;
-      const percentage = Number(answer.answered_percentage);
-      const type = fq ? this.linkType(fq) : QuestionType.RATING;
+    const scores: EvaluationScoreDto[] = (review.answers ?? []).map(
+      (answer) => {
+        const fq = answer.formQuestion;
+        const scale = fq?.rating_scale ?? 10;
+        const percentage = Number(answer.answered_percentage);
+        const type = fq ? this.linkType(fq) : QuestionType.RATING;
 
-      return {
-        scoreId: answer.answer_id,
-        questionId: fq?.form_question_id ?? '',
-        criteriaName: fq ? this.questionLabel(fq) : '',
-        questionType: type,
-        weightage: Number(fq?.weight_percentage ?? 0),
-        ratingScale: scale,
-        // Only a rating answer came from a point on a scale, so only a rating
-        // answer can be put back onto one. Denormalising an option choice or a
-        // comment would invent a number the reviewer never gave.
-        score:
-          type === QuestionType.RATING
-            ? this.roundTo2((percentage / 100) * scale)
-            : 0,
-        scorePercentage: this.roundTo2(percentage),
-        selectedOptionId: answer.selectedOption?.option_id ?? null,
-        selectedOptionText: answer.selectedOption?.option_text ?? null,
-        remarks: answer.answer_comment ?? null,
-      };
-    });
+        return {
+          scoreId: answer.answer_id,
+          questionId: fq?.form_question_id ?? '',
+          criteriaName: fq ? this.questionLabel(fq) : '',
+          questionType: type,
+          weightage: Number(fq?.weight_percentage ?? 0),
+          ratingScale: scale,
+          // Only a rating answer came from a point on a scale, so only a rating
+          // answer can be put back onto one. Denormalising an option choice or a
+          // comment would invent a number the reviewer never gave.
+          score:
+            type === QuestionType.RATING
+              ? this.roundTo2((percentage / 100) * scale)
+              : 0,
+          scorePercentage: this.roundTo2(percentage),
+          selectedOptionId: answer.selectedOption?.option_id ?? null,
+          selectedOptionText: answer.selectedOption?.option_text ?? null,
+          remarks: answer.answer_comment ?? null,
+        };
+      },
+    );
 
     return {
       appraisalId: review.review_id,

@@ -33,7 +33,10 @@ export class WorkingDaySchedulesController {
       'Returns rows across all scopes (global, per-department, per-designation) without applying fallback.',
   })
   @ApiResponse({ status: 200, description: 'Rows retrieved successfully.' })
-  @ApiResponse({ status: 403, description: 'Missing working-days.view permission.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing working-days.view permission.',
+  })
   findAll() {
     return this.service.findAll();
   }
@@ -53,8 +56,14 @@ export class WorkingDaySchedulesController {
   @ApiQuery({ name: 'department_id', required: false })
   @ApiQuery({ name: 'designation_id', required: false })
   @ApiResponse({ status: 200, description: 'Scope retrieved successfully.' })
-  @ApiResponse({ status: 400, description: 'designation_id sent without department_id.' })
-  @ApiResponse({ status: 403, description: 'Missing working-days.view permission.' })
+  @ApiResponse({
+    status: 400,
+    description: 'designation_id sent without department_id.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing working-days.view permission.',
+  })
   findScope(@Query() query: WorkingDaysQueryDto) {
     return this.service.findScope(query);
   }
@@ -74,8 +83,14 @@ export class WorkingDaySchedulesController {
   @ApiQuery({ name: 'department_id', required: false })
   @ApiQuery({ name: 'designation_id', required: false })
   @ApiResponse({ status: 200, description: 'Effective week resolved.' })
-  @ApiResponse({ status: 400, description: 'designation_id sent without department_id.' })
-  @ApiResponse({ status: 403, description: 'Missing working-days.view permission.' })
+  @ApiResponse({
+    status: 400,
+    description: 'designation_id sent without department_id.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing working-days.view permission.',
+  })
   resolve(@Query() query: WorkingDaysQueryDto) {
     return this.service.resolveWeekForQuery(query);
   }
@@ -93,8 +108,14 @@ export class WorkingDaySchedulesController {
       'Atomic whole-week replacement. Days omitted from the payload become non-working.',
   })
   @ApiResponse({ status: 200, description: 'Week saved successfully.' })
-  @ApiResponse({ status: 400, description: 'Validation failed or invalid scope.' })
-  @ApiResponse({ status: 403, description: 'Missing working-days.update permission.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation failed or invalid scope.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing working-days.update permission.',
+  })
   setWeek(@Body() dto: SetWorkingDaysDto) {
     return this.service.setWeek(dto);
   }
@@ -113,8 +134,14 @@ export class WorkingDaySchedulesController {
   @ApiQuery({ name: 'department_id', required: false })
   @ApiQuery({ name: 'designation_id', required: false })
   @ApiResponse({ status: 200, description: 'Override cleared.' })
-  @ApiResponse({ status: 400, description: 'Attempted to clear the global default.' })
-  @ApiResponse({ status: 403, description: 'Missing working-days.update permission.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Attempted to clear the global default.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing working-days.update permission.',
+  })
   clearScope(@Query() query: WorkingDaysQueryDto) {
     return this.service.clearScope(query);
   }

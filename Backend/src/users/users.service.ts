@@ -6,7 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 
 import { User } from './user.entity';
@@ -19,12 +24,18 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { EmployeeQueryDto } from './dto/employee-query.dto';
 import { UpdateAccountSettingsDto } from './dto/update-account-settings.dto';
 import { AssignLeaveTypesDto } from './dto/assign-leave-types.dto';
-import { ChangeOwnPasswordDto, ResetPasswordDto } from './dto/reset-password.dto';
+import {
+  ChangeOwnPasswordDto,
+  ResetPasswordDto,
+} from './dto/reset-password.dto';
 import {
   SELF_EDITABLE_FIELDS,
   UpdateOwnProfileDto,
 } from './dto/update-own-profile.dto';
-import { paginatedResult, type PaginatedResult } from '../common/dto/pagination-query.dto';
+import {
+  paginatedResult,
+  type PaginatedResult,
+} from '../common/dto/pagination-query.dto';
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { PasswordPolicyService } from '../auth/password-policy.service';
 import { MailService } from '../mail/mail.service';
@@ -322,7 +333,10 @@ export class UserService {
   private mapScalars(dto: Partial<CreateUserDto>): Partial<User> {
     const mapped: Partial<User> = {};
 
-    const assign = <K extends keyof User>(key: K, value: User[K] | undefined) => {
+    const assign = <K extends keyof User>(
+      key: K,
+      value: User[K] | undefined,
+    ) => {
       if (value !== undefined) {
         mapped[key] = value;
       }
@@ -345,7 +359,10 @@ export class UserService {
     assign('country', dto.country);
 
     assign('emergency_contact_name', dto.emergency_contact_name);
-    assign('emergency_contact_relationship', dto.emergency_contact_relationship);
+    assign(
+      'emergency_contact_relationship',
+      dto.emergency_contact_relationship,
+    );
     assign('emergency_contact_phone', dto.emergency_contact_phone);
 
     assign('bank_name', dto.bank_name);
@@ -679,7 +696,9 @@ export class UserService {
       .groupBy('user.team_lead_id')
       .getRawMany<{ team_lead_id: string; count: string }>();
 
-    const byLead = new Map(counts.map((c) => [c.team_lead_id, Number(c.count)]));
+    const byLead = new Map(
+      counts.map((c) => [c.team_lead_id, Number(c.count)]),
+    );
 
     return rows.map((row) => ({
       ...row,
@@ -773,6 +792,91 @@ export class UserService {
       where: { user_id: userId },
       order: { created_at: 'ASC' },
     });
+  }
+
+  /**
+   * Returns a single leave balance for a user.
+   * Used by LeaveRequestService when validating leave requests.
+   */
+  async findLeaveBalance(
+    userId: string,
+    leaveTypeId: string,
+  ): Promise<UserLeaveBalance> {
+    const balance = await this.leaveBalanceRepository.findOne({
+      where: {
+        user_id: userId,
+        leave_type_id: leaveTypeId,
+      },
+      relations: ['leaveType'],
+    });
+
+    if (!balance) {
+      throw new NotFoundException(
+        'Leave type is not assigned to this employee',
+      );
+    }
+
+    return balance;
+  }
+
+  /**
+   * Consumes leave days after a leave request is approved.
+   */
+  async consumeLeaveBalance(
+    manager: EntityManager,
+    userId: string,
+    leaveTypeId: string,
+    days: number,
+  ): Promise<void> {
+    const repository = manager.getRepository(UserLeaveBalance);
+
+    const balance = await repository.findOne({
+      where: {
+        user_id: userId,
+        leave_type_id: leaveTypeId,
+      },
+    });
+
+    if (!balance) {
+      throw new BadRequestException('Leave balance not found for employee.');
+    }
+
+    const remaining = balance.allocated_days - balance.used_days;
+
+    if (remaining < days) {
+      throw new BadRequestException('Insufficient leave balance.');
+    }
+
+    balance.used_days += days;
+
+    await repository.save(balance);
+  }
+
+  /**
+   * Restores leave balance when an approved leave is cancelled/rejected.
+   */
+  async restoreLeaveBalance(
+    manager: EntityManager,
+    userId: string,
+    leaveTypeId: string,
+    days: number,
+  ): Promise<void> {
+    const repository = manager.getRepository(UserLeaveBalance);
+
+    const balance = await repository.findOne({
+      where: {
+        user_id: userId,
+        leave_type_id: leaveTypeId,
+      },
+    });
+
+    if (!balance) {
+      return;
+    }
+
+    balance.used_days = Math.max(0, balance.used_days - days);
+
+    await repository.save(balance);
   }
 
   // ==========================================
@@ -1111,7 +1215,11 @@ export class UserService {
     // not exempt: it is typically communicated over a channel less private than
     // the account itself, so a weak or previously-breached one is if anything
     // more exposed.
-    await this.passwordPolicy.assertAcceptable(id, dto.new_password, user.password);
+    await this.passwordPolicy.assertAcceptable(
+      id,
+      dto.new_password,
+      user.password,
+    );
 
     const previousHash = user.password;
     const newHash = await this.hashPassword(dto.new_password);

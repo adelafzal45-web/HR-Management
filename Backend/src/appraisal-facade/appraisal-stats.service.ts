@@ -47,7 +47,11 @@ export interface StatsResponseDto {
   summary: StatsSummaryDto;
   trend: TrendPointDto[];
   byStatus: StatusSliceDto[];
-  byDepartment: Array<{ department: string; averageScore: number; count: number }>;
+  byDepartment: Array<{
+    department: string;
+    averageScore: number;
+    count: number;
+  }>;
 }
 
 export interface ResultRowDto {
@@ -183,7 +187,9 @@ export class AppraisalStatsService {
         rejectedForms: reviews.filter((r) => r.status === 'Rejected').length,
         absents,
         employeesOnLeave,
-        averageScore: scores.length ? this.round2(grossScore / scores.length) : 0,
+        averageScore: scores.length
+          ? this.round2(grossScore / scores.length)
+          : 0,
         grossScore: this.round2(grossScore),
         scoredCount: scores.length,
       },
@@ -219,7 +225,11 @@ export class AppraisalStatsService {
       .take(query.limit)
       .getManyAndCount();
 
-    return paginatedResult(rows.map((row) => this.toResultRow(row)), total, query);
+    return paginatedResult(
+      rows.map((row) => this.toResultRow(row)),
+      total,
+      query,
+    );
   }
 
   // ==========================================================================
@@ -377,7 +387,8 @@ export class AppraisalStatsService {
 
     if (total > rows.length) {
       const note = sheet.addRow({});
-      note.getCell(1).value = `Truncated: showing ${rows.length} of ${total} matching rows. Narrow the filters to export the rest.`;
+      note.getCell(1).value =
+        `Truncated: showing ${rows.length} of ${total} matching rows. Narrow the filters to export the rest.`;
       note.font = { italic: true };
     }
 
@@ -697,7 +708,9 @@ export class AppraisalStatsService {
       });
     }
     if (query.dateFrom) {
-      qb.andWhere('leave."end_date" >= :dateFrom', { dateFrom: query.dateFrom });
+      qb.andWhere('leave."end_date" >= :dateFrom', {
+        dateFrom: query.dateFrom,
+      });
     }
     if (query.dateTo) {
       qb.andWhere('leave."start_date" <= :dateTo', { dateTo: query.dateTo });
@@ -762,15 +775,17 @@ export class AppraisalStatsService {
       byPeriod.set(key, bucket);
     }
 
-    return [...byPeriod.entries()]
-      .map(([period, bucket]) => ({
-        period,
-        averageScore: this.round2(bucket.total / bucket.count),
-        count: bucket.count,
-      }))
-      // Lexical sort is correct for every period key the scheduler emits —
-      // '2026-08-03', '2026-W32', '2026-08' all sort chronologically as strings.
-      .sort((a, b) => a.period.localeCompare(b.period));
+    return (
+      [...byPeriod.entries()]
+        .map(([period, bucket]) => ({
+          period,
+          averageScore: this.round2(bucket.total / bucket.count),
+          count: bucket.count,
+        }))
+        // Lexical sort is correct for every period key the scheduler emits —
+        // '2026-08-03', '2026-W32', '2026-08' all sort chronologically as strings.
+        .sort((a, b) => a.period.localeCompare(b.period))
+    );
   }
 
   private buildStatusSlices(reviews: PerformanceReview[]): StatusSliceDto[] {

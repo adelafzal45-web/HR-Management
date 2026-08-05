@@ -15,7 +15,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * (role_id, permission_id), so grants are guarded with NOT EXISTS rather than
  * ON CONFLICT.
  */
-export class SeedSettingsPermissions1786400000000 implements MigrationInterface {
+export class SeedSettingsPermissions1786400000000
+  implements MigrationInterface
+{
   name = 'SeedSettingsPermissions1786400000000';
 
   private static readonly PERMISSIONS: Array<[string, string]> = [
@@ -66,8 +68,10 @@ export class SeedSettingsPermissions1786400000000 implements MigrationInterface 
   };
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    for (const [name, description] of SeedSettingsPermissions1786400000000
-      .PERMISSIONS) {
+    for (const [
+      name,
+      description,
+    ] of SeedSettingsPermissions1786400000000.PERMISSIONS) {
       await queryRunner.query(
         `INSERT INTO "permissions" ("permission_name", "description")
          VALUES ($1, $2)
