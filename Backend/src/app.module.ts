@@ -10,7 +10,7 @@ import { RoleModule } from './roles/roles.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { DepartmentsModule } from './department/department.module';
 import { RolePermissionsModule } from './role-permissions/role-permissions.module';
-
+import { BiometricModule } from './biometric/biometric.module';
 import { UserMiddleware } from './middleware/user.middleware';
 import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveRequestsModule } from './leave-requests/leave-requests.module';
@@ -46,7 +46,7 @@ import { AppraisalNotificationsModule } from './appraisal-notifications/appraisa
 
       username: 'postgres',
 
-      password: 'admin',
+      password: '123454321',
 
       database: 'HR',
 
@@ -132,6 +132,7 @@ import { AppraisalNotificationsModule } from './appraisal-notifications/appraisa
     // reopen notices). Registered so the entity loads; the behaviour lives in
     // the facade and the appraisal scheduler.
     AppraisalNotificationsModule,
+    BiometricModule,
   ],
 
   controllers: [AppController],

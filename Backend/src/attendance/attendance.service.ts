@@ -582,6 +582,56 @@ export class AttendanceService {
 
     return updatedAttendance;
   }
+
+
+  /**
+ * Processes an attendance punch coming from the biometric machine.
+ *
+ * 1st punch  -> Check In
+ * 2nd punch  -> Check Out
+ * 3rd punch  -> Reject because attendance is already completed
+ */
+async processBiometricPunch(
+  userId: string,
+): Promise<AttendanceWithWorkingDay> {
+  const date = this.today();
+
+  const attendance = await this.findOwnAttendanceOn(
+    userId,
+    date,
+  );
+
+  // =====================================================
+  // FIRST PUNCH -> CHECK IN
+  // =====================================================
+
+  if (!attendance || !attendance.check_in) {
+    return this.checkIn(userId);
+  }
+
+  // =====================================================
+  // SECOND PUNCH -> CHECK OUT
+  // =====================================================
+
+  if (attendance.check_in && !attendance.check_out) {
+    return this.checkOut(userId);
+  }
+
+  // =====================================================
+  // THIRD PUNCH -> ALREADY COMPLETED
+  // =====================================================
+
+  if (attendance.check_in && attendance.check_out) {
+    throw new ConflictException(
+      `Attendance already completed today. You checked out at ${attendance.check_out.slice(0, 5)}.`,
+    );
+  }
+
+  // This should theoretically never be reached.
+  throw new ConflictException(
+    'Unable to determine attendance status.',
+  );
+}
   // ==========================================
   // DELETE
   // ==========================================

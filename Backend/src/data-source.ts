@@ -36,7 +36,7 @@ import { LeaveType } from './leave-types/leave-types.entity';
 import { WorkingDaySchedule } from './working-day-schedules/working-day-schedules.entity';
 import { UserLeaveBalance } from './users/user-leave-balance.entity';
 import { AuditLog } from './audit/audit-log.entity';
-
+import { BiometricUser } from './biometric/biometric.entity';
 export const AppDataSource = new DataSource({
   type: 'postgres',
 
@@ -46,7 +46,7 @@ export const AppDataSource = new DataSource({
 
   username: 'postgres',
 
-  password: 'admin',
+  password: '123454321',
 
   database: 'HR',
 
@@ -82,6 +82,7 @@ export const AppDataSource = new DataSource({
     WorkingDaySchedule,
     UserLeaveBalance,
     AuditLog,
+    BiometricUser,
   ],
 
   migrations: ['src/migrations/*.ts'],
