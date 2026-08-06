@@ -4,7 +4,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
   Logger,
-   OnModuleInit,
+  OnModuleInit,
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
@@ -15,6 +15,7 @@ import { User } from '../users/user.entity';
 
 import { CreateBiometricUserDto } from './dto/create.dto';
 import { UpdateBiometricUserDto } from './dto/update.dto';
+
 import { AttendanceService } from '../attendance/attendance.service';
 
 const ZKLib = require('node-zklib');
@@ -23,18 +24,16 @@ const ZKLib = require('node-zklib');
 export class BiometricService implements OnModuleInit {
   private readonly logger = new Logger(BiometricService.name);
 
-  // ==========================================
+  // =====================================================
   // ZKTECO DEVICE CONFIGURATION
-  // ==========================================
+  // =====================================================
 
   private readonly DEVICE_IP = '192.168.100.73';
   private readonly DEVICE_PORT = 4370;
-
-  // Timeout in milliseconds
   private readonly DEVICE_TIMEOUT = 10000;
-  // Prevent the same biometric event from being processed twice
-private lastPunchKey: string | null = null;
-private lastPunchTime = 0;
+
+  // Prevent duplicate events
+  private lastPunchKey: string | null = null;
 
   constructor(
     @InjectRepository(BiometricUser)
@@ -43,33 +42,37 @@ private lastPunchTime = 0;
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
 
-     private readonly attendanceService: AttendanceService,
+    private readonly attendanceService: AttendanceService,
   ) {}
 
+  // =====================================================
+  // AUTOMATICALLY START LISTENER WHEN NESTJS STARTS
+  // =====================================================
+
   async onModuleInit() {
-  this.logger.log(
-    '🚀 Starting biometric listener automatically...',
-  );
-
-  try {
-    await this.startPunchListener();
-
     this.logger.log(
-      '✅ Biometric listener is running.',
+      '🚀 Starting biometric listener automatically...',
     );
-  } catch (error) {
-    this.logger.error(
-      '❌ Failed to start biometric listener automatically.',
-      error instanceof Error
-        ? error.stack
-        : String(error),
-    );
-  }
-}
 
-  // ==========================================
+    try {
+      await this.startPunchListener();
+
+      this.logger.log(
+        '✅ Biometric listener is running.',
+      );
+    } catch (error) {
+      this.logger.error(
+        '❌ Failed to start biometric listener automatically.',
+        error instanceof Error
+          ? error.stack
+          : String(error),
+      );
+    }
+  }
+
+  // =====================================================
   // CREATE BIOMETRIC USER MAPPING
-  // ==========================================
+  // =====================================================
 
   async create(createDto: CreateBiometricUserDto) {
     const existingBiometricUser =
@@ -100,7 +103,7 @@ private lastPunchTime = 0;
     const biometricUser =
       this.biometricUserRepository.create({
         device_user_id: createDto.device_user_id,
-        user: user,
+        user,
         active: true,
       });
 
@@ -109,9 +112,9 @@ private lastPunchTime = 0;
     );
   }
 
-  // ==========================================
-  // GET ALL MAPPINGS
-  // ==========================================
+  // =====================================================
+  // GET ALL BIOMETRIC MAPPINGS
+  // =====================================================
 
   async findAll() {
     return await this.biometricUserRepository.find({
@@ -124,9 +127,9 @@ private lastPunchTime = 0;
     });
   }
 
-  // ==========================================
-  // GET ONE MAPPING
-  // ==========================================
+  // =====================================================
+  // GET ONE BIOMETRIC MAPPING
+  // =====================================================
 
   async findOne(id: string) {
     const biometricUser =
@@ -148,9 +151,9 @@ private lastPunchTime = 0;
     return biometricUser;
   }
 
-  // ==========================================
-  // FIND EMPLOYEE BY ZKTECO USER ID
-  // ==========================================
+  // =====================================================
+  // FIND EMPLOYEE BY DEVICE USER ID
+  // =====================================================
 
   async findByDeviceUserId(deviceUserId: string) {
     const biometricUser =
@@ -173,9 +176,9 @@ private lastPunchTime = 0;
     return biometricUser;
   }
 
-  // ==========================================
-  // UPDATE MAPPING
-  // ==========================================
+  // =====================================================
+  // UPDATE BIOMETRIC MAPPING
+  // =====================================================
 
   async update(
     id: string,
@@ -227,9 +230,9 @@ private lastPunchTime = 0;
     );
   }
 
-  // ==========================================
-  // DEACTIVATE MAPPING
-  // ==========================================
+  // =====================================================
+  // DEACTIVATE BIOMETRIC MAPPING
+  // =====================================================
 
   async deactivate(id: string) {
     const biometricUser = await this.findOne(id);
@@ -246,9 +249,9 @@ private lastPunchTime = 0;
     };
   }
 
-  // ==========================================
-  // DELETE MAPPING
-  // ==========================================
+  // =====================================================
+  // DELETE BIOMETRIC MAPPING
+  // =====================================================
 
   async remove(id: string) {
     const biometricUser = await this.findOne(id);
@@ -259,7 +262,7 @@ private lastPunchTime = 0;
 
     return {
       message:
-        'Biometric mapping deleted successfully.',
+        'Biometric attendance mapping deleted successfully.',
     };
   }
 
@@ -279,13 +282,13 @@ private lastPunchTime = 0;
       await zkInstance.createSocket();
 
       this.logger.log(
-        `Connected to ZKTeco device at ${this.DEVICE_IP}:${this.DEVICE_PORT}`,
+        `✅ Connected to ZKTeco device at ${this.DEVICE_IP}:${this.DEVICE_PORT}`,
       );
 
       return zkInstance;
     } catch (error) {
       this.logger.error(
-        `Could not connect to ZKTeco device ${this.DEVICE_IP}:${this.DEVICE_PORT}`,
+        `❌ Could not connect to ZKTeco device ${this.DEVICE_IP}:${this.DEVICE_PORT}`,
         error,
       );
 
@@ -326,382 +329,217 @@ private lastPunchTime = 0;
   }
 
   // =====================================================
-  // GET USERS REGISTERED ON MACHINE
+  // PROCESS BIOMETRIC PUNCH
   // =====================================================
 
-  async getDeviceUsers() {
-    const zkInstance = await this.connectToDevice();
-
+  private async processBiometricPunch(data: any) {
     try {
-      const users = await zkInstance.getUsers();
+      this.logger.log(
+        `🔥 Processing biometric punch: ${JSON.stringify(data)}`,
+      );
 
-      return {
-        device_ip: this.DEVICE_IP,
-        users,
-      };
+      // -------------------------------------------------
+      // 1. GET DEVICE USER ID
+      // -------------------------------------------------
+
+      const deviceUserId = data?.userId;
+      const attTime = data?.attTime;
+
+      if (!deviceUserId) {
+        this.logger.warn(
+          `❌ Punch received without userId: ${JSON.stringify(data)}`,
+        );
+
+        return;
+      }
+
+      // -------------------------------------------------
+      // 2. PREVENT DUPLICATE EVENTS
+      // -------------------------------------------------
+
+      const punchKey = `${deviceUserId}_${attTime}`;
+
+      if (this.lastPunchKey === punchKey) {
+        this.logger.warn(
+          `⚠️ Duplicate punch ignored: ${punchKey}`,
+        );
+
+        return;
+      }
+
+      this.lastPunchKey = punchKey;
+
+      this.logger.log(
+        `✅ New punch accepted`,
+      );
+
+      this.logger.log(
+        `📌 Device User ID: ${deviceUserId}`,
+      );
+
+      this.logger.log(
+        `🕐 Device Punch Time: ${attTime}`,
+      );
+
+      // -------------------------------------------------
+      // 3. FIND BIOMETRIC MAPPING
+      // -------------------------------------------------
+
+      const biometricUser =
+        await this.biometricUserRepository.findOne({
+          where: {
+            device_user_id: String(deviceUserId),
+            active: true,
+          },
+          relations: {
+            user: true,
+          },
+        });
+
+      if (!biometricUser) {
+        this.logger.warn(
+          `❌ No employee mapped to biometric device user ID: ${deviceUserId}`,
+        );
+
+        return;
+      }
+
+      // -------------------------------------------------
+      // 4. GET HR USER
+      // -------------------------------------------------
+
+      const user = biometricUser.user;
+
+      if (!user) {
+        this.logger.warn(
+          `❌ Biometric mapping exists but no HR user is linked.`,
+        );
+
+        return;
+      }
+
+      this.logger.log(
+        `👤 Punch belongs to employee: ${user.first_name} ${user.last_name}`,
+      );
+
+      this.logger.log(
+        `🆔 HR User UUID: ${user.user_id}`,
+      );
+
+      // -------------------------------------------------
+      // 5. PROCESS CHECK-IN / CHECK-OUT
+      // -------------------------------------------------
+
+      const attendance =
+        await this.attendanceService.processBiometricPunch(
+          user.user_id,
+        );
+
+      // -------------------------------------------------
+      // 6. SUCCESS LOG
+      // -------------------------------------------------
+
+      this.logger.log(
+        `✅ BIOMETRIC ATTENDANCE PROCESSED`,
+      );
+
+      this.logger.log(
+        `👤 Employee: ${user.first_name} ${user.last_name}`,
+      );
+
+      this.logger.log(
+        `🆔 Device User ID: ${deviceUserId}`,
+      );
+
+      this.logger.log(
+        `🕐 Check-in: ${attendance.check_in ?? 'N/A'}`,
+      );
+
+      this.logger.log(
+        `🕐 Check-out: ${attendance.check_out ?? 'N/A'}`,
+      );
+
     } catch (error) {
       this.logger.error(
-        'Failed to retrieve users from biometric machine.',
-        error,
+        '❌ Error while processing biometric punch.',
+        error instanceof Error
+          ? error.stack
+          : String(error),
       );
-
-      throw new InternalServerErrorException(
-        'Unable to retrieve users from biometric machine.',
-      );
-    } finally {
-      await zkInstance.disconnect();
     }
   }
 
   // =====================================================
-  // GET ATTENDANCE LOGS FROM MACHINE
+  // AUTOMATIC REAL-TIME BIOMETRIC LISTENER
   // =====================================================
 
-  async getDeviceAttendanceLogs() {
-    const zkInstance = await this.connectToDevice();
+  private async startPunchListener() {
+    const zkInstance = new ZKLib(
+      this.DEVICE_IP,
+      this.DEVICE_PORT,
+      this.DEVICE_TIMEOUT,
+      4000,
+    );
 
     try {
-      const logs = await zkInstance.getAttendances();
-
-      return {
-        device_ip: this.DEVICE_IP,
-        count: logs?.data?.length ?? 0,
-        logs,
-      };
-    } catch (error) {
-      this.logger.error(
-        'Failed to retrieve attendance logs.',
-        error,
+      this.logger.log(
+        `🔌 Connecting to ZKTeco ${this.DEVICE_IP}:${this.DEVICE_PORT}`,
       );
 
-      throw new InternalServerErrorException(
-        'Unable to retrieve attendance logs from biometric machine.',
+      await zkInstance.createSocket();
+
+      this.logger.log(
+        `✅ Connected to ZKTeco device`,
       );
-    } finally {
-      await zkInstance.disconnect();
-    }
-  }
 
-  // =====================================================
-  // START REAL-TIME ATTENDANCE LISTENER
-  // =====================================================
+      try {
+        await zkInstance.enableDevice();
 
-  async startRealtimeAttendance() {
-    const zkInstance = await this.connectToDevice();
+        this.logger.log(
+          `🔓 ZKTeco device enabled`,
+        );
+      } catch {
+        this.logger.warn(
+          `⚠️ Could not explicitly enable device.`,
+        );
+      }
 
-    try {
+      this.logger.log(
+        `🟢 REAL-TIME BIOMETRIC LISTENER STARTED`,
+      );
+
+      this.logger.log(
+        `👉 Waiting for biometric punches...`,
+      );
+this.logger.log("STARTING getRealTimeLogs()");
       await zkInstance.getRealTimeLogs(
         async (data: any) => {
           this.logger.log(
-            `Biometric punch received: ${JSON.stringify(data)}`,
+            `🚨 BIOMETRIC PUNCH RECEIVED`,
+          );
+
+          this.logger.log(
+            `RAW DEVICE DATA: ${JSON.stringify(data)}`,
           );
 
           await this.processBiometricPunch(data);
         },
       );
+this.logger.error("getRealTimeLogs() RETURNED");
 
-      return {
-        message:
-          'Real-time biometric attendance listener started.',
-        device_ip: this.DEVICE_IP,
-        device_port: this.DEVICE_PORT,
-      };
     } catch (error) {
       this.logger.error(
-        'Failed to start real-time attendance listener.',
-        error,
+        '❌ Biometric listener failed.',
+        error instanceof Error
+          ? error.stack
+          : String(error),
       );
 
-      await zkInstance.disconnect();
+      try {
+        await zkInstance.disconnect();
+      } catch {}
 
-      throw new InternalServerErrorException(
-        'Unable to start biometric attendance listener.',
-      );
+      throw error;
     }
   }
-
-  // =====================================================
-  // PROCESS A BIOMETRIC PUNCH
-  // =====================================================
-private async processBiometricPunch(data: any) {
-  try {
-    this.logger.log(
-      `🔥 Processing biometric punch: ${JSON.stringify(data)}`,
-    );
-
-    // =====================================================
-    // 1. GET DEVICE USER ID + PUNCH TIME
-    // =====================================================
-
-    const deviceUserId = data?.userId;
-    const attTime = data?.attTime;
-
-    if (!deviceUserId) {
-      this.logger.warn(
-        `❌ Punch received without userId: ${JSON.stringify(data)}`,
-      );
-      return;
-    }
-
-    // =====================================================
-    // 2. PREVENT DUPLICATE PUNCH EVENTS
-    // =====================================================
-
-    const punchKey = `${deviceUserId}_${attTime}`;
-
-    if (this.lastPunchKey === punchKey) {
-      this.logger.warn(
-        `⚠️ DUPLICATE PUNCH IGNORED: ${punchKey}`,
-      );
-
-      return;
-    }
-
-    this.lastPunchKey = punchKey;
-    this.lastPunchTime = Date.now();
-
-    this.logger.log(
-      `✅ NEW PUNCH ACCEPTED`,
-    );
-
-    this.logger.log(
-      `📌 Device User ID: ${deviceUserId}`,
-    );
-
-    this.logger.log(
-      `🕐 Device Punch Time: ${attTime}`,
-    );
-
-    // =====================================================
-    // 3. FIND BIOMETRIC MAPPING
-    // =====================================================
-
-    const biometricUser =
-      await this.biometricUserRepository.findOne({
-        where: {
-          device_user_id: String(deviceUserId),
-          active: true,
-        },
-        relations: {
-          user: true,
-        },
-      });
-
-    if (!biometricUser) {
-      this.logger.warn(
-        `❌ No employee mapped to biometric device user ID: ${deviceUserId}`,
-      );
-
-      return;
-    }
-
-    // =====================================================
-    // 4. GET HR USER
-    // =====================================================
-
-    const user = biometricUser.user;
-
-    if (!user) {
-      this.logger.warn(
-        `❌ Biometric mapping exists but no HR user is linked.`,
-      );
-
-      return;
-    }
-
-    this.logger.log(
-      `👤 Punch belongs to employee: ${user.first_name} ${user.last_name}`,
-    );
-
-    this.logger.log(
-      `🆔 HR User UUID: ${user.user_id}`,
-    );
-
-    // =====================================================
-    // 5. CHECK IN / CHECK OUT
-    // =====================================================
-
-    const attendance =
-      await this.attendanceService.processBiometricPunch(
-        user.user_id,
-      );
-
-    // =====================================================
-    // 6. SUCCESS LOG
-    // =====================================================
-
-    this.logger.log(
-      `✅ BIOMETRIC ATTENDANCE PROCESSED`,
-    );
-
-    this.logger.log(
-      `👤 Employee: ${user.first_name} ${user.last_name}`,
-    );
-
-    this.logger.log(
-      `🆔 Device User ID: ${deviceUserId}`,
-    );
-
-    this.logger.log(
-      `🕐 Check-in: ${attendance.check_in ?? 'N/A'}`,
-    );
-
-    this.logger.log(
-      `🕐 Check-out: ${attendance.check_out ?? 'N/A'}`,
-    );
-
-  } catch (error) {
-    this.logger.error(
-      '❌ Error while processing biometric punch.',
-      error instanceof Error
-        ? error.stack
-        : String(error),
-    );
-  }
-}
-
-async startPunchTest() {
-  const zkInstance = new ZKLib(
-    this.DEVICE_IP,
-    this.DEVICE_PORT,
-    this.DEVICE_TIMEOUT,
-    4000,
-  );
-
-  try {
-    this.logger.log(
-      `🔌 Connecting to ${this.DEVICE_IP}:${this.DEVICE_PORT}`,
-    );
-
-    await zkInstance.createSocket();
-
-    this.logger.log(
-      `✅ Connected to ZKTeco device`,
-    );
-
-    try {
-      await zkInstance.enableDevice();
-
-      this.logger.log(
-        `🔓 ZKTeco device enabled`,
-      );
-    } catch (error) {
-      this.logger.warn(
-        `Could not enable device.`,
-      );
-    }
-
-    this.logger.log(
-      `🟢 REAL-TIME ATTENDANCE LISTENER STARTED`,
-    );
-
-    this.logger.log(
-      `👉 Place your finger on the machine...`,
-    );
-
-    await zkInstance.getRealTimeLogs(
-      async (data: any) => {
-        this.logger.log(
-          `🚨 BIOMETRIC PUNCH RECEIVED`,
-        );
-
-        this.logger.log(
-          `RAW DEVICE DATA: ${JSON.stringify(data)}`,
-        );
-
-        await this.processBiometricPunch(data);
-      },
-    );
-
-    return {
-      success: true,
-      message:
-        'Real-time biometric attendance listener started.',
-      device_ip: this.DEVICE_IP,
-      device_port: this.DEVICE_PORT,
-    };
-
-  } catch (error) {
-    this.logger.error(
-      '❌ Failed to start biometric punch listener.',
-      error instanceof Error
-        ? error.stack
-        : String(error),
-    );
-
-    try {
-      await zkInstance.disconnect();
-    } catch {}
-
-    throw new InternalServerErrorException(
-      'Unable to start biometric punch listener.',
-    );
-  }
-}
-
-private async startPunchListener() {
-  const zkInstance = new ZKLib(
-    this.DEVICE_IP,
-    this.DEVICE_PORT,
-    this.DEVICE_TIMEOUT,
-    4000,
-  );
-
-  try {
-    this.logger.log(
-      `🔌 Connecting to ZKTeco ${this.DEVICE_IP}:${this.DEVICE_PORT}`,
-    );
-
-    await zkInstance.createSocket();
-
-    this.logger.log(
-      `✅ Connected to ZKTeco device`,
-    );
-
-    try {
-      await zkInstance.enableDevice();
-
-      this.logger.log(
-        `🔓 ZKTeco device enabled`,
-      );
-    } catch (error) {
-      this.logger.warn(
-        `⚠️ Could not explicitly enable device.`,
-      );
-    }
-
-    this.logger.log(
-      `🟢 REAL-TIME BIOMETRIC LISTENER STARTED`,
-    );
-
-    await zkInstance.getRealTimeLogs(
-      async (data: any) => {
-        this.logger.log(
-          `🚨 BIOMETRIC PUNCH RECEIVED`,
-        );
-
-        this.logger.log(
-          `RAW DEVICE DATA: ${JSON.stringify(data)}`,
-        );
-
-        await this.processBiometricPunch(data);
-      },
-    );
-
-  } catch (error) {
-    this.logger.error(
-      '❌ Biometric listener failed.',
-      error instanceof Error
-        ? error.stack
-        : String(error),
-    );
-
-    try {
-      await zkInstance.disconnect();
-    } catch {}
-
-    throw error;
-  }
-}
-
 }
