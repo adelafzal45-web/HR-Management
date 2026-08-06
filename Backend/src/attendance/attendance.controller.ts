@@ -28,6 +28,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtUser } from '../auth/auth.constants';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
+import { BulkMarkAttendanceDto } from './dto/bulk-mark-attendance.dto';
 
 @ApiTags('Attendance')
 @Controller('attendance')
@@ -127,9 +128,13 @@ export class AttendanceController {
   // through /attendance/check-in above, which stamps its own time and status.
 
   @Post()
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.create')
   @ApiOperation({
     summary: 'Create attendance record',
-    description: 'Logged in employee marks attendance.',
+    description:
+      'Manual entry for a past or current day. Employees clock in through ' +
+      '/attendance/check-in, which needs no permission.',
   })
   @ApiBody({
     type: CreateAttendanceDto,
@@ -139,7 +144,30 @@ export class AttendanceController {
     description: 'Attendance created successfully.',
   })
   create(@Req() req: any, @Body() createAttendanceDto: CreateAttendanceDto) {
-    return this.attendanceService.create(createAttendanceDto, req.user.user_id);
+    // When the DTO carries an explicit user_id, file the record for that employee;
+    // otherwise default to the caller, which is what the self-service route does.
+    const targetUserId = createAttendanceDto.user_id ?? req.user.user_id;
+    return this.attendanceService.create(createAttendanceDto, targetUserId);
+  }
+
+  @Post('bulk-mark')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.create')
+  @ApiOperation({
+    summary: 'Mark one date for many employees',
+    description:
+      'Applies one status and optional stamps to a list of employees, or to ' +
+      'every active employee. Each row still goes through the same validation ' +
+      'as a single manual entry, and one employee failing does not abort the ' +
+      'rest — the response reports the outcome per employee.',
+  })
+  @ApiBody({ type: BulkMarkAttendanceDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Per-employee outcome, with counts of marked and skipped.',
+  })
+  bulkMark(@Req() req: any, @Body() dto: BulkMarkAttendanceDto) {
+    return this.attendanceService.bulkMark(dto, req.user.user_id);
   }
 
   // ==========================================
@@ -190,8 +218,14 @@ export class AttendanceController {
   }
 
   @Get(':id')
-  /* @UseGuards(PermissionGuard)
-  @RequirePermission('attendance.view')*/
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.view')
+  @ApiOperation({
+    summary: 'One attendance record',
+    description:
+      'Any record, for any employee — hence the same guard as the org-wide ' +
+      'list. Employees read their own days through /attendance/me.',
+  })
   @ApiParam({
     name: 'id',
   })
@@ -200,19 +234,50 @@ export class AttendanceController {
   }
 
   @Patch()
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.update')
   @ApiOperation({
-    summary: 'update attendance record',
-    description: 'Logged in employee marks attendance.',
+    summary: 'Correct an attendance record',
+    description:
+      "The manual-correction path for the caller's own row on a given date. " +
+      'Employees close their own day with /attendance/check-out, which derives ' +
+      'the hours rather than accepting them.',
   })
-  /*@UseGuards(PermissionGuard)
-  @RequirePermission('attendance.update')*/
   update(@Req() req: any, @Body() updateAttendanceDto: UpdateAttendanceDto) {
     return this.attendanceService.update(req.user.user_id, updateAttendanceDto);
   }
 
+  @Patch(':id')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.update')
+  @ApiOperation({
+    summary: 'Correct any attendance record',
+    description:
+      'The HR correction path: addresses a row by its own id, so it can fix ' +
+      "any employee's day rather than only the caller's. Unlike the " +
+      'self-service PATCH, an existing stamp may be replaced — that is what a ' +
+      'correction is — but the status, stamp and hours rules are the same.',
+  })
+  @ApiParam({ name: 'id' })
+  @ApiResponse({ status: 200, description: 'Record corrected.' })
+  @ApiResponse({ status: 404, description: 'Record not found.' })
+  updateById(
+    @Param('id') id: string,
+    @Body() updateAttendanceDto: UpdateAttendanceDto,
+  ) {
+    return this.attendanceService.updateById(id, updateAttendanceDto);
+  }
+
   @Delete(':id')
-  /* @UseGuards(PermissionGuard)
-  @RequirePermission('attendance.delete')*/
+  @UseGuards(PermissionGuard)
+  @RequirePermission('attendance.delete')
+  @ApiOperation({
+    summary: 'Delete an attendance record',
+    description: "Removes any employee's record, so it is HR-only.",
+  })
+  @ApiParam({
+    name: 'id',
+  })
   remove(@Param('id') id: string) {
     return this.attendanceService.remove(id);
   }

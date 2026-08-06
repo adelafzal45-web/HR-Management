@@ -194,6 +194,27 @@ export type LeaveAssignmentPayload = {
   used_days?: number;
 };
 
+// ---- Documents -------------------------------------------------------------
+
+/**
+ * A stored attachment. Mirrors Backend/src/employee-documents/employee-document.entity.ts.
+ *
+ * `stored_name` is the UUID filename on disk; `original_name` is what the user
+ * picked and what the UI shows. The two are separate so an upload named
+ * `../../etc/passwd` cannot influence where the bytes land.
+ */
+export type EmployeeDocument = {
+  document_id: string;
+  employeeId: string;
+  category: string;
+  original_name: string;
+  stored_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by?: string | null;
+  uploaded_at: string;
+};
+
 // ---- Request payloads ------------------------------------------------------
 
 /**

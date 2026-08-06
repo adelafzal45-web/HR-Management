@@ -7,7 +7,10 @@ import { WorkingDaySchedulesService } from './working-day-schedules.service';
 import { AuthorizationModule } from '../authorization/authorization.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([WorkingDaySchedule]), AuthorizationModule],
+  imports: [
+    TypeOrmModule.forFeature([WorkingDaySchedule]),
+    AuthorizationModule,
+  ],
   controllers: [WorkingDaySchedulesController],
   providers: [WorkingDaySchedulesService],
   exports: [WorkingDaySchedulesService, TypeOrmModule],

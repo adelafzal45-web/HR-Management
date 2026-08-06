@@ -53,7 +53,11 @@ const MAGIC_BYTES: Record<string, number[][]> = {
 };
 
 /** Directory photos are written to, and the URL prefix they are served under. */
-export const PHOTO_UPLOAD_DIR = resolve(process.cwd(), 'uploads', 'employee-photos');
+export const PHOTO_UPLOAD_DIR = resolve(
+  process.cwd(),
+  'uploads',
+  'employee-photos',
+);
 export const PHOTO_URL_PREFIX = '/uploads/employee-photos';
 
 /**
@@ -84,9 +88,15 @@ export function thumbPathFor(photoPath: string): string {
  * image should still upload — the avatar fallback reads the full image.
  */
 export async function saveThumbnail(photoPath: string): Promise<string | null> {
-  const sourcePath = join(PHOTO_UPLOAD_DIR, photoPath.slice(PHOTO_URL_PREFIX.length + 1));
+  const sourcePath = join(
+    PHOTO_UPLOAD_DIR,
+    photoPath.slice(PHOTO_URL_PREFIX.length + 1),
+  );
   const thumbPath = thumbPathFor(photoPath);
-  const targetPath = join(PHOTO_UPLOAD_DIR, thumbPath.slice(PHOTO_URL_PREFIX.length + 1));
+  const targetPath = join(
+    PHOTO_UPLOAD_DIR,
+    thumbPath.slice(PHOTO_URL_PREFIX.length + 1),
+  );
 
   try {
     await sharp(sourcePath)
@@ -95,7 +105,9 @@ export async function saveThumbnail(photoPath: string): Promise<string | null> {
       .toFile(targetPath);
     return thumbPath;
   } catch (error) {
-    logger.warn(`Thumbnail generation failed for ${photoPath}: ${String(error)}`);
+    logger.warn(
+      `Thumbnail generation failed for ${photoPath}: ${String(error)}`,
+    );
     return null;
   }
 }

@@ -236,7 +236,10 @@ export class AuthService {
     );
   }
 
-  async login(dto: LoginDto, channel: LoginChannel = 'web'): Promise<LoginResult> {
+  async login(
+    dto: LoginDto,
+    channel: LoginChannel = 'web',
+  ): Promise<LoginResult> {
     const user = await this.validateUser(dto.email, dto.password, channel);
 
     const token = await this.signAccessToken(user);
@@ -297,7 +300,9 @@ export class AuthService {
    * stored session is re-validated against current server state instead of
    * being trusted from localStorage.
    */
-  async me(claims: JwtUser): Promise<Omit<LoginResult, 'token' | 'refreshToken'>> {
+  async me(
+    claims: JwtUser,
+  ): Promise<Omit<LoginResult, 'token' | 'refreshToken'>> {
     const user = await this.userRepository.findOne({
       where: { user_id: claims.user_id },
       relations: { role: true, designation: true },

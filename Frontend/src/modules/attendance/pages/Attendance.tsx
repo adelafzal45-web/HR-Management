@@ -1,10 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { LogIn, LogOut, Clock, CalendarDays, CalendarX } from "lucide-react";
+import {
+ LogIn,
+ LogOut,
+ Clock,
+ CalendarDays,
+ CalendarX,
+ CheckCircle2,
+ AlertCircle,
+ XCircle,
+ Timer,
+ Zap,
+ type LucideIcon,
+} from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import StatusBadge from "@/components/common/StatusBadge";
-import EmptyState from "@/components/common/EmptyState";
 import SectionTabs from "@/components/common/SectionTabs";
+import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useAuth } from "@/app/providers/AuthContext";
 import { getAttendanceTabs } from "@/config/featureTabs";
@@ -12,8 +24,51 @@ import { attendanceApi, type AttendanceRecord, type TodayAttendance } from "@/ap
 
 const now = new Date();
 
+type PeriodFilter = "daily" | "weekly" | "monthly";
+
 function formatDate(dateStr: string) {
  return new Date(dateStr).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+const iso = (d: Date) =>
+ `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const PERIODS: { value: PeriodFilter; label: string }[] = [
+ { value: "daily", label: "Daily" },
+ { value: "weekly", label: "Weekly" },
+ { value: "monthly", label: "Monthly" },
+];
+
+/**
+ * The date window Daily / Weekly / Monthly select inside the month on screen.
+ *
+ * Anchored to today only while the current month is being viewed; on any other
+ * month it anchors to that month's last day (or its first, for a future month).
+ * Anchoring to today unconditionally would leave Daily and Weekly permanently
+ * empty the moment someone looked at March.
+ *
+ * The range is applied in the browser rather than by refetching, because
+ * `GET /attendance/me/history` is a whole month either way — a narrower request
+ * does not exist, so a round trip would buy nothing.
+ */
+function periodRange(period: PeriodFilter, month: number, year: number): { from: string; to: string } {
+ const monthStart = new Date(year, month - 1, 1);
+ const monthEnd = new Date(year, month, 0);
+ const today = new Date();
+ const anchor = today < monthStart ? monthStart : today > monthEnd ? monthEnd : today;
+
+ if (period === "monthly") return { from: iso(monthStart), to: iso(monthEnd) };
+ if (period === "daily") return { from: iso(anchor), to: iso(anchor) };
+
+ const weekStart = new Date(anchor);
+ weekStart.setDate(weekStart.getDate() - 6);
+ return { from: iso(weekStart < monthStart ? monthStart : weekStart), to: iso(anchor) };
+}
+
+function rangeLabel(period: PeriodFilter, from: string, to: string) {
+ const fmt = (s: string) => new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+ if (period === "daily") return fmt(from);
+ return `${fmt(from)} – ${fmt(to)}`;
 }
 
 export default function Attendance() {
@@ -28,11 +83,21 @@ export default function Attendance() {
  const [history, setHistory] = useState<AttendanceRecord[]>([]);
  const [month, setMonth] = useState(now.getMonth() + 1);
  const [year, setYear] = useState(now.getFullYear());
+ const [period, setPeriod] = useState<PeriodFilter>("monthly");
 
  const [loadingToday, setLoadingToday] = useState(true);
  const [loadingHistory, setLoadingHistory] = useState(true);
  const [actionLoading, setActionLoading] = useState<"in" | "out" | null>(null);
  const [error, setError] = useState<string | null>(null);
+
+ // Table state. The month's rows are all in memory, so search, filters, sort
+ // and paging are all applied here rather than by the server.
+ const [search, setSearch] = useState("");
+ const [filters, setFilters] = useState<Record<string, string>>({});
+ const [sortKey, setSortKey] = useState<string>("attendanceDate");
+ const [sortDir, setSortDir] = useState<"ASC" | "DESC">("DESC");
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
  const loadToday = async () => {
  setLoadingToday(true);
@@ -98,20 +163,114 @@ export default function Attendance() {
  }
  };
 
+ const range = useMemo(() => periodRange(period, month, year), [period, month, year]);
+
+ // Everything below the cards reflects the selected period, so the numbers on
+ // top and the rows underneath can never describe different spans of time.
+ const inPeriod = useMemo(
+  () => history.filter((r) => r.attendanceDate >= range.from && r.attendanceDate <= range.to),
+  [history, range],
+ );
+
  const summary = useMemo(() => {
- const present = history.filter((r) => r.status === "Present").length;
- const late = history.filter((r) => r.status === "Late").length;
- const absent = history.filter((r) => r.status === "Absent").length;
- const totalHours = history.reduce((sum, r) => sum + (r.workingHours ?? 0), 0);
- const totalOvertime = history.reduce((sum, r) => sum + (r.overtimeHours ?? 0), 0);
- return {
- present,
- late,
- absent,
- totalHours: Math.round(totalHours * 10) / 10,
- totalOvertime: Math.round(totalOvertime * 10) / 10,
- };
+  const present = inPeriod.filter((r) => r.status === "Present").length;
+  const late = inPeriod.filter((r) => r.status === "Late").length;
+  const absent = inPeriod.filter((r) => r.status === "Absent").length;
+  const totalHours = inPeriod.reduce((sum, r) => sum + (r.workingHours ?? 0), 0);
+  const totalOvertime = inPeriod.reduce((sum, r) => sum + (r.overtimeHours ?? 0), 0);
+  return {
+   present,
+   late,
+   absent,
+   totalHours: Math.round(totalHours * 10) / 10,
+   totalOvertime: Math.round(totalOvertime * 10) / 10,
+  };
+ }, [inPeriod]);
+
+ const shiftOptions = useMemo(() => {
+  const names = [...new Set(history.map((r) => r.shiftName).filter((n) => n && n !== "—"))];
+  return names.sort().map((n) => ({ value: n, label: n }));
  }, [history]);
+
+ const statusOptions = useMemo(() => {
+  const values = [...new Set(history.map((r) => r.status).filter(Boolean))];
+  return values.sort().map((s) => ({ value: s, label: s }));
+ }, [history]);
+
+ const visible = useMemo(() => {
+  const term = search.trim().toLowerCase();
+  const rows = inPeriod.filter((r) => {
+   if (filters.status && r.status !== filters.status) return false;
+   if (filters.shift && r.shiftName !== filters.shift) return false;
+   if (!term) return true;
+   return [formatDate(r.attendanceDate), r.shiftName, r.status, r.checkIn ?? "", r.checkOut ?? ""]
+    .join(" ")
+    .toLowerCase()
+    .includes(term);
+  });
+
+  const dir = sortDir === "ASC" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+   if (sortKey === "workingHours") return ((a.workingHours ?? 0) - (b.workingHours ?? 0)) * dir;
+   if (sortKey === "overtimeHours") return ((a.overtimeHours ?? 0) - (b.overtimeHours ?? 0)) * dir;
+   if (sortKey === "status") return a.status.localeCompare(b.status) * dir;
+   return a.attendanceDate.localeCompare(b.attendanceDate) * dir;
+  });
+ }, [inPeriod, search, filters, sortKey, sortDir]);
+
+ const paged = useMemo(
+  () => visible.slice((page - 1) * pageSize, page * pageSize),
+  [visible, page, pageSize],
+ );
+
+ // Any narrowing can strand the viewer on a page that no longer exists.
+ useEffect(() => setPage(1), [period, month, year, search, filters, pageSize]);
+
+ const columns: DataTableColumn<AttendanceRecord>[] = [
+  {
+   key: "attendanceDate",
+   label: "Date",
+   sortable: true,
+   render: (r) => <span className="font-medium text-gray-900">{formatDate(r.attendanceDate)}</span>,
+  },
+  {
+   key: "shift",
+   label: "Shift",
+   filterable: true,
+   filterOptions: shiftOptions,
+   hideBelow: "md",
+   render: (r) => r.shiftName,
+  },
+  { key: "checkIn", label: "Check-in", render: (r) => r.checkIn ?? <span className="text-gray-400">—</span> },
+  { key: "checkOut", label: "Check-out", render: (r) => r.checkOut ?? <span className="text-gray-400">—</span> },
+  {
+   key: "workingHours",
+   label: "Hours",
+   sortable: true,
+   render: (r) => (r.workingHours != null ? `${r.workingHours}h` : <span className="text-gray-400">—</span>),
+  },
+  {
+   key: "overtimeHours",
+   label: "Overtime",
+   sortable: true,
+   hideBelow: "lg",
+   render: (r) =>
+    r.isOvertime ? (
+     <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-600">
+      +{r.overtimeHours}h
+     </span>
+    ) : (
+     <span className="text-gray-400">—</span>
+    ),
+  },
+  {
+   key: "status",
+   label: "Status",
+   filterable: true,
+   filterOptions: statusOptions,
+   render: (r) => <StatusBadge status={r.status} />,
+  },
+ ];
 
  const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
  const yearOptions = [now.getFullYear(), now.getFullYear() - 1];
@@ -120,6 +279,16 @@ export default function Attendance() {
  <DashboardLayout title="Attendance" activeKey="attendance">
  <BackendStatusBanner status={status} />
  <SectionTabs tabs={tabs} active="daily-attendance" />
+
+ {/* Summary across the top. The figures follow the period pills on the right,
+ so the cards and the rows underneath always describe the same span. */}
+ <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+ <SummaryCard icon={CheckCircle2} label="Present" value={summary.present} tone="emerald" />
+ <SummaryCard icon={AlertCircle} label="Late" value={summary.late} tone="amber" />
+ <SummaryCard icon={XCircle} label="Absent" value={summary.absent} tone="rose" />
+ <SummaryCard icon={Timer} label="Total hrs" value={summary.totalHours} tone="sky" />
+ <SummaryCard icon={Zap} label="Overtime hrs" value={summary.totalOvertime} tone="orange" />
+ </div>
 
  <div className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_1fr]">
  {/* Today's check-in/out card */}
@@ -212,13 +381,38 @@ export default function Attendance() {
  </div>
 
  {/* History */}
- <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
- <div className="flex flex-wrap items-center justify-between gap-3">
+ <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+ <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+ <div>
  <h2 className="text-base font-semibold text-gray-900">Attendance History</h2>
- <div className="flex items-center gap-2">
+ <p className="mt-0.5 text-xs text-gray-500">{rangeLabel(period, range.from, range.to)}</p>
+ </div>
+ <div className="flex flex-wrap items-center gap-2">
+ {/* Reads as a row of buttons but behaves as one filter control: a
+ radiogroup, so arrow keys and screen readers treat the three as a
+ single choice rather than three unrelated actions. */}
+ <div role="radiogroup" aria-label="Period" className="flex rounded-full bg-gray-100 p-1">
+ {PERIODS.map((p) => (
+ <button
+ key={p.value}
+ type="button"
+ role="radio"
+ aria-checked={period === p.value}
+ onClick={() => setPeriod(p.value)}
+ className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+ period === p.value
+ ? "bg-white text-gray-900 shadow-sm"
+ : "text-gray-500 hover:text-gray-800"
+ }`}
+ >
+ {p.label}
+ </button>
+ ))}
+ </div>
  <select
  value={month}
  onChange={(e) => setMonth(Number(e.target.value))}
+ aria-label="Month"
  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/50"
  >
  {monthOptions.map((m) => (
@@ -230,6 +424,7 @@ export default function Attendance() {
  <select
  value={year}
  onChange={(e) => setYear(Number(e.target.value))}
+ aria-label="Year"
  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/50"
  >
  {yearOptions.map((y) => (
@@ -241,81 +436,73 @@ export default function Attendance() {
  </div>
  </div>
 
- <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
- <SummaryPill label="Present" value={summary.present} tone="text-emerald-600 bg-emerald-50" />
- <SummaryPill label="Late" value={summary.late} tone="text-amber-600 bg-amber-50" />
- <SummaryPill label="Absent" value={summary.absent} tone="text-rose-600 bg-rose-50" />
- <SummaryPill label="Total hrs" value={summary.totalHours} tone="text-sky-600 bg-sky-50" />
- <SummaryPill label="Overtime hrs" value={summary.totalOvertime} tone="text-orange-600 bg-orange-50" />
- </div>
-
- <div className="mt-5 overflow-x-auto">
- {loadingHistory ? (
- <div className="space-y-2">
- {[...Array(5)].map((_, i) => (
- <div key={i} className="h-11 animate-pulse rounded-lg bg-gray-100" />
- ))}
- </div>
- ) : history.length === 0 ? (
- <EmptyState
- icon={CalendarX}
- title="No records found"
- description="There's no attendance data for the selected month."
+ <DataTable
+ columns={columns}
+ rows={paged}
+ rowKey={(r) => r.attendanceId}
+ loading={loadingHistory}
+ search={search}
+ onSearchChange={setSearch}
+ searchPlaceholder="Search attendance…"
+ emptyIcon={CalendarX}
+ emptyTitle="No records found"
+ emptyDescription="There's no attendance data for the selected period."
+ page={page}
+ pageSize={pageSize}
+ onPageSizeChange={setPageSize}
+ pageSizeOptions={[10, 25, 50]}
+ total={visible.length}
+ onPageChange={setPage}
+ sortKey={sortKey}
+ sortDir={sortDir}
+ onSortChange={(key, dir) => {
+ setSortKey(key);
+ setSortDir(dir);
+ }}
+ filters={filters}
+ onFiltersChange={setFilters}
+ unifiedFilter
+ sortOptions={[
+ { value: "attendanceDate", label: "Date" },
+ { value: "workingHours", label: "Hours" },
+ { value: "overtimeHours", label: "Overtime" },
+ { value: "status", label: "Status" },
+ ]}
  />
- ) : (
- <table className="w-full min-w-[480px] text-left text-sm">
- <thead>
- <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
- <th className="pb-3 font-medium">
- <span className="flex items-center gap-1.5">
- <CalendarDays size={13} /> Date
- </span>
- </th>
- <th className="pb-3 font-medium">Shift</th>
- <th className="pb-3 font-medium">Check-in</th>
- <th className="pb-3 font-medium">Check-out</th>
- <th className="pb-3 font-medium">Hours</th>
- <th className="pb-3 font-medium">Overtime</th>
- <th className="pb-3 font-medium">Status</th>
- </tr>
- </thead>
- <tbody>
- {history.map((r) => (
- <tr key={r.attendanceId} className="border-b border-gray-50 last:border-0">
- <td className="py-3 font-medium text-gray-900">{formatDate(r.attendanceDate)}</td>
- <td className="py-3 text-gray-600">{r.shiftName}</td>
- <td className="py-3 text-gray-600">{r.checkIn ?? "—"}</td>
- <td className="py-3 text-gray-600">{r.checkOut ?? "—"}</td>
- <td className="py-3 text-gray-600">{r.workingHours != null ? `${r.workingHours}h` : "—"}</td>
- <td className="py-3">
- {r.isOvertime ? (
- <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-600">
- +{r.overtimeHours}h
- </span>
- ) : (
- <span className="text-gray-400">—</span>
- )}
- </td>
- <td className="py-3">
- <StatusBadge status={r.status} />
- </td>
- </tr>
- ))}
- </tbody>
- </table>
- )}
- </div>
  </div>
  </div>
  </DashboardLayout>
  );
 }
 
-function SummaryPill({ label, value, tone }: { label: string; value: number; tone: string }) {
+function SummaryCard({
+ icon: Icon,
+ label,
+ value,
+ tone,
+}: {
+ icon: LucideIcon;
+ label: string;
+ value: number;
+ tone: "emerald" | "amber" | "rose" | "sky" | "orange";
+}) {
+ const tones: Record<string, string> = {
+ emerald: "bg-emerald-50 text-emerald-600",
+ amber: "bg-amber-50 text-amber-600",
+ rose: "bg-rose-50 text-rose-600",
+ sky: "bg-sky-50 text-sky-600",
+ orange: "bg-orange-50 text-orange-600",
+ };
+
  return (
- <div className={`rounded-xl px-3 py-2.5 ${tone}`}>
- <p className="text-lg font-semibold">{value}</p>
- <p className="text-xs font-medium opacity-80">{label}</p>
+ <div className="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+ <div className="min-w-0">
+ <p className="text-2xl font-semibold leading-none text-gray-900">{value}</p>
+ <p className="mt-1.5 truncate text-xs font-medium text-gray-500">{label}</p>
+ </div>
+ <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}>
+ <Icon size={18} />
+ </span>
  </div>
  );
 }

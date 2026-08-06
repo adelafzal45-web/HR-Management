@@ -189,8 +189,9 @@ ${button('Sign in', '{{login_url}}')}
     key: 'admin_reset_notification',
     name: 'Admin Reset Notification',
     description:
-      "Tells an employee that an administrator reset their password on their behalf.",
-    subject: 'Your {{company_name}} password has been reset by an administrator',
+      'Tells an employee that an administrator reset their password on their behalf.',
+    subject:
+      'Your {{company_name}} password has been reset by an administrator',
     bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your password was reset</h1>
 <p style="margin:0 0 14px;">Hello {{employee_name}}, an administrator at {{company_name}} reset the password on your account on {{event_time}}.</p>
 ${detailRows([
@@ -217,8 +218,7 @@ ${SECURITY_NOTE}`,
   {
     key: 'email_changed',
     name: 'Email Changed',
-    description:
-      'Sent to the new address after the account email is changed.',
+    description: 'Sent to the new address after the account email is changed.',
     subject: 'Your {{company_name}} sign-in email was changed',
     bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your email address was changed</h1>
 <p style="margin:0 0 14px;">Hello {{employee_name}}, the email address on your {{company_name}} account was changed on {{event_time}}.</p>
@@ -235,7 +235,8 @@ ${button('Sign in', '{{login_url}}')}
   {
     key: 'account_deactivated',
     name: 'Account Deactivated',
-    description: 'Informs an employee that their portal access was switched off.',
+    description:
+      'Informs an employee that their portal access was switched off.',
     subject: 'Your {{company_name}} account has been deactivated',
     bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your account has been deactivated</h1>
 <p style="margin:0 0 14px;">Hello {{employee_name}}, access to your {{company_name}} HR portal account was deactivated on {{event_time}}.</p>

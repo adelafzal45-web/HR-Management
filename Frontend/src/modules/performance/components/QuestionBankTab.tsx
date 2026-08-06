@@ -588,6 +588,7 @@ export default function QuestionBankTab({
         filters={tableFilters}
         onFiltersChange={setTableFilters}
         unifiedFilter
+        hideSortDirection
         sortOptions={[
           { value: "createdAt", label: "Created date" },
           { value: "questionText", label: "Question" },

@@ -11,12 +11,13 @@
 // Every path below is a route that exists in Backend/src/users/users.controller.ts.
 // ============================================================================
 
-import { api, apiUpload, ENDPOINTS } from "@/lib/apiClient";
+import { api, apiDownload, apiUpload, ENDPOINTS, saveBlob } from "@/lib/apiClient";
 import type {
   AccountSettingsPayload,
   ChangeOwnPasswordPayload,
   CreateEmployeePayload,
   Employee,
+  EmployeeDocument,
   EmployeeListQuery,
   LeaveAssignmentPayload,
   LeaveBalance,
@@ -148,6 +149,43 @@ export const employeeService = {
   /** DELETE /users/:id/photo — clears the stored image. */
   removePhoto: (id: string) =>
     api.delete<Employee>(ENDPOINTS.users.photo(id)),
+
+  // ---- Documents ----------------------------------------------------------
+
+  /**
+   * POST /users/:id/documents (multipart).
+   *
+   * Files are sent under the `files` field, with a matching `categories` array
+   * entry per file. The backend validates against magic bytes and stores them
+   * with UUID names in `uploads/employee-documents/`.
+   */
+  uploadDocuments: (id: string, files: File[], categories: string[]) => {
+    const form = new FormData();
+    files.forEach((file) => form.append("files", file));
+    categories.forEach((cat) => form.append("categories", cat));
+    return apiUpload<EmployeeDocument[]>(ENDPOINTS.users.documents(id), form);
+  },
+
+  /** GET /users/:id/documents — metadata only, ordered newest first. */
+  listDocuments: (id: string) =>
+    api.get<EmployeeDocument[]>(ENDPOINTS.users.documents(id)),
+
+  /** DELETE /users/:id/documents/:documentId */
+  deleteDocument: (id: string, documentId: string) =>
+    api.delete<{ success: boolean }>(ENDPOINTS.users.documentById(id, documentId)),
+
+  /**
+   * POST /users/documents/export — downloads a zip of every document belonging
+   * to the given employees. Folders are named by employee code and category.
+   */
+  exportDocuments: async (employeeIds: string[]) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const blob = await apiDownload(ENDPOINTS.users.documentsExport, {
+      method: "POST",
+      body: JSON.stringify({ employeeIds }),
+    });
+    saveBlob(blob, `employee-documents-${today}.zip`);
+  },
 };
 
 // ============================================================================

@@ -83,6 +83,7 @@ export type AppraisalForm = {
   departmentNames: string[];
   designationNames: string[];
   reviewCount: number;
+  version: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -90,6 +91,16 @@ export type AppraisalForm = {
 export type AppraisalFormDetail = AppraisalForm & {
   questions: FormQuestion[];
   assignments: Assignment[];
+};
+
+/** One entry in a form's revision history. */
+export type FormVersionInfo = {
+  version: number;
+  /** The version the form is on now — the one edits and publishes hit. */
+  isCurrent: boolean;
+  questionCount: number;
+  /** Evaluations submitted while this version was current. */
+  reviewCount: number;
 };
 
 export type TeamMember = {
@@ -234,9 +245,30 @@ type FormAudienceInput = {
 // HR/Admin — forms, questions, assignments
 // ---------------------------------------------------------------------------
 
+export type FormListParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: FormStatus;
+  evaluationType?: EvaluationType;
+  departmentId?: string;
+  designationId?: string;
+  sortBy?: string;
+  sortOrder?: "ASC" | "DESC";
+};
+
+export type FormListResult = {
+  data: AppraisalForm[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
 export const formsApi = {
-  /** `appraisal-forms.view` */
-  list: () => api.get<AppraisalForm[]>(ENDPOINTS.appraisal.forms),
+  /** `appraisal-forms.view` — paginated, filtered, and sorted */
+  list: (params: FormListParams = {}) =>
+    api.get<FormListResult>(`${ENDPOINTS.appraisal.forms}${toQuery(params)}`),
 
   /** `appraisal-forms.view` */
   get: (formId: string) =>
@@ -276,11 +308,40 @@ export const formsApi = {
   publish: (formId: string) =>
     api.post<AppraisalForm>(ENDPOINTS.appraisal.publishForm(formId)),
 
+  /**
+   * `appraisal-forms.update` — one call for every lifecycle move the list
+   * screen offers: publish, unpublish, archive, restore, activate, deactivate.
+   *
+   * `status` and `isActive` are independent: archiving retires a form,
+   * deactivating only pauses new evaluations. Send either or both. Unpublishing
+   * is refused server-side once evaluations reference the form.
+   */
+  changeStatus: (
+    formId: string,
+    payload: { status?: FormStatus; isActive?: boolean; reason?: string },
+  ) => api.patch<AppraisalForm>(ENDPOINTS.appraisal.formStatus(formId), payload),
+
   /** `appraisal-forms.delete` — archives instead if evaluations reference it */
   remove: (formId: string) =>
     api.delete<{ archived: boolean; message: string }>(
       ENDPOINTS.appraisal.form(formId),
     ),
+
+  /**
+   * `appraisal-forms.update` — starts a new version of a published form so it
+   * can be edited. Copies the current version's questions into a new version and
+   * returns the form to Draft. Existing reviews stay scored against the old
+   * version. Publishing again makes the new version the one new evaluations use.
+   */
+  createVersion: (formId: string) =>
+    api.post<AppraisalForm>(ENDPOINTS.appraisal.formVersions(formId)),
+
+  /**
+   * `appraisal-forms.view` — the form's revision history, newest first, with
+   * question counts and review counts per version.
+   */
+  listVersions: (formId: string) =>
+    api.get<FormVersionInfo[]>(ENDPOINTS.appraisal.formVersions(formId)),
 
   /** `appraisal-forms.update` — only allowed while the form is Draft */
   saveQuestions: (formId: string, questions: FormQuestionInput[]) =>
@@ -308,6 +369,14 @@ export const formsApi = {
   /** `appraisal-forms.assign` */
   unassign: (assignmentId: string) =>
     api.delete<{ message: string }>(ENDPOINTS.appraisal.assignment(assignmentId)),
+
+  /** `appraisal.export` — downloads .xlsx with current filters applied */
+  exportExcel: async (params: FormListParams = {}) => {
+    const blob = await apiDownload(
+      `${ENDPOINTS.appraisal.formsExportExcel}${toQuery(params)}`,
+    );
+    saveBlob(blob, `appraisal-forms-${today()}.xlsx`);
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -376,6 +445,16 @@ export const appraisalReportsApi = {
   /** `appraisal.viewAll` */
   getAllEvaluations: () =>
     api.get<SubmittedEvaluation[]>(ENDPOINTS.appraisal.allEvaluations),
+
+  /**
+   * `appraisal.viewAll` — one employee's history, breakdown and trend.
+   *
+   * Same payload as `myAppraisalApi.getMyEvaluations`, but for an arbitrary
+   * employee. The server re-checks scope from the JWT, so a Team Lead calling
+   * this for someone outside their roster gets a 403 rather than the record.
+   */
+  getEmployeeEvaluations: (employeeId: string) =>
+    api.get<MyEvaluations>(ENDPOINTS.appraisal.employeeEvaluations(employeeId)),
 
   /** `appraisal.viewAll` */
   getAnalytics: () => api.get<Analytics>(ENDPOINTS.appraisal.analytics),
@@ -702,10 +781,12 @@ export type CompareEmployee = {
   name: string;
   department: string;
   designation: string;
+  teamLead: string;
   grossScore: number;
   averageScore: number;
   reviewCount: number;
   submittedCount: number;
+  pendingCount: number;
   approvedCount: number;
   presentDays: number;
   absentDays: number;
@@ -750,6 +831,10 @@ export const appraisalStatsApi = {
     api.get<Paginated<ResultRow>>(
       `${ENDPOINTS.appraisal.results}${toQuery(params)}`,
     ),
+
+  /** `appraisal.stats` — one submitted review, for the form viewer */
+  getReviewDetail: (reviewId: string) =>
+    api.get<SubmittedEvaluation>(ENDPOINTS.appraisal.reviewDetail(reviewId)),
 
   /** `appraisal.compare` — 2 to 6 employees */
   compare: (

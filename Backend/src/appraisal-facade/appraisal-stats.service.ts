@@ -47,7 +47,11 @@ export interface StatsResponseDto {
   summary: StatsSummaryDto;
   trend: TrendPointDto[];
   byStatus: StatusSliceDto[];
-  byDepartment: Array<{ department: string; averageScore: number; count: number }>;
+  byDepartment: Array<{
+    department: string;
+    averageScore: number;
+    count: number;
+  }>;
 }
 
 export interface ResultRowDto {
@@ -77,10 +81,12 @@ export interface CompareEmployeeDto {
   name: string;
   department: string;
   designation: string;
+  teamLead: string;
   grossScore: number;
   averageScore: number;
   reviewCount: number;
   submittedCount: number;
+  pendingCount: number;
   approvedCount: number;
   presentDays: number;
   absentDays: number;
@@ -183,7 +189,9 @@ export class AppraisalStatsService {
         rejectedForms: reviews.filter((r) => r.status === 'Rejected').length,
         absents,
         employeesOnLeave,
-        averageScore: scores.length ? this.round2(grossScore / scores.length) : 0,
+        averageScore: scores.length
+          ? this.round2(grossScore / scores.length)
+          : 0,
         grossScore: this.round2(grossScore),
         scoredCount: scores.length,
       },
@@ -219,7 +227,11 @@ export class AppraisalStatsService {
       .take(query.limit)
       .getManyAndCount();
 
-    return paginatedResult(rows.map((row) => this.toResultRow(row)), total, query);
+    return paginatedResult(
+      rows.map((row) => this.toResultRow(row)),
+      total,
+      query,
+    );
   }
 
   // ==========================================================================
@@ -249,7 +261,7 @@ export class AppraisalStatsService {
 
     const employees = await this.userRepository.find({
       where: { user_id: In(employeeIds) },
-      relations: { department: true, designation: true },
+      relations: { department: true, designation: true, teamLead: true },
     });
     if (employees.length !== employeeIds.length) {
       throw new BadRequestException('One or more employee ids do not exist.');
@@ -295,10 +307,13 @@ export class AppraisalStatsService {
         name: `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim(),
         department: employee.department?.department_name ?? '',
         designation: employee.designation?.title ?? '',
+        teamLead:
+          `${employee.teamLead?.first_name ?? ''} ${employee.teamLead?.last_name ?? ''}`.trim(),
         grossScore: this.round2(gross),
         averageScore: scores.length ? this.round2(gross / scores.length) : 0,
         reviewCount: reviews.length,
         submittedCount: reviews.filter((r) => r.status === 'Submitted').length,
+        pendingCount: reviews.filter((r) => r.status === 'Draft').length,
         approvedCount: reviews.filter((r) => r.status === 'Approved').length,
         presentDays: attendance.present,
         absentDays: attendance.absent,
@@ -377,7 +392,8 @@ export class AppraisalStatsService {
 
     if (total > rows.length) {
       const note = sheet.addRow({});
-      note.getCell(1).value = `Truncated: showing ${rows.length} of ${total} matching rows. Narrow the filters to export the rest.`;
+      note.getCell(1).value =
+        `Truncated: showing ${rows.length} of ${total} matching rows. Narrow the filters to export the rest.`;
       note.font = { italic: true };
     }
 
@@ -414,9 +430,12 @@ export class AppraisalStatsService {
       { header: 'Name', key: 'name', width: 26 },
       { header: 'Department', key: 'department', width: 20 },
       { header: 'Designation', key: 'designation', width: 20 },
+      { header: 'Team Lead', key: 'teamLead', width: 24 },
       { header: 'Gross Score', key: 'grossScore', width: 13 },
       { header: 'Average Score', key: 'averageScore', width: 14 },
       { header: 'Reviews', key: 'reviewCount', width: 10 },
+      { header: 'Submitted', key: 'submittedCount', width: 11 },
+      { header: 'Pending', key: 'pendingCount', width: 10 },
       { header: 'Approved', key: 'approvedCount', width: 11 },
       { header: 'Present Days', key: 'presentDays', width: 13 },
       { header: 'Absent Days', key: 'absentDays', width: 13 },
@@ -697,7 +716,9 @@ export class AppraisalStatsService {
       });
     }
     if (query.dateFrom) {
-      qb.andWhere('leave."end_date" >= :dateFrom', { dateFrom: query.dateFrom });
+      qb.andWhere('leave."end_date" >= :dateFrom', {
+        dateFrom: query.dateFrom,
+      });
     }
     if (query.dateTo) {
       qb.andWhere('leave."start_date" <= :dateTo', { dateTo: query.dateTo });
@@ -762,15 +783,17 @@ export class AppraisalStatsService {
       byPeriod.set(key, bucket);
     }
 
-    return [...byPeriod.entries()]
-      .map(([period, bucket]) => ({
-        period,
-        averageScore: this.round2(bucket.total / bucket.count),
-        count: bucket.count,
-      }))
-      // Lexical sort is correct for every period key the scheduler emits —
-      // '2026-08-03', '2026-W32', '2026-08' all sort chronologically as strings.
-      .sort((a, b) => a.period.localeCompare(b.period));
+    return (
+      [...byPeriod.entries()]
+        .map(([period, bucket]) => ({
+          period,
+          averageScore: this.round2(bucket.total / bucket.count),
+          count: bucket.count,
+        }))
+        // Lexical sort is correct for every period key the scheduler emits —
+        // '2026-08-03', '2026-W32', '2026-08' all sort chronologically as strings.
+        .sort((a, b) => a.period.localeCompare(b.period))
+    );
   }
 
   private buildStatusSlices(reviews: PerformanceReview[]): StatusSliceDto[] {

@@ -177,6 +177,34 @@ const fromApiDepartment = (raw: ApiDepartment): Department => ({
  createdAt: raw.created_at ?? raw.createdAt ?? "",
 });
 
+// What a delete is blocked by, straight from GET /:id/delete-impact. The
+// server counts these itself rather than the screen inferring them, so the
+// dialog and the 409 can never disagree about what is attached.
+export type DepartmentDeleteImpact = {
+ department_id: string;
+ department_name: string;
+ employee_count: number;
+ designation_count: number;
+ designations_in_use: number;
+ designations: { designation_id: string; title: string; employee_count: number }[];
+ deletable: boolean;
+};
+
+export type DesignationDeleteImpact = {
+ designation_id: string;
+ title: string;
+ department_id: string | null;
+ department_name: string | null;
+ employee_count: number;
+ deletable: boolean;
+};
+
+export type ReassignResult = {
+ moved_employees: number;
+ moved_designations?: number;
+ message: string;
+};
+
 export const departmentsApi = {
  list: (params: ListParams = {}) =>
  withDemoFallback<ListResult<Department>>(
@@ -213,6 +241,19 @@ export const departmentsApi = {
  () => apiRequest<{ departmentId: string }>(`/departments/${id}`, { method: "DELETE" }),
  () => mockDepartmentsApi.remove(id),
  ),
+
+ // No withDemoFallback on the next two: the mock store has no notion of an
+ // employee or a designation, so it could only ever answer "nothing is
+ // blocking you" — the one answer that would make the dialog lie. The
+ // Departments screen treats a failure here as "impact unknown" and falls
+ // back to the plain confirm, which the server still guards with its 409.
+ deleteImpact: (id: string) => apiRequest<DepartmentDeleteImpact>(`/departments/${id}/delete-impact`),
+
+ reassignAndDelete: (id: string, targetDepartmentId: string) =>
+ apiRequest<ReassignResult>(`/departments/${id}/reassign-and-delete`, {
+ method: "POST",
+ body: { target_department_id: targetDepartmentId },
+ }),
 
  // Lightweight lookup used to populate the "Department" dropdown on the
  // Designation form — always resolves from the currently-known list.
@@ -328,6 +369,15 @@ export const designationsApi = {
  () => apiRequest<{ designationId: string }>(`/designations/${id}`, { method: "DELETE" }),
  () => mockDesignationsApi.remove(id),
  ),
+
+ // Unwrapped for the same reason as the department pair above.
+ deleteImpact: (id: string) => apiRequest<DesignationDeleteImpact>(`/designations/${id}/delete-impact`),
+
+ reassignAndDelete: (id: string, targetDesignationId: string) =>
+ apiRequest<ReassignResult>(`/designations/${id}/reassign-and-delete`, {
+ method: "POST",
+ body: { target_designation_id: targetDesignationId },
+ }),
 };
 
 // ---- Job Categories — GET/POST/PATCH/DELETE /job-categories ---------------
@@ -594,10 +644,13 @@ export const permissionsApi = {
 // CreateRoleDto: { role_name, description } (no status field)
 // CreateRolePermissionDto: { roleId, permissionId } (camelCase, unlike role_name/description above)
 // Confirmed routes:
-// /roles -> POST, GET, GET :id, DELETE (no PATCH — role_name/
-// description edits below only affect the mock
-// fallback until the backend adds an update route)
-// /role-permissions -> POST, GET, DELETE :id (no GET :id, no PATCH)
+// /roles -> POST, GET, GET :id, PATCH :id, DELETE :id
+// /role-permissions -> POST, GET, PATCH :id, DELETE :id (no GET :id)
+//
+// This block used to claim /roles had no PATCH. It does — RoleController.update,
+// behind `roles.update` — and the note being wrong is what let `update` below
+// ship without ever sending one, so renaming a role reported success and
+// changed nothing. Treat this list as a claim to re-check against Swagger.
 // The form still presents "assign permissions to a role" as part of a single
 // Role object, but under the hood this is a real join table: create/update
 // below diff the role's desired `permissionIds` against `/role-permissions`
@@ -612,6 +665,17 @@ type ApiRole = {
  createdAt?: string;
 };
 
+// `GET /role-permissions` loads `relations: ['role', 'permission']`, so each row
+// arrives with the two sides *nested* — `{ role_permission_id, role: {...},
+// permission: {...} }` — not as flat `role_id` / `permission_id` columns.
+//
+// The accessors below used to read only the flat forms. Neither key exists on
+// the real response, so every lookup resolved to "", no mapping ever matched a
+// role, and the Roles table showed "0 assigned" for all of them while the edit
+// modal opened with every checkbox clear — then saved that empty set back over
+// the role's real grants. The nested shape is checked first for that reason;
+// the flat aliases stay as a fallback for the mock data and any future DTO that
+// flattens them.
 type ApiRolePermission = {
  id?: string;
  role_permission_id?: string;
@@ -619,11 +683,15 @@ type ApiRolePermission = {
  role_id?: string;
  permissionId?: string;
  permission_id?: string;
+ role?: { role_id?: string; id?: string } | null;
+ permission?: { permission_id?: string; id?: string } | null;
 };
 
 const rpId = (rp: ApiRolePermission) => rp.id ?? rp.role_permission_id ?? "";
-const rpRoleId = (rp: ApiRolePermission) => rp.roleId ?? rp.role_id ?? "";
-const rpPermissionId = (rp: ApiRolePermission) => rp.permissionId ?? rp.permission_id ?? "";
+const rpRoleId = (rp: ApiRolePermission) =>
+ rp.role?.role_id ?? rp.role?.id ?? rp.roleId ?? rp.role_id ?? "";
+const rpPermissionId = (rp: ApiRolePermission) =>
+ rp.permission?.permission_id ?? rp.permission?.id ?? rp.permissionId ?? rp.permission_id ?? "";
 
 const toApiRolePayload = (payload: Pick<Role, "name" | "description">) => ({
  role_name: payload.name,

@@ -10,6 +10,7 @@ import {
  CircleCheck,
  CircleSlash,
  KeyRound,
+ Download,
 } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import SectionTabs from "@/components/common/SectionTabs";
@@ -18,7 +19,6 @@ import { useAuth } from "@/app/providers/AuthContext";
 import EmployeeDataGrid, { type GridColumn, type FilterChip, type BulkAction } from "@/modules/employees/components/EmployeeDataGrid";
 import AdvancedFilterDrawer, { EMPTY_FILTERS, type EmployeeFilters, type SavedFilter } from "@/modules/employees/components/AdvancedFilterDrawer";
 import EmployeeDetailsDrawer from "@/modules/employees/components/EmployeeDetailsDrawer";
-import ImportEmployeesModal, { type ImportRow } from "@/modules/employees/components/ImportEmployeesModal";
 import SendResetLinksDialog, { type ResetLinkTarget } from "@/modules/employees/components/SendResetLinksDialog";
 import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -38,12 +38,10 @@ import { employeeService } from "@/modules/employees/api/employeeService";
 import {
  departmentsApi,
  designationsApi,
- jobCategoriesApi,
  shiftsApi,
  rolesApi,
  type Department,
  type Designation,
- type JobCategory,
  type Shift,
  type Role,
 } from "@/modules/settings/api/settingsApi";
@@ -63,16 +61,6 @@ const STATUS_OPTIONS = [
 ];
 
 const SAVED_FILTERS_KEY = "technocues:employees:savedFilters";
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// CSV gender values are free text; the DTO accepts only the Title-Cased set.
-const GENDER_FROM_CSV: Record<string, string> = {
- m: "Male",
- male: "Male",
- f: "Female",
- female: "Female",
- other: "Other",
-};
 
 function loadSavedFilters(): SavedFilter[] {
  try {
@@ -121,11 +109,9 @@ export default function EmployeesPage() {
  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => loadSavedFilters());
  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
- const [importOpen, setImportOpen] = useState(false);
 
  const [departments, setDepartments] = useState<Department[]>([]);
  const [designations, setDesignations] = useState<Designation[]>([]);
- const [jobCategories, setJobCategories] = useState<JobCategory[]>([]);
  const [shifts, setShifts] = useState<Shift[]>([]);
  const [roles, setRoles] = useState<Role[]>([]);
 
@@ -161,7 +147,6 @@ export default function EmployeesPage() {
  useEffect(() => {
  departmentsApi.listAll().then((res) => setDepartments(res.data)).catch(() => undefined);
  designationsApi.list({ pageSize: 1000 }).then((res) => setDesignations(res.data)).catch(() => undefined);
- jobCategoriesApi.list({ pageSize: 1000 }).then((res) => setJobCategories(res.data)).catch(() => undefined);
  shiftsApi.list({ pageSize: 1000 }).then((res) => setShifts(res.data)).catch(() => undefined);
  rolesApi.list({ pageSize: 1000 }).then((res) => setRoles(res.data)).catch(() => undefined);
  }, []);
@@ -312,9 +297,35 @@ export default function EmployeesPage() {
  }
  };
 
+ /**
+  * Downloads every stored document of the selected employees as one zip.
+  *
+  * The selection is not cleared afterwards: unlike a status change, this leaves
+  * the records untouched, so an admin who wants a second format still has their
+  * picks. A 404 here means "none of them have documents", which is a normal
+  * outcome rather than a failure, so it reads as a warning.
+  */
+ const handleExportDocuments = async (ids: string[]) => {
+   try {
+     await employeeService.exportDocuments(ids);
+     toast.showSuccess("Documents downloaded.");
+   } catch (err) {
+     const message = err instanceof Error ? err.message : "Couldn't download documents.";
+     if (/no documents|none of the selected/i.test(message)) {
+       toast.showWarning("Nothing to download.", message);
+     } else {
+       toast.showError(message);
+     }
+   }
+ };
+
  const bulkActions: BulkAction<Employee>[] = [
  { key: "activate", label: "Activate", icon: CircleCheck, onClick: (ids) => runBulkStatus(ids, "active") },
  { key: "deactivate", label: "Deactivate", icon: CircleSlash, onClick: (ids) => runBulkStatus(ids, "inactive") },
+ // Mirrors the backend gate on POST /users/documents/export.
+ ...(hasPermission("employees.documents.view")
+ ? [{ key: "export-docs", label: "Download documents", icon: Download, onClick: handleExportDocuments }]
+ : []),
  // Admin password resets (employees.password.reset): shows only to holders of
  // that permission, matching the backend gate on POST /users/password-reset-links.
  ...(hasPermission("employees.password.reset")
@@ -386,69 +397,6 @@ export default function EmployeesPage() {
  if (!opened) return toast.showWarning("Couldn't open the print window.", "Check your browser's pop-up blocker and try again.");
  }
  toast.showSuccess(`Exported ${rowsToExport.length} employee(s) as ${format.toUpperCase()}.`);
- };
-
- const handleImport = async (rows: ImportRow[]): Promise<{ success: number; failed: number }> => {
- let success = 0;
- let failed = 0;
- const findByName = <T extends { name: string }>(list: T[], name: string | undefined) =>
- name ? list.find((x) => x.name.toLowerCase() === name.trim().toLowerCase()) : undefined;
-
- for (let i = 0; i < rows.length; i++) {
- const r = rows[i];
- const firstName = r.firstName || r["First Name"] || "";
- const lastName = r.lastName || r["Last Name"] || "";
- const email = r.email || r.Email || "";
- if (!firstName.trim() || !lastName.trim() || !EMAIL_RE.test(email.trim())) {
- failed++;
- continue;
- }
- const dept = findByName(departments, r.department || r.Department) ?? departments[0];
- const deptDesignations = designations.filter((d) => d.departmentId === dept?.departmentId);
- const designation = findByName(designations, r.designation || r.Designation) ?? deptDesignations[0] ?? designations[0];
- const role = findByName(roles, r.role || r.Role) ?? roles[0];
- const jobCategory = jobCategories[0];
- const shift = findByName(shifts, r.shift || r.Shift) ?? shifts[0];
- const employmentTypeRaw = (r.employmentType || r["Employment Type"] || "full_time").toLowerCase().replace(/\s+/g, "_");
- const employmentType = (EMPLOYMENT_TYPE_OPTIONS.find((o) => o.value === employmentTypeRaw)?.value ?? "full_time") as Employee["employmentType"];
-
- try {
- await employeeService.create({
- first_name: firstName.trim(),
- last_name: lastName.trim(),
- email: email.trim(),
- // Meets the DTO's strength rule (upper, lower, digit, symbol, 8+)
- // whatever the random segment yields. Imported accounts are expected
- // to go through a password reset before first login.
- password: `Tc${Math.random().toString(36).slice(2, 8)}9!A`,
- phone: (r.phone || r.Phone || "").trim(),
- date_of_birth: r.dateOfBirth || r["Date of Birth"] || "2000-01-01",
- gender: GENDER_FROM_CSV[(r.gender || r.Gender || "").trim().toLowerCase()] ?? "Other",
- // The CSV template carries one free-text address column, but the DTO
- // requires the parts. Fall back to a marker the importer can correct
- // afterwards rather than failing the whole row on a missing city.
- street_address: (r.streetAddress || r["Street Address"] || r.address || r.Address || "Not provided").trim(),
- city: (r.city || r.City || "Lahore").trim(),
- state_province: (r.stateProvince || r["State / Province"] || "Punjab").trim(),
- postal_code: (r.postalCode || r["Postal Code"] || "54000").trim(),
- country: (r.country || r.Country || "Pakistan").trim(),
- joining_date: r.joiningDate || r["Joining Date"] || new Date().toISOString().slice(0, 10),
- employee_type: EMPLOYMENT_TYPE_LABEL[employmentType] ?? "Full-Time",
- department_id: dept?.departmentId ?? "",
- designation_id: designation?.designationId ?? "",
- job_category_id: jobCategory?.jobCategoryId ?? "",
- shift_id: shift?.shiftId ?? "",
- role_id: role?.roleId ?? "",
- salary: Number(r.salary || r.Salary) || 0,
- status: true,
- });
- success++;
- } catch {
- failed++;
- }
- }
- load();
- return { success, failed };
  };
 
  // ---- grid columns --------------------------------------------------------
@@ -536,7 +484,6 @@ export default function EmployeesPage() {
  activeFilterCount={activeFilterCount}
  filterChips={filterChips}
  onExport={handleExport}
- onImportClick={() => setImportOpen(true)}
  selectedIds={selectedIds}
  onSelectedIdsChange={setSelectedIds}
  bulkActions={bulkActions}
@@ -610,8 +557,6 @@ export default function EmployeesPage() {
  />
 
  <EmployeeDetailsDrawer open={!!drawerEmployee} employee={drawerEmployee} onClose={() => setDrawerEmployee(null)} />
-
- <ImportEmployeesModal open={importOpen} onClose={() => setImportOpen(false)} onImport={handleImport} />
 
  <SendResetLinksDialog
  open={resetLinksOpen}

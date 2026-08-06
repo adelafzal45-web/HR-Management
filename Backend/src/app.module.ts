@@ -34,6 +34,7 @@ import { WorkingDaySchedulesModule } from './working-day-schedules/working-day-s
 import { AuditModule } from './audit/audit.module';
 import { MailModule } from './mail/mail.module';
 import { AppraisalNotificationsModule } from './appraisal-notifications/appraisal-notifications.module';
+import { EmployeeDocumentsModule } from './employee-documents/employee-documents.module';
 
 @Module({
   imports: [
@@ -65,6 +66,8 @@ import { AppraisalNotificationsModule } from './appraisal-notifications/appraisa
     ScheduleModule.forRoot(),
 
     UserModule,
+
+    EmployeeDocumentsModule,
 
     RoleModule,
 

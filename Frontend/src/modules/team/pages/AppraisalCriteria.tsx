@@ -13,10 +13,12 @@ export default function AppraisalCriteria() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Published-only is a server-side filter now; `isActive` still narrows on
+    // the client because archived-but-published forms share the same status.
     formsApi
-      .list()
-      .then((data) => {
-        const published = data.filter((f) => f.status === "Published" && f.isActive);
+      .list({ status: "Published", pageSize: 100, sortBy: "formName", sortOrder: "ASC" })
+      .then((res) => {
+        const published = res.data.filter((f) => f.isActive);
         setForms(published);
         if (published.length > 0 && !selectedFormId) {
           setSelectedFormId(published[0].formId);

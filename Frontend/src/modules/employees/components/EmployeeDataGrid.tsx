@@ -12,10 +12,8 @@ import {
  Columns3,
  SlidersHorizontal,
  Download,
- Upload,
  X,
  GripVertical,
- FileText,
  FileSpreadsheet,
  FileType,
 } from "lucide-react";
@@ -66,7 +64,6 @@ type Props<T> = {
  activeFilterCount: number;
  filterChips: FilterChip[];
  onExport: (rowsToExport: T[], format: ExportFormat) => void;
- onImportClick: () => void;
  selectedIds: Set<string>;
  onSelectedIdsChange: (ids: Set<string>) => void;
  bulkActions: BulkAction<T>[];
@@ -100,6 +97,17 @@ function saveJSON(key: string, value: unknown) {
  }
 }
 
+/** Width of the leading checkbox column, in px. */
+const SELECT_COL_WIDTH = 44;
+
+/**
+ * Width of the trailing actions column, in px.
+ *
+ * Four 36px buttons plus three 6px gaps plus the cell's own 32px of horizontal
+ * padding — anything less and the buttons overflow their cell.
+ */
+const ACTIONS_COL_WIDTH = 194;
+
 function buildPageWindow(current: number, total: number): (number | "ellipsis")[] {
  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
  const pages = new Set<number>([1, total, current, current - 1, current + 1]);
@@ -131,7 +139,6 @@ export default function EmployeeDataGrid<T>({
  activeFilterCount,
  filterChips,
  onExport,
- onImportClick,
  selectedIds,
  onSelectedIdsChange,
  bulkActions,
@@ -183,6 +190,20 @@ export default function EmployeeDataGrid<T>({
  }, [exportMenuOpen]);
 
  const visibleColumns = useMemo(() => columns.filter((c) => c.locked || visibility[c.key] !== false), [columns, visibility]);
+
+ // `table-layout: fixed` with `width: 100%` treats the <col> widths as
+ // proportions, not sizes: adding columns shrinks every one of them, and the
+ // action buttons — which have a hard min-width — then spill out of their cell
+ // and sit on top of the Status column. Pinning a min-width equal to the sum of
+ // the declared widths makes the widths absolute again, so the wrapper scrolls
+ // horizontally instead of squeezing the cells.
+ const tableMinWidth = useMemo(
+   () =>
+     SELECT_COL_WIDTH +
+     visibleColumns.reduce((sum, c) => sum + (widths[c.key] ?? c.width), 0) +
+     (actions ? ACTIONS_COL_WIDTH : 0),
+   [visibleColumns, widths, actions],
+ );
 
  const sortedRows = useMemo(() => {
  if (!sort) return rows;
@@ -326,28 +347,22 @@ export default function EmployeeDataGrid<T>({
  )}
  </div>
 
- <button
- type="button"
- onClick={onImportClick}
- className="flex min-h-10 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
- >
- <Upload size={15} /> Import
- </button>
  <div className="relative" ref={exportMenuRef}>
  <button
  type="button"
  onClick={() => setExportMenuOpen((o) => !o)}
  aria-expanded={exportMenuOpen}
  aria-haspopup="menu"
- className="flex min-h-10 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+ aria-label="Export"
+ title="Export"
+ className="flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 transition hover:bg-gray-50"
  >
- <Download size={15} /> Export
+ <Download size={15} />
  </button>
  {exportMenuOpen && (
  <div role="menu" className="absolute right-0 z-20 mt-2 w-48 rounded-xl border border-gray-100 bg-white p-1.5 shadow-lg">
  {(
  [
- { format: "csv" as const, label: "Export as CSV", icon: FileText },
  { format: "excel" as const, label: "Export as Excel", icon: FileSpreadsheet },
  { format: "pdf" as const, label: "Export as PDF", icon: FileType },
  ]
@@ -445,13 +460,13 @@ export default function EmployeeDataGrid<T>({
  <>
  {/* Desktop / tablet — sticky header, resizable + sortable columns */}
  <div className="hidden max-h-[65vh] overflow-auto sm:block">
- <table className="w-full text-left text-sm" style={{ tableLayout: "fixed" }}>
+ <table className="w-full text-left text-sm" style={{ tableLayout: "fixed", minWidth: tableMinWidth }}>
  <colgroup>
- <col style={{ width: 44 }} />
+ <col style={{ width: SELECT_COL_WIDTH }} />
  {visibleColumns.map((c) => (
  <col key={c.key} style={{ width: widths[c.key] ?? c.width }} />
  ))}
- {actions && <col style={{ width: 132 }} />}
+ {actions && <col style={{ width: ACTIONS_COL_WIDTH }} />}
  </colgroup>
  <thead className="sticky top-0 z-10">
  <tr className="border-b border-gray-100 bg-gray-50/95 text-xs font-semibold uppercase tracking-wide text-gray-500 backdrop-blur">

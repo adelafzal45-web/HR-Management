@@ -39,8 +39,14 @@ export class LeaveTypesController {
   @ApiBody({ type: CreateLeaveTypeDto })
   @ApiResponse({ status: 201, description: 'Leave type created successfully.' })
   @ApiResponse({ status: 400, description: 'Validation failed.' })
-  @ApiResponse({ status: 403, description: 'Missing leave-types.create permission.' })
-  @ApiResponse({ status: 409, description: 'A leave type with that name already exists.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-types.create permission.',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'A leave type with that name already exists.',
+  })
   create(@Body() dto: CreateLeaveTypeDto) {
     return this.leaveTypesService.create(dto);
   }
@@ -54,10 +60,17 @@ export class LeaveTypesController {
   @RequirePermission('leave-types.view')
   @ApiOperation({
     summary: 'List all leave types',
-    description: 'Returns every leave type, active and inactive, sorted by name.',
+    description:
+      'Returns every leave type, active and inactive, sorted by name.',
   })
-  @ApiResponse({ status: 200, description: 'Leave types retrieved successfully.' })
-  @ApiResponse({ status: 403, description: 'Missing leave-types.view permission.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Leave types retrieved successfully.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-types.view permission.',
+  })
   findAll() {
     return this.leaveTypesService.findAll();
   }
@@ -71,8 +84,14 @@ export class LeaveTypesController {
   @RequirePermission('leave-types.view')
   @ApiOperation({ summary: 'Get a leave type by id' })
   @ApiParam({ name: 'id', description: 'Leave type UUID' })
-  @ApiResponse({ status: 200, description: 'Leave type retrieved successfully.' })
-  @ApiResponse({ status: 403, description: 'Missing leave-types.view permission.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Leave type retrieved successfully.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-types.view permission.',
+  })
   @ApiResponse({ status: 404, description: 'Leave type not found.' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.leaveTypesService.findOne(id);
@@ -90,9 +109,15 @@ export class LeaveTypesController {
   @ApiBody({ type: UpdateLeaveTypeDto })
   @ApiResponse({ status: 200, description: 'Leave type updated successfully.' })
   @ApiResponse({ status: 400, description: 'Validation failed.' })
-  @ApiResponse({ status: 403, description: 'Missing leave-types.update permission.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-types.update permission.',
+  })
   @ApiResponse({ status: 404, description: 'Leave type not found.' })
-  @ApiResponse({ status: 409, description: 'A leave type with that name already exists.' })
+  @ApiResponse({
+    status: 409,
+    description: 'A leave type with that name already exists.',
+  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLeaveTypeDto,
@@ -110,7 +135,10 @@ export class LeaveTypesController {
   @ApiOperation({ summary: 'Delete a leave type' })
   @ApiParam({ name: 'id', description: 'Leave type UUID' })
   @ApiResponse({ status: 200, description: 'Leave type deleted successfully.' })
-  @ApiResponse({ status: 403, description: 'Missing leave-types.delete permission.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing leave-types.delete permission.',
+  })
   @ApiResponse({ status: 404, description: 'Leave type not found.' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.leaveTypesService.remove(id);

@@ -71,13 +71,21 @@ const GROUPS: SettingsGroup[] = [
  label: "Access Control",
  icon: Lock,
  items: [
- { to: "/settings/roles", label: "Roles", icon: ShieldCheck },
- { to: "/settings/permissions", label: "Permissions", icon: KeyRound },
+ { to: "/settings/roles", label: "Roles & Permissions", icon: ShieldCheck },
  ],
  },
 ];
 
-const ALL_TABS = GROUPS.flatMap((g) => g.items);
+// Screens that still resolve as routes but are deliberately absent from the
+// nav. Permissions is managed from inside a Role now, so listing it as a peer
+// of Roles only offered a second, lesser way to reach the same data — but the
+// route stays reachable, and the breadcrumb has to keep naming it correctly for
+// anyone who lands there directly.
+const HIDDEN_TABS: SettingsTab[] = [
+ { to: "/settings/permissions", label: "Permissions", icon: KeyRound },
+];
+
+const ALL_TABS = [...GROUPS.flatMap((g) => g.items), ...HIDDEN_TABS];
 
 // Remembers which groups are expanded across visits, same pattern as the
 // main Sidebar's fold state.

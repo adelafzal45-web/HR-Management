@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -7,13 +8,28 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { Attendance } from './attendance.entity';
 import { User } from '../users/user.entity';
 
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { BulkMarkAttendanceDto } from './dto/bulk-mark-attendance.dto';
+
+import {
+  ATTENDANCE_STATUSES,
+  NON_WORKING_STATUS,
+  STATUSES_FORBIDDING_CHECK_IN,
+  STATUSES_REQUIRING_CHECK_IN,
+  type AttendanceStatus,
+} from './attendance-status';
+
+import {
+  derivePunctuality,
+  NO_PUNCTUALITY,
+  type AttendancePunctuality,
+} from './attendance-punctuality';
 
 import { PerformanceReviewService } from '../performance-review/performance-review.service';
 import {
@@ -21,14 +37,16 @@ import {
   isoDayOfWeek,
 } from '../working-day-schedules/working-day-schedules.service';
 
-/** Status used for days the company does not operate. */
-export const NON_WORKING_STATUS = 'Non-Working';
+// Re-exported so the existing import path keeps working; the value itself now
+// lives with the rest of the status vocabulary in `attendance-status.ts`.
+export { NON_WORKING_STATUS };
 
 /** Attendance record decorated with working-day context for reports/calendars. */
-export type AttendanceWithWorkingDay = Attendance & {
-  is_working_day: boolean;
-  counts_as_absent: boolean;
-};
+export type AttendanceWithWorkingDay = Attendance &
+  AttendancePunctuality & {
+    is_working_day: boolean;
+    counts_as_absent: boolean;
+  };
 
 /**
  * Everything the check-in / check-out buttons need in order to render without
@@ -66,6 +84,8 @@ const MINUTES_PER_DAY = 1440;
 
 @Injectable()
 export class AttendanceService {
+  private readonly logger = new Logger(AttendanceService.name);
+
   constructor(
     @InjectRepository(Attendance)
     private readonly attendanceRepository: Repository<Attendance>,
@@ -78,6 +98,27 @@ export class AttendanceService {
 
     private readonly workingDaySchedules: WorkingDaySchedulesService,
   ) {}
+
+  /**
+   * Fires the auto-zero appraisal behind an absence, and swallows anything it
+   * throws.
+   *
+   * The attendance row is already committed by the time this runs. An appraisal
+   * that cannot be written is a problem for the appraisal module to report in
+   * the log, not a reason to hand the caller a 500 for a save that succeeded —
+   * that combination is what made a marked-absent request look like it had
+   * failed while the record sat in the table.
+   */
+  private async writeAbsentReview(attendance: Attendance): Promise<void> {
+    try {
+      await this.performanceReviewService.createAbsentReview(attendance);
+    } catch (error) {
+      this.logger.error(
+        `Attendance ${attendance.attendance_id} was saved as Absent but its auto-zero appraisal could not be written.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
 
   // ==========================================
   // CREATE ATTENDANCE
@@ -98,17 +139,31 @@ export class AttendanceService {
       throw new NotFoundException('User not found');
     }
 
-    const isWorkingDay = await this.isWorkingDayForUser(
-      user,
-      createAttendanceDto.attendance_date,
-    );
+    if (user.status === false) {
+      throw new BadRequestException(
+        'This account is inactive and cannot record attendance.',
+      );
+    }
 
-    let status = createAttendanceDto.attendance_status;
+    const attendanceDate = this.formatDate(createAttendanceDto.attendance_date);
+
+    // A record dated in the future is always a mistake — attendance is a report
+    // of what happened, and a future row would sit there being counted by every
+    // report until the day arrives.
+    if (attendanceDate > this.today()) {
+      throw new BadRequestException(
+        `${attendanceDate} is in the future. Attendance can only be recorded for today or a past date.`,
+      );
+    }
+
+    const isWorkingDay = await this.isWorkingDayForUser(user, attendanceDate);
+
+    let status = this.normaliseStatus(createAttendanceDto.attendance_status);
 
     if (!isWorkingDay) {
-      if (status.toUpperCase() === 'ABSENT') {
+      if (status === 'Absent') {
         throw new BadRequestException(
-          `${this.formatDate(createAttendanceDto.attendance_date)} is not a working day for this employee, so it cannot be recorded as Absent.`,
+          `${attendanceDate} is not a working day for this employee, so it cannot be recorded as Absent.`,
         );
       }
 
@@ -116,7 +171,19 @@ export class AttendanceService {
         status = NON_WORKING_STATUS;
       }
     }
-    const attendanceDate = this.formatDate(createAttendanceDto.attendance_date);
+
+    // Every rule that relates the status, the two stamps and the hours to each
+    // other lives in one place, so `create` and `update` cannot disagree about
+    // what a consistent row looks like.
+    const { workingHours, overtimeHours, isOvertime } = this.assertConsistent({
+      status,
+      checkIn: createAttendanceDto.check_in,
+      checkOut: createAttendanceDto.check_out,
+      workingHours: createAttendanceDto.working_hours,
+      overtimeHours: createAttendanceDto.overtime_hours,
+      isOvertime: createAttendanceDto.is_overtime,
+      breakMinutes: user.shift?.break_duration_minutes ?? 0,
+    });
 
     const existingAttendance = await this.attendanceRepository
       .createQueryBuilder('attendance')
@@ -128,13 +195,16 @@ export class AttendanceService {
       .getOne();
 
     if (existingAttendance) {
-      throw new BadRequestException('You have already checked in today.');
+      throw new BadRequestException(
+        `Attendance for ${attendanceDate} already exists. Update the existing record instead of creating a second one.`,
+      );
     }
+
     const attendance = this.attendanceRepository.create({
       attendance_date: createAttendanceDto.attendance_date,
       check_in: createAttendanceDto.check_in,
       check_out: createAttendanceDto.check_out,
-      working_hours: createAttendanceDto.working_hours,
+      working_hours: workingHours,
       attendance_status: status,
 
       // Logged-in employee
@@ -143,8 +213,8 @@ export class AttendanceService {
       // Shift comes from logged-in employee
       shift: user.shift,
 
-      overtime_hours: createAttendanceDto.overtime_hours,
-      is_overtime: createAttendanceDto.is_overtime ?? false,
+      overtime_hours: overtimeHours,
+      is_overtime: isOvertime,
     });
 
     const savedAttendance = await this.attendanceRepository.save(attendance);
@@ -153,11 +223,128 @@ export class AttendanceService {
     // AUTO ZERO APPRAISAL LOGIC
     // ==========================================
 
-    if (status.toUpperCase() === 'ABSENT') {
-      await this.performanceReviewService.createAbsentReview(savedAttendance);
+    if (status === 'Absent') {
+      await this.writeAbsentReview(savedAttendance);
     }
 
     return savedAttendance;
+  }
+
+  // ==========================================
+  // CONSISTENCY RULES
+  // ==========================================
+
+  /**
+   * Maps an incoming status onto the canonical spelling, rejecting anything
+   * outside the vocabulary.
+   *
+   * The DTO's `@IsIn` already covers the HTTP path; this covers everything that
+   * reaches the service by another route (the scheduler, seeds, tests) and
+   * makes the comparisons below exact-match rather than `.toUpperCase()`
+   * guesswork.
+   */
+  private normaliseStatus(value: string): AttendanceStatus {
+    const match = ATTENDANCE_STATUSES.find(
+      (status) => status.toLowerCase() === value.trim().toLowerCase(),
+    );
+
+    if (!match) {
+      throw new BadRequestException(
+        `attendance_status must be one of: ${ATTENDANCE_STATUSES.join(', ')}.`,
+      );
+    }
+
+    return match;
+  }
+
+  /**
+   * The cross-field rules a single attendance row has to satisfy, and the hours
+   * that follow from them.
+   *
+   * None of this was checked before: `create` and `update` both took
+   * `working_hours`, `overtime_hours` and `is_overtime` straight off the DTO,
+   * so a caller could file an Absent day with a check-in, a check-out before
+   * its check-in, and nine hours of overtime — all of which flow into payroll
+   * figures and, for Absent, into an auto-generated zero appraisal.
+   *
+   * Hours are recomputed rather than trusted whenever both stamps are present.
+   * A supplied figure is only accepted for a stamp-less correction, and even
+   * then it has to agree with `is_overtime`.
+   */
+  private assertConsistent(input: {
+    status: AttendanceStatus;
+    checkIn?: string;
+    checkOut?: string;
+    workingHours?: number;
+    overtimeHours?: number;
+    isOvertime?: boolean;
+    breakMinutes: number;
+  }): {
+    workingHours?: number;
+    overtimeHours?: number;
+    isOvertime: boolean;
+  } {
+    const { status, checkIn, checkOut } = input;
+
+    if (!checkIn && STATUSES_REQUIRING_CHECK_IN.includes(status)) {
+      throw new BadRequestException(`A ${status} day needs a check-in time.`);
+    }
+
+    if (checkIn && STATUSES_FORBIDDING_CHECK_IN.includes(status)) {
+      throw new BadRequestException(
+        `A ${status} day cannot have a check-in time. Record it as Present, Late or Half-Day instead.`,
+      );
+    }
+
+    if (checkOut && !checkIn) {
+      throw new BadRequestException(
+        'A check-out time needs a check-in time to go with it.',
+      );
+    }
+
+    if (checkIn && checkOut) {
+      // Equal stamps, not just reversed ones: a zero-length day is a mis-click
+      // on the check-out button, and it would record a real attendance as zero
+      // hours. A genuinely reversed pair is treated as a shift crossing
+      // midnight by `deriveHours`, which is why it is not rejected here.
+      if (this.minutesOf(checkIn) === this.minutesOf(checkOut)) {
+        throw new BadRequestException(
+          'Check-out cannot be the same time as check-in.',
+        );
+      }
+
+      const derived = this.deriveHours(checkIn, checkOut, input.breakMinutes);
+
+      return {
+        workingHours: derived.workingHours,
+        overtimeHours: derived.overtimeHours,
+        isOvertime: derived.overtimeHours > 0,
+      };
+    }
+
+    // No check-out, so nothing to derive from. Hours are only meaningful once
+    // the day is closed; carrying a supplied figure on an open row would let it
+    // survive the check-out that should have replaced it.
+    if (
+      !checkOut &&
+      (input.workingHours != null || input.overtimeHours != null)
+    ) {
+      throw new BadRequestException(
+        'Working and overtime hours are calculated at check-out and cannot be set before it.',
+      );
+    }
+
+    if (input.isOvertime === true) {
+      throw new BadRequestException(
+        'Overtime is determined from the recorded hours and cannot be set directly.',
+      );
+    }
+
+    return {
+      workingHours: undefined,
+      overtimeHours: undefined,
+      isOvertime: false,
+    };
   }
 
   // ==========================================
@@ -214,6 +401,19 @@ export class AttendanceService {
     if (existing?.check_in) {
       throw new ConflictException(
         `You already checked in today at ${existing.check_in.slice(0, 5)}.`,
+      );
+    }
+
+    // An `On Leave` row is a decision someone already made about this day.
+    // Stamping over it would silently turn approved leave into a normal working
+    // day — including for the leave balance, which reads this column — so the
+    // correction has to go through HR rather than through the button.
+    if (
+      existing &&
+      this.normaliseStatus(existing.attendance_status) === 'On Leave'
+    ) {
+      throw new ConflictException(
+        'Today is recorded as leave. Ask HR to cancel the leave before checking in.',
       );
     }
 
@@ -317,7 +517,10 @@ export class AttendanceService {
       .leftJoinAndSelect('user.designation', 'designation')
       .leftJoinAndSelect('attendance.shift', 'shift')
       .where('user.user_id = :userId', { userId })
-      .andWhere('attendance.attendance_date BETWEEN :from AND :to', { from, to })
+      .andWhere('attendance.attendance_date BETWEEN :from AND :to', {
+        from,
+        to,
+      })
       .orderBy('attendance.attendance_date', 'DESC')
       .getMany();
 
@@ -328,15 +531,24 @@ export class AttendanceService {
    * Late is the shift's business, not the browser's: `start_time` plus the grace
    * period the shift itself defines. With no assigned shift there is no lateness
    * to measure, so the day is simply Present.
+   *
+   * The comparison is made in minutes-from-shift-start rather than
+   * minutes-from-midnight, so a night shift that begins at 22:00 and an arrival
+   * at 22:10 is ten minutes late rather than fourteen hours early.
    */
   private resolveArrivalStatus(user: User, arrivedAt: string): string {
     if (!user.shift) return 'Present';
 
-    const cutoff =
-      this.minutesOf(user.shift.start_time) +
-      (user.shift.grace_period_minutes ?? 0);
+    const start = this.minutesOf(user.shift.start_time);
+    let offset = this.minutesOf(arrivedAt) - start;
 
-    return this.minutesOf(arrivedAt) > cutoff ? 'Late' : 'Present';
+    // Half a day either side of the start is the widest window in which an
+    // arrival still plausibly belongs to this shift; beyond it, the clock has
+    // wrapped and the arrival is on the other side of midnight.
+    if (offset < -MINUTES_PER_DAY / 2) offset += MINUTES_PER_DAY;
+    if (offset > MINUTES_PER_DAY / 2) offset -= MINUTES_PER_DAY;
+
+    return offset > (user.shift.grace_period_minutes ?? 0) ? 'Late' : 'Present';
   }
 
   /** Loads the employee with the relations the clock needs. */
@@ -368,12 +580,7 @@ export class AttendanceService {
         user: { user_id: userId },
         attendance_date: date as unknown as Date,
       },
-      relations: [
-        'user',
-        'user.department',
-        'user.designation',
-        'shift',
-      ],
+      relations: ['user', 'user.department', 'user.designation', 'shift'],
     });
   }
 
@@ -467,7 +674,9 @@ export class AttendanceService {
         'shift',
         'performanceReviews',
       ],
-    });if (!attendance) {
+    });
+
+    if (!attendance) {
       throw new NotFoundException('Attendance record not found');
     }
 
@@ -510,15 +719,16 @@ export class AttendanceService {
       throw new NotFoundException('No check-in found for today.');
     }
 
-    const targetStatus =
-      updateAttendanceDto.attendance_status ?? attendance.attendance_status;
+    const targetStatus = this.normaliseStatus(
+      updateAttendanceDto.attendance_status ?? attendance.attendance_status,
+    );
 
     // ==========================================
     // Validate Absent only on working day
     // ==========================================
 
     if (
-      targetStatus.toUpperCase() === 'ABSENT' &&
+      targetStatus === 'Absent' &&
       !(await this.isWorkingDayForUser(
         attendance.user,
         attendance.attendance_date,
@@ -559,16 +769,28 @@ export class AttendanceService {
       attendance.check_out = updateAttendanceDto.check_out;
     }
 
-    attendance.working_hours =
-      updateAttendanceDto.working_hours ?? attendance.working_hours;
+    if (!attendance.check_in && updateAttendanceDto.check_in) {
+      attendance.check_in = updateAttendanceDto.check_in;
+    }
 
+    // The same rules `create` applies, against the row as it will be once this
+    // update lands. Previously the three numeric fields were taken straight off
+    // the DTO, so this endpoint could set 99 overtime hours on an Absent day
+    // that the create path would have refused outright.
+    const { workingHours, overtimeHours, isOvertime } = this.assertConsistent({
+      status: targetStatus,
+      checkIn: attendance.check_in,
+      checkOut: attendance.check_out,
+      workingHours: updateAttendanceDto.working_hours,
+      overtimeHours: updateAttendanceDto.overtime_hours,
+      isOvertime: updateAttendanceDto.is_overtime,
+      breakMinutes: attendance.shift?.break_duration_minutes ?? 0,
+    });
+
+    attendance.working_hours = workingHours;
     attendance.attendance_status = targetStatus;
-
-    attendance.overtime_hours =
-      updateAttendanceDto.overtime_hours ?? attendance.overtime_hours;
-
-    attendance.is_overtime =
-      updateAttendanceDto.is_overtime ?? attendance.is_overtime;
+    attendance.overtime_hours = overtimeHours;
+    attendance.is_overtime = isOvertime;
 
     const updatedAttendance = await this.attendanceRepository.save(attendance);
 
@@ -576,8 +798,8 @@ export class AttendanceService {
     // Auto Zero Appraisal
     // ==========================================
 
-    if (updatedAttendance.attendance_status.toUpperCase() === 'ABSENT') {
-      await this.performanceReviewService.createAbsentReview(updatedAttendance);
+    if (targetStatus === 'Absent') {
+      await this.writeAbsentReview(updatedAttendance);
     }
 
     return updatedAttendance;
@@ -594,6 +816,246 @@ export class AttendanceService {
     return {
       message: 'Attendance deleted successfully',
     };
+  }
+
+  // ==========================================
+  // UPDATE BY ID — the HR correction path
+  // ==========================================
+
+  /**
+   * Corrects one attendance row, addressed by its own id.
+   *
+   * `update` above finds the row by (caller, date), which is right for an
+   * employee closing their own day and useless for HR fixing someone else's
+   * Tuesday — there was no route that could do it, which is why the Attendance
+   * Records screen's edit dialog had nothing to call.
+   *
+   * Unlike `update`, this deliberately allows an existing stamp to be replaced:
+   * a correction whose whole purpose is fixing a wrong check-in cannot be
+   * refused on the grounds that a check-in already exists. Every other rule —
+   * status vocabulary, stamp/status coherence, derived hours — is the shared
+   * `assertConsistent`, so a correction cannot produce a row that `create`
+   * would have rejected.
+   */
+  async updateById(
+    id: string,
+    dto: UpdateAttendanceDto,
+  ): Promise<AttendanceWithWorkingDay> {
+    const attendance = await this.attendanceRepository.findOne({
+      where: { attendance_id: id },
+      relations: [
+        'user',
+        'user.department',
+        'user.designation',
+        'shift',
+        'performanceReviews',
+      ],
+    });
+
+    if (!attendance) {
+      throw new NotFoundException('Attendance record not found');
+    }
+
+    const targetStatus = this.normaliseStatus(
+      dto.attendance_status ?? attendance.attendance_status,
+    );
+
+    // `undefined` means "leave as-is"; `null` means "clear it". The correction
+    // dialog needs the second one to turn a Present day into an Absent one.
+    const nextCheckIn =
+      dto.check_in === undefined
+        ? attendance.check_in
+        : (dto.check_in ?? undefined);
+    const nextCheckOut =
+      dto.check_out === undefined
+        ? attendance.check_out
+        : (dto.check_out ?? undefined);
+
+    if (
+      targetStatus === 'Absent' &&
+      !(await this.isWorkingDayForUser(
+        attendance.user,
+        attendance.attendance_date,
+      ))
+    ) {
+      throw new BadRequestException(
+        `${this.formatDate(attendance.attendance_date)} is not a working day for this employee, so it cannot be recorded as Absent.`,
+      );
+    }
+
+    const { workingHours, overtimeHours, isOvertime } = this.assertConsistent({
+      status: targetStatus,
+      checkIn: nextCheckIn,
+      checkOut: nextCheckOut,
+      workingHours: dto.working_hours,
+      overtimeHours: dto.overtime_hours,
+      isOvertime: dto.is_overtime,
+      breakMinutes: attendance.shift?.break_duration_minutes ?? 0,
+    });
+
+    attendance.check_in = nextCheckIn;
+    attendance.check_out = nextCheckOut;
+    attendance.attendance_status = targetStatus;
+    attendance.working_hours = workingHours;
+    attendance.overtime_hours = overtimeHours;
+    attendance.is_overtime = isOvertime;
+
+    const saved = await this.attendanceRepository.save(attendance);
+
+    if (targetStatus === 'Absent') {
+      await this.writeAbsentReview(saved);
+    }
+
+    const [decorated] = await this.decorateWithWorkingDay([saved]);
+    return decorated;
+  }
+
+  // ==========================================
+  // BULK MARK — HR filing one date for many employees
+  // ==========================================
+
+  /**
+   * Applies one status, on one date, to a list of employees.
+   *
+   * Every employee goes through `create`, so a bulk mark cannot file anything
+   * the single-record path would have refused — same status vocabulary, same
+   * stamp/status coherence, same future-date and duplicate guards. The point of
+   * the method is the loop and the report, not a second set of rules.
+   *
+   * One employee failing does not abort the run. A shutdown day marked for two
+   * hundred people should not be lost because three of them already have a row;
+   * the caller gets a per-employee outcome and can act on the failures alone.
+   */
+  async bulkMark(
+    dto: BulkMarkAttendanceDto,
+    actorId: string,
+  ): Promise<{
+    marked: number;
+    skipped: number;
+    total: number;
+    results: Array<{
+      user_id: string;
+      employee_code: string | null;
+      employee_name: string;
+      ok: boolean;
+      reason?: string;
+    }>;
+  }> {
+    const targets = await this.resolveBulkTargets(dto);
+
+    if (targets.length === 0) {
+      throw new BadRequestException(
+        'No employees matched. Select at least one employee, or use all_active with a department that has active staff.',
+      );
+    }
+
+    const results: Array<{
+      user_id: string;
+      employee_code: string | null;
+      employee_name: string;
+      ok: boolean;
+      reason?: string;
+    }> = [];
+
+    for (const target of targets) {
+      const name =
+        `${target.first_name ?? ''} ${target.last_name ?? ''}`.trim() ||
+        target.email ||
+        target.user_id;
+
+      try {
+        await this.create(
+          {
+            attendance_date: dto.attendance_date as unknown as Date,
+            attendance_status: dto.attendance_status,
+            check_in: dto.check_in,
+            check_out: dto.check_out,
+          },
+          target.user_id,
+        );
+
+        results.push({
+          user_id: target.user_id,
+          employee_code: target.employee_code ?? null,
+          employee_name: name,
+          ok: true,
+        });
+      } catch (error) {
+        // The message from `create` is already the specific reason this row was
+        // refused — "already exists", "not a working day", "cannot have a
+        // check-in time" — so it is surfaced as-is rather than flattened.
+        results.push({
+          user_id: target.user_id,
+          employee_code: target.employee_code ?? null,
+          employee_name: name,
+          ok: false,
+          reason:
+            error instanceof Error
+              ? error.message
+              : 'Could not mark this employee.',
+        });
+      }
+    }
+
+    const marked = results.filter((r) => r.ok).length;
+
+    // Logged rather than returned: the actor is already known from the token,
+    // and a bulk write is the one attendance action with no per-row audit trail.
+    this.logger.log(
+      `Bulk mark by ${actorId}: ${dto.attendance_status} on ${dto.attendance_date} — ${marked}/${results.length} marked.`,
+    );
+
+    return {
+      marked,
+      skipped: results.length - marked,
+      total: results.length,
+      results,
+    };
+  }
+
+  /**
+   * Turns the bulk DTO's three targeting modes into a concrete employee list.
+   *
+   * An explicit `user_ids` wins over `all_active`, and an empty selection is
+   * never silently promoted to "everyone" — that is what `all_active` is for,
+   * and it has to be asked for.
+   */
+  private async resolveBulkTargets(
+    dto: BulkMarkAttendanceDto,
+  ): Promise<User[]> {
+    if (dto.user_ids?.length) {
+      const users = await this.userRepository.find({
+        where: { user_id: In(dto.user_ids) },
+        relations: ['department', 'designation', 'shift'],
+      });
+
+      const found = new Set(users.map((u) => u.user_id));
+      const missing = dto.user_ids.filter((id) => !found.has(id));
+
+      if (missing.length) {
+        throw new NotFoundException(
+          `${missing.length} of the selected employees no longer exist.`,
+        );
+      }
+
+      return users;
+    }
+
+    if (!dto.all_active) {
+      throw new BadRequestException(
+        'Select employees to mark, or set all_active to mark every active employee.',
+      );
+    }
+
+    return this.userRepository.find({
+      where: {
+        status: true,
+        ...(dto.department_id
+          ? { department: { department_id: dto.department_id } }
+          : {}),
+      },
+      relations: ['department', 'designation', 'shift'],
+    });
   }
 
   // ==========================================
@@ -699,11 +1161,22 @@ export class AttendanceService {
       const isWorkingDay =
         week[isoDayOfWeek(this.formatDate(record.attendance_date))] === true;
 
+      const punctuality = record.shift
+        ? derivePunctuality({
+            checkIn: record.check_in,
+            checkOut: record.check_out,
+            shiftStart: record.shift.start_time,
+            shiftEnd: record.shift.end_time,
+            graceMinutes: record.shift.grace_period_minutes,
+          })
+        : NO_PUNCTUALITY;
+
       out.push(
         Object.assign(record, {
           is_working_day: isWorkingDay,
           counts_as_absent:
             isWorkingDay && record.attendance_status.toUpperCase() === 'ABSENT',
+          ...punctuality,
         }) as AttendanceWithWorkingDay,
       );
     }

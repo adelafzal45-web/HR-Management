@@ -74,13 +74,17 @@ export class UpdateEmailTemplateDto {
  * see the result before committing it.
  */
 export class PreviewEmailTemplateDto {
-  @ApiPropertyOptional({ description: 'Unsaved subject to preview instead of the stored one' })
+  @ApiPropertyOptional({
+    description: 'Unsaved subject to preview instead of the stored one',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(255)
   subject?: string;
 
-  @ApiPropertyOptional({ description: 'Unsaved body to preview instead of the stored one' })
+  @ApiPropertyOptional({
+    description: 'Unsaved body to preview instead of the stored one',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(100_000)
@@ -91,7 +95,8 @@ export class PreviewEmailTemplateDto {
    * discarded there, so a caller cannot introduce new placeholders by preview.
    */
   @ApiPropertyOptional({
-    description: 'Placeholder overrides, e.g. { "employee_name": "Ayesha Khan" }',
+    description:
+      'Placeholder overrides, e.g. { "employee_name": "Ayesha Khan" }',
     type: 'object',
     additionalProperties: { type: 'string' },
   })

@@ -13,6 +13,8 @@ import { Attendance } from '../attendance/attendance.entity';
 
 import { AttendanceModule } from '../attendance/attendance.module';
 
+import { AppraisalFormsModule } from '../appraisal-forms/appraisal-forms.module';
+
 import { AuthorizationModule } from '../authorization/authorization.module';
 
 @Module({
@@ -27,6 +29,11 @@ import { AuthorizationModule } from '../authorization/authorization.module';
     ]),
 
     forwardRef(() => AttendanceModule),
+
+    // For AppraisalFormResolverService — the shared "which form applies to this
+    // employee" rule. AppraisalFormsModule depends on nothing that leads back
+    // here, so this is a plain import rather than a forwardRef.
+    AppraisalFormsModule,
 
     AuthorizationModule,
   ],

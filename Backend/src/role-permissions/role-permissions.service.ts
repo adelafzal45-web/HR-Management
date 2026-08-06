@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UpdateRolePermissionDto } from './dto/update-role.dto';
 import { Repository } from 'typeorm';
@@ -37,6 +41,30 @@ export class RolePermissionsService {
 
     if (!permission) {
       throw new NotFoundException('Permission not found');
+    }
+
+    /*
+     * `role_permissions` has no UNIQUE on (role_id, permission_id), so nothing
+     * at the database level stops the same grant being inserted twice. A
+     * duplicate is not harmful — `PermissionGuard` only asks whether a row
+     * exists — but it makes the Roles screen's diff wrong: it unassigns by row
+     * id, so it deletes one copy and the permission stays granted.
+     *
+     * Checked rather than caught, because there is no constraint to catch. Two
+     * concurrent grants of the same pair can still both land; that is the
+     * existing behaviour and needs the index to fix properly.
+     */
+    const duplicate = await this.rolePermissionRepository.findOne({
+      where: {
+        role: { role_id: dto.roleId },
+        permission: { permission_id: dto.permissionId },
+      },
+    });
+
+    if (duplicate) {
+      throw new ConflictException(
+        `"${role.role_name}" already grants "${permission.permission_name}".`,
+      );
     }
 
     const rolePermission = this.rolePermissionRepository.create({
@@ -97,9 +125,17 @@ export class RolePermissionsService {
   }
 
   async remove(id: string) {
-    await this.rolePermissionRepository.delete(id);
+    // `delete` reports 0 affected rows for an id that never existed rather than
+    // throwing, so without this an unassign of a stale row answered 200 and the
+    // Roles screen took it as confirmation that the grant was gone.
+    const result = await this.rolePermissionRepository.delete(id);
+
+    if (!result.affected) {
+      throw new NotFoundException('Role Permission not found');
+    }
 
     return {
+      role_permission_id: id,
       message: 'Role Permission deleted successfully',
     };
   }

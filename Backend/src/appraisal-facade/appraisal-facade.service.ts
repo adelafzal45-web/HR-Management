@@ -6,7 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import * as ExcelJS from 'exceljs';
 
 import { User } from '../users/user.entity';
 import {
@@ -14,6 +15,7 @@ import {
   FormStatus,
 } from '../appraisal-forms/appraisal-forms.entity';
 import { AppraisalFormAssignment } from '../appraisal-forms/appraisal-form-assignment.entity';
+import { AppraisalFormResolverService } from '../appraisal-forms/appraisal-form-resolver.service';
 import {
   TeamLeadAssignment,
   TeamLeadAssignmentMember,
@@ -27,6 +29,8 @@ import {
 import { AppraisalQuestionBankService } from './appraisal-question-bank.service';
 import { AppraisalFormQuestion } from '../appraisal-form-questions/appraisal-form-questions.entity';
 import { PerformanceReview } from '../performance-review/performance-review.entity';
+import { LOCKED_REVIEW_STATUSES } from '../performance-review/performance-review.constants';
+import { isUniqueViolation } from '../common/typeorm-errors';
 import {
   ReviewApproval,
   ReviewApprovalAction,
@@ -40,7 +44,10 @@ import { AuthorizationService } from '../authorization/authorization.service';
 import { Department } from '../department/department.entity';
 import { Designation } from '../designation/designation.entity';
 
+import { escapeLikeTerm } from '../common/dto/settings-list-query.dto';
 import { CreateFormDto, UpdateFormDto } from './dto/form.dto';
+import { FormListResult, FormQueryDto } from './dto/form-query.dto';
+import { ChangeFormStatusDto } from './dto/change-form-status.dto';
 import { SaveFormQuestionsDto } from './dto/save-form-questions.dto';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { SubmitEvaluationDto } from './dto/submit-evaluation.dto';
@@ -136,8 +143,25 @@ export interface FormDto {
   departmentNames: string[];
   designationNames: string[];
   reviewCount: number;
+  /**
+   * Which revision of this form is current. Starts at 1 and is bumped by
+   * `createFormVersion`, which is how a published form is reopened for editing
+   * without disturbing the reviews already scored against the old questions.
+   */
+  version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One entry in a form's revision history. */
+export interface FormVersionDto {
+  version: number;
+  /** True for the version the form is on now — the one edits and publishes hit. */
+  isCurrent: boolean;
+  /** Active question links recorded against this version. */
+  questionCount: number;
+  /** Reviews submitted while this version was current. */
+  reviewCount: number;
 }
 
 export interface FormDetailDto extends FormDto {
@@ -258,13 +282,14 @@ export interface AnalyticsDto {
 }
 
 /**
- * Statuses that make a review read-only.
+ * Ceiling on rows in a forms .xlsx export.
  *
- * `Draft` is the only writable state — it covers both a scheduler-generated
- * placeholder and a review HR has reopened. Everything else has been submitted,
- * which means someone may already have acted on the numbers.
+ * Each row costs three related queries in `toFormDto`, so an unbounded export
+ * of a large form catalogue is a slow request that holds a connection open.
+ * Mirrors `MAX_EXPORT_ROWS` in the stats service, at a lower bound because
+ * forms number in the hundreds where reviews number in the thousands.
  */
-const LOCKED_REVIEW_STATUSES = ['Submitted', 'Approved', 'Rejected'];
+const MAX_FORM_EXPORT_ROWS = 1000;
 
 /** A validated answer, normalised onto 0–100 before anything is persisted. */
 interface ResolvedAnswer {
@@ -307,6 +332,8 @@ export class AppraisalFacadeService {
     private readonly assignmentRepository: Repository<AppraisalFormAssignment>,
 
     private readonly performanceReviewService: PerformanceReviewService,
+
+    private readonly formResolver: AppraisalFormResolverService,
 
     private readonly questionBank: AppraisalQuestionBankService,
 
@@ -437,12 +464,210 @@ export class AppraisalFacadeService {
   // FORMS — HR/Admin
   // ==========================================================================
 
-  async listForms(): Promise<FormDto[]> {
-    const forms = await this.formRepository.find({
-      order: { created_at: 'DESC' },
+  /**
+   * The forms list, filtered / sorted / paged in the database.
+   *
+   * Only the requested page is projected into DTOs. `toFormDto` runs three
+   * related queries per form, so projecting the whole table to satisfy a
+   * 10-row page was the dominant cost on this screen.
+   *
+   * `questionCount` and `reviewCount` are not columns, so they sort through
+   * correlated subqueries. Only active links are counted, matching the
+   * `questionCount` the DTO reports.
+   */
+  async listForms(query: FormQueryDto): Promise<FormListResult<FormDto>> {
+    const qb = this.formRepository.createQueryBuilder('form');
+
+    const term = query.search?.trim();
+    if (term) {
+      // ILIKE for case-insensitive matching on Postgres; the term is escaped so
+      // a typed `%` or `_` matches itself rather than everything.
+      const pattern = `%${escapeLikeTerm(term)}%`;
+      qb.andWhere(
+        '(form.form_name ILIKE :pattern OR form.description ILIKE :pattern)',
+        { pattern },
+      );
+    }
+
+    if (query.status) {
+      qb.andWhere('form.status = :status', { status: query.status });
+    }
+
+    if (query.evaluationType) {
+      qb.andWhere('form.evaluation_type = :evaluationType', {
+        evaluationType: query.evaluationType,
+      });
+    }
+
+    /*
+     * Audience filters are EXISTS rather than joins: a form assigned to three
+     * departments would otherwise return three rows and corrupt both the page
+     * size and `total`.
+     */
+    if (query.departmentId) {
+      qb.andWhere(
+        `EXISTS (
+           SELECT 1 FROM appraisal_form_assignments afa
+           WHERE afa.form_id = form.form_id
+             AND afa.department_id = :departmentId
+         )`,
+        { departmentId: query.departmentId },
+      );
+    }
+
+    if (query.designationId) {
+      qb.andWhere(
+        `EXISTS (
+           SELECT 1 FROM appraisal_form_assignments afa
+           WHERE afa.form_id = form.form_id
+             AND afa.designation_id = :designationId
+         )`,
+        { designationId: query.designationId },
+      );
+    }
+
+    const direction = query.order;
+
+    switch (query.sortBy) {
+      case 'formName':
+        qb.orderBy('LOWER(form.form_name)', direction);
+        break;
+      case 'evaluationType':
+        qb.orderBy('form.evaluation_type', direction);
+        break;
+      case 'status':
+        qb.orderBy('form.status', direction);
+        break;
+      case 'questionCount':
+        qb.addSelect(
+          `(SELECT COUNT(*) FROM appraisal_form_questions afq
+             WHERE afq.form_id = form.form_id AND afq.is_active = true)`,
+          'question_count',
+        ).orderBy('question_count', direction);
+        break;
+      case 'activeWeightTotal':
+        /*
+         * COALESCE, not a bare SUM: a form with no active questions sums to
+         * NULL, and NULLs sort to one end regardless of direction — those forms
+         * would sit above 100% forms on an ascending sort. The DTO reports 0 for
+         * them, so 0 is what we order by.
+         */
+        qb.addSelect(
+          `(SELECT COALESCE(SUM(afq.weight_percentage), 0)
+              FROM appraisal_form_questions afq
+             WHERE afq.form_id = form.form_id AND afq.is_active = true)`,
+          'weight_total',
+        ).orderBy('weight_total', direction);
+        break;
+      case 'reviewCount':
+        qb.addSelect(
+          `(SELECT COUNT(*) FROM performance_reviews pr
+             WHERE pr.form_id = form.form_id)`,
+          'review_count',
+        ).orderBy('review_count', direction);
+        break;
+      case 'createdAt':
+        qb.orderBy('form.created_at', direction);
+        break;
+      default:
+        qb.orderBy('form.updated_at', direction);
+    }
+
+    // Ties on a non-unique key (status, evaluation type) would otherwise order
+    // arbitrarily, letting a row appear on two pages or on none.
+    qb.addOrderBy('form.form_id', 'ASC');
+
+    const pageSize = query.pageSize;
+    const page = query.page;
+
+    const [forms, total] = await qb
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+
+    return {
+      data: await Promise.all(forms.map((form) => this.toFormDto(form))),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
+  /**
+   * The forms list as .xlsx.
+   *
+   * Applies the caller's filters but ignores `page` / `pageSize`: an export of
+   * "page 2 of 5" is a bug report waiting to happen. Capped at
+   * `MAX_FORM_EXPORT_ROWS`, with a note written into the sheet when the cap is
+   * hit so a truncated file cannot be mistaken for a complete one.
+   */
+  async exportFormsToExcel(query: FormQueryDto): Promise<Buffer> {
+    /*
+     * A real DTO instance, not a spread literal: `order` is a prototype getter
+     * and would be lost by `{ ...query }`, silently flipping every export back
+     * to descending.
+     */
+    const exportQuery = Object.assign(new FormQueryDto(), query, {
+      page: 1,
+      pageSize: MAX_FORM_EXPORT_ROWS,
     });
 
-    return Promise.all(forms.map((form) => this.toFormDto(form)));
+    const all = await this.listForms(exportQuery);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'HRMS';
+    const sheet = workbook.addWorksheet('Evaluation Forms');
+
+    sheet.columns = [
+      { header: 'Form Name', key: 'formName', width: 32 },
+      { header: 'Description', key: 'description', width: 40 },
+      { header: 'Schedule', key: 'evaluationType', width: 14 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Active', key: 'isActive', width: 9 },
+      { header: 'Departments', key: 'departments', width: 30 },
+      { header: 'Designations', key: 'designations', width: 30 },
+      { header: 'Questions', key: 'questionCount', width: 11 },
+      { header: 'Weight %', key: 'activeWeightTotal', width: 11 },
+      { header: 'Evaluations', key: 'reviewCount', width: 12 },
+      { header: 'Created', key: 'createdAt', width: 14 },
+      { header: 'Updated', key: 'updatedAt', width: 14 },
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { vertical: 'middle' };
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    for (const form of all.data) {
+      sheet.addRow({
+        formName: form.formName,
+        description: form.description,
+        evaluationType: form.evaluationType,
+        status: form.status,
+        isActive: form.isActive ? 'Yes' : 'No',
+        // Joined rather than one row per audience entry: the sheet mirrors the
+        // table, where a form is one row regardless of how broadly it applies.
+        departments: form.departmentNames.join(', ') || '—',
+        designations: form.designationNames.join(', ') || '—',
+        questionCount: form.questionCount,
+        activeWeightTotal: form.activeWeightTotal,
+        reviewCount: form.reviewCount,
+        createdAt: form.createdAt,
+        updatedAt: form.updatedAt,
+      });
+    }
+
+    sheet.getColumn('activeWeightTotal').numFmt = '0.00';
+
+    if (all.total > all.data.length) {
+      const note = sheet.addRow({});
+      note.getCell(1).value =
+        `Truncated: showing ${all.data.length} of ${all.total} matching forms. Narrow the filters to export the rest.`;
+      note.font = { italic: true };
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer as ArrayBuffer);
   }
 
   async getForm(formId: string): Promise<FormDetailDto> {
@@ -517,9 +742,7 @@ export class AppraisalFacadeService {
         where: { form_name: name },
       });
       if (duplicate && duplicate.form_id !== formId) {
-        throw new ConflictException(
-          `A form named "${name}" already exists.`,
-        );
+        throw new ConflictException(`A form named "${name}" already exists.`);
       }
       form.form_name = name;
     }
@@ -673,6 +896,10 @@ export class AppraisalFacadeService {
           linkRepo.create({
             appraisalForm: created,
             question: fq.question,
+            // A copy starts its own history at version 1 regardless of how many
+            // revisions the source went through — the source's versions describe
+            // the source's reviews, and this form has none.
+            version: 1,
             display_order: fq.display_order,
             weight_percentage: fq.weight_percentage,
             is_required: fq.is_required,
@@ -700,6 +927,158 @@ export class AppraisalFacadeService {
     });
 
     return this.toFormDto(copy);
+  }
+
+  /**
+   * Opens a published form for editing by starting a new version of it.
+   *
+   * The alternative — letting the questions be edited in place — is what the
+   * publish snapshot exists to prevent: reviews are scored against frozen
+   * wording and weights, and rewriting those would silently change what an
+   * already-submitted score meant. Duplicating is the other escape hatch, but a
+   * duplicate is a *different* form: it needs a new name, it does not inherit
+   * the original's history, and the audience has to be reassigned.
+   *
+   * A version keeps the form's identity. The previous version's link rows are
+   * left exactly as they are, so `performance_review_answers.form_question_id`
+   * still resolves to the question each answer was given against; the new
+   * version gets its own copies to edit. Nothing about existing reviews moves.
+   *
+   * The form drops back to Draft for the duration. That is deliberate: a form
+   * mid-rework is not one reviewers should be scoring against, and
+   * `resolveFormForEmployee` only picks Published rows. Publishing again
+   * snapshots the new version and makes it the one new reviews use.
+   */
+  async createFormVersion(formId: string, actorId: string): Promise<FormDto> {
+    const form = await this.formRepository.findOne({
+      where: { form_id: formId },
+    });
+    if (!form) {
+      throw new NotFoundException('Appraisal form not found');
+    }
+
+    if (form.status === FormStatus.ARCHIVED) {
+      throw new BadRequestException(
+        'Restore this form from the archive before starting a new version.',
+      );
+    }
+
+    // A Draft is already editable in place. Versioning it would leave an empty
+    // version behind and imply a history that never existed.
+    if (form.status === FormStatus.DRAFT) {
+      throw new BadRequestException(
+        'This form is already a Draft — edit its questions directly.',
+      );
+    }
+
+    const currentVersion = form.version ?? 1;
+    const nextVersion = currentVersion + 1;
+
+    const current = await this.loadFormQuestions(
+      this.formQuestionRepository.manager,
+      formId,
+      currentVersion,
+    );
+
+    await this.dataSource.transaction(async (manager) => {
+      const formRepo = manager.getRepository(AppraisalForms);
+      const linkRepo = manager.getRepository(AppraisalFormQuestion);
+
+      for (const fq of current) {
+        await linkRepo.save(
+          linkRepo.create({
+            appraisalForm: form,
+            question: fq.question,
+            version: nextVersion,
+            display_order: fq.display_order,
+            weight_percentage: fq.weight_percentage,
+            is_required: fq.is_required,
+            is_active: fq.is_active,
+            description: fq.description ?? null,
+            rating_scale: fq.rating_scale,
+            min_label: fq.min_label ?? null,
+            max_label: fq.max_label ?? null,
+            /*
+             * Snapshots are deliberately not carried over. The new version is a
+             * Draft, and a Draft reads the live bank — copying the freeze would
+             * show the builder wording it cannot edit, which is the exact
+             * confusion `saveFormQuestions` clears these columns to avoid.
+             */
+            snapshot_text: null,
+            snapshot_type: null,
+            snapshot_description: null,
+            snapshot_options: null,
+          }),
+        );
+      }
+
+      form.version = nextVersion;
+      form.status = FormStatus.DRAFT;
+      await formRepo.save(form);
+    });
+
+    await this.audit.record({
+      actor: { user_id: actorId },
+      action: 'appraisal.form.version',
+      entityType: 'appraisal_forms',
+      entityId: formId,
+      before: { version: currentVersion, status: FormStatus.PUBLISHED },
+      after: { version: nextVersion, status: FormStatus.DRAFT },
+    });
+
+    const fresh = await this.formRepository.findOne({
+      where: { form_id: formId },
+    });
+    return this.toFormDto(fresh ?? form);
+  }
+
+  /**
+   * The version history of one form: how many questions each version carried and
+   * how many reviews were scored against it.
+   *
+   * Review counts come from `performance_reviews.form_version`, which is stamped
+   * at submission. Reviews predating versioning have a NULL there and are
+   * counted as version 1 — that is what the migration backfilled them to, and
+   * leaving them uncounted would report a version that plainly has history as
+   * having none.
+   */
+  async listFormVersions(formId: string): Promise<FormVersionDto[]> {
+    const form = await this.formRepository.findOne({
+      where: { form_id: formId },
+    });
+    if (!form) {
+      throw new NotFoundException('Appraisal form not found');
+    }
+
+    const currentVersion = form.version ?? 1;
+
+    const links = await this.formQuestionRepository.find({
+      where: { appraisalForm: { form_id: formId } },
+      select: { form_question_id: true, version: true, is_active: true },
+    });
+
+    const reviews = await this.dataSource
+      .getRepository(PerformanceReview)
+      .find({
+        where: { appraisalForm: { form_id: formId } },
+        select: { review_id: true, form_version: true },
+      });
+
+    const versions = new Set<number>([currentVersion]);
+    for (const link of links) versions.add(link.version ?? 1);
+    for (const review of reviews) versions.add(review.form_version ?? 1);
+
+    return [...versions]
+      .sort((a, b) => b - a)
+      .map((version) => ({
+        version,
+        isCurrent: version === currentVersion,
+        questionCount: links.filter(
+          (l) => (l.version ?? 1) === version && l.is_active,
+        ).length,
+        reviewCount: reviews.filter((r) => (r.form_version ?? 1) === version)
+          .length,
+      }));
   }
 
   /**
@@ -852,11 +1231,131 @@ export class AppraisalFacadeService {
   }
 
   /**
+   * The one entry point for lifecycle changes from the list screen: publish,
+   * unpublish, archive, restore, activate, deactivate.
+   *
+   * Publishing routes through `publishForm` rather than setting the column, so
+   * the weight rules and the question snapshotting cannot be bypassed by
+   * choosing "Published" from a dropdown instead of clicking Publish.
+   *
+   * Published → Draft is permitted even with reviews on the form. Versioning is
+   * what makes that safe: reviews keep resolving their answers through the link
+   * rows of the version they were scored against, so reopening the current
+   * version for editing cannot reach them. It is still the blunt option —
+   * an unpublished form resolves for nobody, so no new evaluations can be
+   * created until it is published again. `createFormVersion` is the flow that
+   * keeps the form live while it is reworked.
+   *
+   * Draft → Archived is allowed, but the reverse restores to Draft, never to
+   * Published — a form that was archived mid-draft is not publish-ready, and
+   * re-publishing has to re-run the weight checks.
+   */
+  async changeFormStatus(
+    formId: string,
+    dto: ChangeFormStatusDto,
+    actorId: string,
+  ): Promise<FormDto> {
+    if (dto.status === undefined && dto.isActive === undefined) {
+      throw new BadRequestException(
+        'Provide a status, an isActive flag, or both.',
+      );
+    }
+
+    const form = await this.formRepository.findOne({
+      where: { form_id: formId },
+    });
+    if (!form) {
+      throw new NotFoundException('Appraisal form not found');
+    }
+
+    const before = { status: form.status, is_active: form.is_active };
+
+    // Publishing has its own validation and snapshot pass. Delegate, then apply
+    // any isActive change on top of the freshly published row.
+    if (
+      dto.status === FormStatus.PUBLISHED &&
+      form.status !== FormStatus.PUBLISHED
+    ) {
+      if (form.status === FormStatus.ARCHIVED) {
+        throw new BadRequestException(
+          'Restore this form from the archive before publishing it.',
+        );
+      }
+      await this.publishForm(formId);
+      if (dto.isActive === false) {
+        await this.formRepository.update(formId, { is_active: false });
+      }
+      return this.finishStatusChange(formId, before, dto, actorId, form);
+    }
+
+    if (dto.status !== undefined && dto.status !== form.status) {
+      if (dto.status === FormStatus.DRAFT) {
+        /*
+         * Unpublishing is now allowed even when reviews exist. With versioning,
+         * a form can be edited while reviews stay scored against their frozen
+         * version, so the publish-then-lock flow is no longer the only way to
+         * rework a form. That said, unpublishing is rarely what you want: it
+         * removes the form from `resolveFormForEmployee`, so no new reviews can
+         * be created until you publish again. Starting a new version keeps the
+         * old one live while you edit.
+         */
+        form.status = FormStatus.DRAFT;
+        // A restored-or-unpublished form is editable again, so it must not stay
+        // flagged inactive from its archived state unless asked.
+        form.is_active = dto.isActive ?? true;
+      } else if (dto.status === FormStatus.ARCHIVED) {
+        form.status = FormStatus.ARCHIVED;
+        // Archived and active is a contradiction: the scheduler reads is_active
+        // to decide what to generate, so an "active archive" would keep
+        // producing evaluations for a retired form.
+        form.is_active = false;
+      }
+    }
+
+    if (dto.isActive !== undefined && form.status !== FormStatus.ARCHIVED) {
+      form.is_active = dto.isActive;
+    }
+
+    await this.formRepository.save(form);
+    return this.finishStatusChange(formId, before, dto, actorId, form);
+  }
+
+  /** Audit-and-return tail shared by both branches of `changeFormStatus`. */
+  private async finishStatusChange(
+    formId: string,
+    before: { status: string; is_active: boolean },
+    dto: ChangeFormStatusDto,
+    actorId: string,
+    fallback: AppraisalForms,
+  ): Promise<FormDto> {
+    const fresh =
+      (await this.formRepository.findOne({ where: { form_id: formId } })) ??
+      fallback;
+
+    await this.audit.record({
+      actor: { user_id: actorId },
+      action: 'appraisal.form.status',
+      entityType: 'appraisal_forms',
+      entityId: formId,
+      before,
+      after: {
+        status: fresh.status,
+        is_active: fresh.is_active,
+        reason: dto.reason ?? null,
+      },
+    });
+
+    return this.toFormDto(fresh);
+  }
+
+  /**
    * Deletes a form outright only when nothing references it. Once reviews exist
    * the form is archived instead, so historical evaluations keep resolving
    * their questions and weights.
    */
-  async deleteForm(formId: string): Promise<{ archived: boolean; message: string }> {
+  async deleteForm(
+    formId: string,
+  ): Promise<{ archived: boolean; message: string }> {
     const form = await this.formRepository.findOne({
       where: { form_id: formId },
     });
@@ -958,10 +1457,7 @@ export class AppraisalFacadeService {
 
         const type = question.question_type;
 
-        if (
-          type === QuestionType.TEXT_FEEDBACK &&
-          Number(item.weightage) > 0
-        ) {
+        if (type === QuestionType.TEXT_FEEDBACK && Number(item.weightage) > 0) {
           throw new BadRequestException(
             `"${question.question_text}" is a text feedback question, so its weight must be 0% — there is nothing to score.`,
           );
@@ -972,6 +1468,10 @@ export class AppraisalFacadeService {
           formQuestionRepo.create({
             appraisalForm: form,
             question,
+            // New links belong to the version being edited, not to version 1.
+            // Without this a question added while reworking v2 would be invisible
+            // to `loadFormQuestions`, which filters on the form's current version.
+            version: form.version ?? 1,
           });
 
         link.question = question;
@@ -1192,9 +1692,11 @@ export class AppraisalFacadeService {
     formId: string,
     dto: CreateAssignmentDto,
   ): Promise<AssignmentDto> {
-    const targets = [dto.departmentId, dto.designationId, dto.employeeId].filter(
-      Boolean,
-    );
+    const targets = [
+      dto.departmentId,
+      dto.designationId,
+      dto.employeeId,
+    ].filter(Boolean);
     if (targets.length !== 1) {
       throw new BadRequestException(
         'Provide exactly one of departmentId, designationId, or employeeId.',
@@ -1289,53 +1791,17 @@ export class AppraisalFacadeService {
    * Most specific target wins: employee → designation → department. Within a
    * tier the newest assignment wins, so re-assigning supersedes without
    * needing to delete the old row first.
+   *
+   * The rule itself now lives on `AppraisalFormResolverService`, in the leaf
+   * forms module, because `PerformanceReviewService` needs the same answer when
+   * it writes an auto-zero review for an absence and cannot import this service
+   * without a cycle. This method stays as-is for its existing callers.
    */
   async resolveFormForEmployee(
     employeeId: string,
     manager?: EntityManager,
   ): Promise<AppraisalForms | null> {
-    const repo = manager
-      ? manager.getRepository(AppraisalFormAssignment)
-      : this.assignmentRepository;
-    const userRepo = manager ? manager.getRepository(User) : this.userRepository;
-
-    const employee = await userRepo.findOne({
-      where: { user_id: employeeId },
-      relations: { department: true, designation: true },
-    });
-    if (!employee) {
-      throw new NotFoundException('Employee not found');
-    }
-
-    const tiers: Array<FindOptionsWhere<AppraisalFormAssignment>> = [
-      { user: { user_id: employeeId } },
-    ];
-    if (employee.designation?.designation_id) {
-      tiers.push({
-        designation: { designation_id: employee.designation.designation_id },
-      });
-    }
-    if (employee.department?.department_id) {
-      tiers.push({
-        department: { department_id: employee.department.department_id },
-      });
-    }
-
-    for (const where of tiers) {
-      const match = await repo.findOne({
-        where: {
-          ...where,
-          form: { status: FormStatus.PUBLISHED, is_active: true },
-        },
-        relations: { form: true },
-        order: { created_at: 'DESC' },
-      });
-      if (match?.form) {
-        return match.form;
-      }
-    }
-
-    return null;
+    return this.formResolver.resolveFormForEmployee(employeeId, manager);
   }
 
   // ==========================================================================
@@ -1380,7 +1846,9 @@ export class AppraisalFacadeService {
     const assignmentRepo = manager
       ? manager.getRepository(TeamLeadAssignment)
       : this.dataSource.getRepository(TeamLeadAssignment);
-    const userRepo = manager ? manager.getRepository(User) : this.userRepository;
+    const userRepo = manager
+      ? manager.getRepository(User)
+      : this.userRepository;
 
     const assignments = await assignmentRepo.find({
       where: { teamLead: { user_id: leadId } },
@@ -1460,7 +1928,9 @@ export class AppraisalFacadeService {
       return this.resolveVisibleEmployeeIds(reviewerId, manager);
     }
 
-    const userRepo = manager ? manager.getRepository(User) : this.userRepository;
+    const userRepo = manager
+      ? manager.getRepository(User)
+      : this.userRepository;
 
     // Active only, matching the roster resolver: a deactivated account has
     // nothing to evaluate, and an administrator is not an exception to that.
@@ -1513,30 +1983,60 @@ export class AppraisalFacadeService {
       return [];
     }
 
-    // Latest review per member, authored by this reviewer.
+    // Reviews for these members, whoever wrote them.
+    //
+    // The roster question is "has this period been evaluated", not "did *I*
+    // evaluate it": two leads can share a member, HR can evaluate anyone, and
+    // the absence job writes reviews with no lead involved at all. Scoping this
+    // to `reviewer: requesterId` reported Pending for work that was already
+    // done — and then invited a second submission that the unique index on
+    // (reviewee, form, period) rejects.
+    //
+    // Drafts are excluded: the scheduler pre-creates one per member per period,
+    // so counting them would flip the whole roster to Completed the moment the
+    // job runs, and their 0% would headline `lastScore`.
     const reviews = await this.dataSource
       .getRepository(PerformanceReview)
       .find({
         where: {
-          reviewer: { user_id: requesterId },
           reviewee: { user_id: In(members.map((m) => m.user_id)) },
+          status: In(LOCKED_REVIEW_STATUSES),
         },
-        relations: { reviewee: true },
+        relations: { reviewee: true, appraisalForm: true },
         order: { created_at: 'DESC' },
       });
 
-    const latestByEmployee = new Map<string, PerformanceReview>();
+    // Newest-first within each employee, inherited from the query order.
+    const historyByEmployee = new Map<string, PerformanceReview[]>();
     for (const review of reviews) {
       const id = review.reviewee?.user_id;
-      if (id && !latestByEmployee.has(id)) {
-        latestByEmployee.set(id, review);
-      }
+      if (!id) continue;
+      const history = historyByEmployee.get(id);
+      if (history) history.push(review);
+      else historyByEmployee.set(id, [review]);
     }
+
+    const now = new Date();
 
     return Promise.all(
       members.map(async (member) => {
         const form = await this.resolveFormForEmployee(member.user_id);
-        const latest = latestByEmployee.get(member.user_id);
+        const history = historyByEmployee.get(member.user_id) ?? [];
+        const latest = history[0] ?? null;
+
+        // Pending is about the period that is open now, on the form this member
+        // is actually assigned. A review from last month, or against a form
+        // they have since been moved off, does not settle this one.
+        const currentPeriod = form
+          ? cadenceFor(form.evaluation_type).periodKey(now)
+          : null;
+        const doneThisPeriod =
+          form !== null &&
+          history.some(
+            (review) =>
+              review.appraisalForm?.form_id === form.form_id &&
+              review.review_period === currentPeriod,
+          );
 
         return {
           employeeId: member.user_id,
@@ -1554,7 +2054,7 @@ export class AppraisalFacadeService {
           assignedFormName: form?.form_name ?? null,
           evaluationStatus: !form
             ? ('Unassigned' as const)
-            : latest
+            : doneThisPeriod
               ? ('Completed' as const)
               : ('Pending' as const),
           lastReviewedAt: latest ? this.toDateString(latest.review_date) : null,
@@ -1568,24 +2068,36 @@ export class AppraisalFacadeService {
 
   async getTeamStats(requesterId: string): Promise<TeamStatsDto> {
     const team = await this.getMyTeam(requesterId);
+
+    // Counted the same way the roster labels each row, so the header card and
+    // the table cannot disagree: done / outstanding *for the period that is
+    // open now*. Members with no assigned form are in neither bucket — nothing
+    // is expected of them, so counting them as pending would make a completion
+    // rate no lead can ever reach.
+    const evaluated = team.filter(
+      (m) => m.evaluationStatus === 'Completed',
+    ).length;
+    const pending = team.filter((m) => m.evaluationStatus === 'Pending').length;
+    const expected = evaluated + pending;
+
+    // Scores are a separate question: the distribution is of the latest score
+    // on record, which is worth showing even when it predates this period.
     const scored = team.filter((m) => m.lastScore !== null);
 
-    const evaluated = scored.length;
-    const teamSize = team.length;
-
     const average =
-      evaluated > 0
+      scored.length > 0
         ? this.roundTo2(
-            scored.reduce((sum, m) => sum + (m.lastScore ?? 0), 0) / evaluated,
+            scored.reduce((sum, m) => sum + (m.lastScore ?? 0), 0) /
+              scored.length,
           )
         : null;
 
     return {
-      teamSize,
+      teamSize: team.length,
       evaluated,
-      pending: teamSize - evaluated,
+      pending,
       completionRate:
-        teamSize > 0 ? this.roundTo2((evaluated / teamSize) * 100) : 0,
+        expected > 0 ? this.roundTo2((evaluated / expected) * 100) : 0,
       averageScore: average,
       distribution: this.toDistribution(scored.map((m) => m.lastScore ?? 0)),
     };
@@ -1692,7 +2204,7 @@ export class AppraisalFacadeService {
 
         assignment.department = department;
       } else {
-        const memberIds = [...new Set(dto.memberIds!)];
+        const memberIds = [...new Set(dto.memberIds)];
         if (memberIds.includes(dto.teamLeadId)) {
           throw new BadRequestException(
             'A Team Lead cannot be a member of their own team — self-evaluation is not allowed.',
@@ -2090,11 +2602,18 @@ export class AppraisalFacadeService {
     // perform.
     const reviewPeriod = cadenceFor(form.evaluation_type).periodKey(new Date());
 
+    /*
+     * Keyed on reviewee + form + period and nothing else, to match both
+     * `UQ_pr_reviewee_form_period` and the lookup in `submitEvaluation`. Scoping
+     * it to the requesting reviewer as well hid the scheduler's Draft (stamped
+     * with `team_lead_id`) and any submission written by another lead, so this
+     * screen offered a blank form for a period that was already taken — and the
+     * conflict only appeared after the evaluation had been filled in.
+     */
     const existingReview = await this.dataSource
       .getRepository(PerformanceReview)
       .findOne({
         where: {
-          reviewer: { user_id: reviewerId },
           reviewee: { user_id: employeeId },
           appraisalForm: { form_id: form.form_id },
           review_period: reviewPeriod,
@@ -2198,23 +2717,41 @@ export class AppraisalFacadeService {
         );
       }
 
-      // One review per reviewer + employee + form + period. A submitted review
-      // is LOCKED: the previous behaviour here silently overwrote it, which meant
-      // an approved evaluation could be rewritten after the fact with no trace.
+      // One review per reviewee + form + period. A submitted review is LOCKED:
+      // the previous behaviour here silently overwrote it, which meant an
+      // approved evaluation could be rewritten after the fact with no trace.
       // Re-submitting now conflicts, and the only way back is an HR reopen —
       // which leaves a REOPEN row in review_approvals.
+      //
+      // The lookup deliberately does NOT filter on the reviewer, because
+      // `UQ_pr_reviewee_form_period` does not either. The scheduler stamps its
+      // Drafts with `employee.team_lead_id`, which is not necessarily whoever is
+      // submitting now — a second lead, an HR user, or a lead added after the
+      // Draft was generated all reach this code. Matching on reviewer as well
+      // missed those rows, fell through to the INSERT below, and surfaced the
+      // unique-index violation as a raw 500 instead of filling in the Draft.
       let review = await reviewRepo.findOne({
         where: {
-          reviewer: { user_id: reviewerId },
           reviewee: { user_id: employeeId },
           appraisalForm: { form_id: form.form_id },
           review_period: dto.reviewPeriod,
         },
+        relations: { reviewer: true },
       });
 
       if (review && LOCKED_REVIEW_STATUSES.includes(review.status)) {
+        // Name the reviewer when it was somebody else, so a lead who did not
+        // write it is not left thinking the system lost their submission.
+        const other =
+          review.reviewer && review.reviewer.user_id !== reviewerId
+            ? ` by ${
+                `${review.reviewer.first_name ?? ''} ${
+                  review.reviewer.last_name ?? ''
+                }`.trim() || review.reviewer.email
+              }`
+            : '';
         throw new ConflictException(
-          `This evaluation was already submitted for ${dto.reviewPeriod} (status: ${review.status}) and is locked. Ask HR to reopen it before making changes.`,
+          `This evaluation was already submitted${other} for ${dto.reviewPeriod} (status: ${review.status}) and is locked. Ask HR to reopen it before making changes.`,
         );
       }
 
@@ -2233,6 +2770,21 @@ export class AppraisalFacadeService {
         review.locked_at = now;
         review.appraisalForm = form;
         review.evaluation_type = form.evaluation_type;
+        /*
+         * The reviewer is taken over by whoever actually filled the form in.
+         * `assertCanReview` above has already established that this user is
+         * allowed to review this employee, and the row can only hold one
+         * reviewer — recording the scheduler's guess instead of the person who
+         * did the work would misattribute the evaluation.
+         */
+        review.reviewer = reviewer;
+        /*
+         * Restamped rather than left alone. A scheduler-generated Draft can sit
+         * unanswered while HR publishes a new version of the form; the answers
+         * being written now are against the questions loaded above, which are
+         * the current version's, so that is the version this review belongs to.
+         */
+        review.form_version = form.version ?? 1;
         review = await reviewRepo.save(review);
       } else {
         review = reviewRepo.create({
@@ -2248,8 +2800,24 @@ export class AppraisalFacadeService {
           locked_at: now,
           comments: dto.comments,
           recommendation: dto.recommendation,
+          // Lock which version the review was scored against, so editing the form
+          // later doesn't silently change what these answers meant.
+          form_version: form.version ?? 1,
         });
-        review = await reviewRepo.save(review);
+        try {
+          review = await reviewRepo.save(review);
+        } catch (error) {
+          // The gap between the SELECT above and this INSERT is small but real:
+          // the scheduler, or a second lead pressing Submit at the same moment,
+          // can land the row in between. That is the index doing its job, so it
+          // is reported as the conflict it is rather than a 500.
+          if (isUniqueViolation(error)) {
+            throw new ConflictException(
+              `An evaluation for ${dto.reviewPeriod} was created by someone else while this one was being submitted. Reopen the form to see the current version.`,
+            );
+          }
+          throw error;
+        }
       }
 
       const optionRepo = manager.getRepository(AppraisalQuestionOption);
@@ -2337,16 +2905,36 @@ export class AppraisalFacadeService {
   // ==========================================================================
 
   async getMyEvaluations(employeeId: string): Promise<MyEvaluationsDto> {
-    const reviews = await this.dataSource.getRepository(PerformanceReview).find({
-      where: { reviewee: { user_id: employeeId } },
-      relations: {
-        reviewee: true,
-        reviewer: true,
-        appraisalForm: true,
-        answers: { formQuestion: { question: true }, selectedOption: true },
-      },
-      order: { review_date: 'DESC', created_at: 'DESC' },
-    });
+    const reviews = await this.dataSource
+      .getRepository(PerformanceReview)
+      .find({
+        /*
+         * Submitted and later only — a Draft is not an evaluation yet.
+         *
+         * The scheduler generates a Draft per employee per period the moment the
+         * period opens, scored 0 with no answers. Unfiltered, those placeholders
+         * reached the employee's own history: a 0% row for a review nobody had
+         * written, pulling `averageScore` down, taking `latestScore` (the sort is
+         * newest-first, and the current period's Draft is always newest), and
+         * planting a 0 on the trend chart. The employee saw a failing grade for
+         * work their lead had not evaluated yet.
+         *
+         * `LOCKED_REVIEW_STATUSES` is exactly the right set here — a review is
+         * locked precisely when it has been submitted, which is when the employee
+         * is entitled to see it.
+         */
+        where: {
+          reviewee: { user_id: employeeId },
+          status: In(LOCKED_REVIEW_STATUSES),
+        },
+        relations: {
+          reviewee: true,
+          reviewer: true,
+          appraisalForm: true,
+          answers: { formQuestion: { question: true }, selectedOption: true },
+        },
+        order: { review_date: 'DESC', created_at: 'DESC' },
+      });
 
     const evaluations = reviews.map((r) => this.toSubmittedEvaluation(r));
 
@@ -2395,31 +2983,84 @@ export class AppraisalFacadeService {
     };
   }
 
+  /**
+   * The same per-employee history/breakdown/trend as {@link getMyEvaluations},
+   * but for any employee — with a scope check so it cannot be pointed outside
+   * the caller's roster.
+   *
+   * `all` (HR/Admin) is unrestricted. `team`/`self` are confined to the ids the
+   * caller can already see, mirroring the Compare guard in AppraisalStatsService
+   * — a Team Lead lists and opens only their own team here.
+   */
+  async getEmployeeEvaluations(
+    employeeId: string,
+    viewer: { userId: string; scope: 'all' | 'team' | 'self' },
+  ): Promise<MyEvaluationsDto> {
+    if (viewer.scope !== 'all') {
+      const roster = await this.resolveVisibleEmployeeIds(viewer.userId);
+      roster.add(viewer.userId);
+      if (!roster.has(employeeId)) {
+        throw new ForbiddenException(
+          'That employee is outside the records you can view.',
+        );
+      }
+    }
+    return this.getMyEvaluations(employeeId);
+  }
+
   // ==========================================================================
   // HR — org-wide
   // ==========================================================================
 
-  async getAllEvaluations(): Promise<SubmittedEvaluationDto[]> {
-    const reviews = await this.dataSource.getRepository(PerformanceReview).find({
-      relations: {
-        reviewee: true,
-        reviewer: true,
-        appraisalForm: true,
-        answers: { formQuestion: { question: true }, selectedOption: true },
-      },
-      order: { review_date: 'DESC', created_at: 'DESC' },
-    });
+  /**
+   * One submitted review, in the same shape the evaluation history uses.
+   *
+   * Loads the same relations as `getAllEvaluations` so `toSubmittedEvaluation`
+   * can resolve every per-question score, its selected option and remarks — the
+   * form viewer on the Results tab reads exactly this.
+   */
+  async getEvaluationById(reviewId: string): Promise<SubmittedEvaluationDto> {
+    const review = await this.dataSource
+      .getRepository(PerformanceReview)
+      .findOne({
+        where: { review_id: reviewId },
+        relations: {
+          reviewee: true,
+          reviewer: true,
+          appraisalForm: true,
+          answers: { formQuestion: { question: true }, selectedOption: true },
+        },
+      });
+
+    if (!review) throw new NotFoundException('Review not found.');
+
+    return this.toSubmittedEvaluation(review);
+  }
+
+  async getAllEvaluations(): Promise<SubmittedEvaluationDto[]> {    const reviews = await this.dataSource
+      .getRepository(PerformanceReview)
+      .find({
+        relations: {
+          reviewee: true,
+          reviewer: true,
+          appraisalForm: true,
+          answers: { formQuestion: { question: true }, selectedOption: true },
+        },
+        order: { review_date: 'DESC', created_at: 'DESC' },
+      });
 
     return reviews.map((r) => this.toSubmittedEvaluation(r));
   }
 
   async getAnalytics(): Promise<AnalyticsDto> {
-    const reviews = await this.dataSource.getRepository(PerformanceReview).find({
-      relations: {
-        reviewee: { department: true, designation: true },
-      },
-      order: { review_date: 'ASC' },
-    });
+    const reviews = await this.dataSource
+      .getRepository(PerformanceReview)
+      .find({
+        relations: {
+          reviewee: { department: true, designation: true },
+        },
+        order: { review_date: 'ASC' },
+      });
 
     const scores = reviews.map((r) => Number(r.total_score_percentage));
     const average =
@@ -2464,9 +3105,7 @@ export class AppraisalFacadeService {
       ).size,
       averageScore: average,
       distribution: this.toDistribution(scores),
-      byDepartment: group(
-        (r) => r.reviewee?.department?.department_name ?? '',
-      ),
+      byDepartment: group((r) => r.reviewee?.department?.department_name ?? ''),
       byDesignation: group((r) => r.reviewee?.designation?.title ?? ''),
       trend: [...trendBuckets.entries()].map(([period, b]) => ({
         period,
@@ -2526,6 +3165,7 @@ export class AppraisalFacadeService {
           .filter((name): name is string => Boolean(name)),
       ),
       reviewCount,
+      version: form.version ?? 1,
       createdAt: this.toDateString(form.created_at),
       updatedAt: this.toDateString(form.updated_at),
     };
@@ -2620,32 +3260,34 @@ export class AppraisalFacadeService {
   private toSubmittedEvaluation(
     review: PerformanceReview,
   ): SubmittedEvaluationDto {
-    const scores: EvaluationScoreDto[] = (review.answers ?? []).map((answer) => {
-      const fq = answer.formQuestion;
-      const scale = fq?.rating_scale ?? 10;
-      const percentage = Number(answer.answered_percentage);
-      const type = fq ? this.linkType(fq) : QuestionType.RATING;
+    const scores: EvaluationScoreDto[] = (review.answers ?? []).map(
+      (answer) => {
+        const fq = answer.formQuestion;
+        const scale = fq?.rating_scale ?? 10;
+        const percentage = Number(answer.answered_percentage);
+        const type = fq ? this.linkType(fq) : QuestionType.RATING;
 
-      return {
-        scoreId: answer.answer_id,
-        questionId: fq?.form_question_id ?? '',
-        criteriaName: fq ? this.questionLabel(fq) : '',
-        questionType: type,
-        weightage: Number(fq?.weight_percentage ?? 0),
-        ratingScale: scale,
-        // Only a rating answer came from a point on a scale, so only a rating
-        // answer can be put back onto one. Denormalising an option choice or a
-        // comment would invent a number the reviewer never gave.
-        score:
-          type === QuestionType.RATING
-            ? this.roundTo2((percentage / 100) * scale)
-            : 0,
-        scorePercentage: this.roundTo2(percentage),
-        selectedOptionId: answer.selectedOption?.option_id ?? null,
-        selectedOptionText: answer.selectedOption?.option_text ?? null,
-        remarks: answer.answer_comment ?? null,
-      };
-    });
+        return {
+          scoreId: answer.answer_id,
+          questionId: fq?.form_question_id ?? '',
+          criteriaName: fq ? this.questionLabel(fq) : '',
+          questionType: type,
+          weightage: Number(fq?.weight_percentage ?? 0),
+          ratingScale: scale,
+          // Only a rating answer came from a point on a scale, so only a rating
+          // answer can be put back onto one. Denormalising an option choice or a
+          // comment would invent a number the reviewer never gave.
+          score:
+            type === QuestionType.RATING
+              ? this.roundTo2((percentage / 100) * scale)
+              : 0,
+          scorePercentage: this.roundTo2(percentage),
+          selectedOptionId: answer.selectedOption?.option_id ?? null,
+          selectedOptionText: answer.selectedOption?.option_text ?? null,
+          remarks: answer.answer_comment ?? null,
+        };
+      },
+    );
 
     return {
       appraisalId: review.review_id,
@@ -2689,9 +3331,20 @@ export class AppraisalFacadeService {
   private async loadFormQuestions(
     manager: EntityManager,
     formId: string,
+    version?: number,
   ): Promise<AppraisalFormQuestion[]> {
+    const form = await manager.getRepository(AppraisalForms).findOne({
+      where: { form_id: formId },
+      select: { version: true },
+    });
+
+    const targetVersion = version ?? form?.version ?? 1;
+
     return manager.getRepository(AppraisalFormQuestion).find({
-      where: { appraisalForm: { form_id: formId } },
+      where: {
+        appraisalForm: { form_id: formId },
+        version: targetVersion,
+      },
       // `question.options` is needed for the option-based types; a Draft form
       // renders from it, and publishing copies it into snapshot_options.
       relations: { question: { options: true }, appraisalForm: true },

@@ -43,10 +43,7 @@ import {
   RefreshTokenGuard,
   type RefreshTokenRequest,
 } from './guards/refresh-token.guard';
-import {
-  clearRefreshTokenCookie,
-  setRefreshTokenCookie,
-} from './cookie.util';
+import { clearRefreshTokenCookie, setRefreshTokenCookie } from './cookie.util';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -242,7 +239,11 @@ export class AuthController {
     @Body() dto: ResetPasswordWithTokenDto,
     @Req() req: Request,
   ): Promise<{ message: string }> {
-    return this.passwordResetService.redeem(dto.token, dto.new_password, req.ip);
+    return this.passwordResetService.redeem(
+      dto.token,
+      dto.new_password,
+      req.ip,
+    );
   }
 
   /**

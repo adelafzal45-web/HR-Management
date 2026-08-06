@@ -19,6 +19,7 @@ import {
 import { DepartmentsService } from './department.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
+import { ReassignAndDeleteDepartmentDto } from './dto/reassign-department.dto';
 import { UseGuards } from '@nestjs/common';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
@@ -135,5 +136,69 @@ export class DepartmentsController {
   })
   remove(@Param('id') id: string) {
     return this.departmentService.delete(id);
+  }
+
+  @Get(':id/delete-impact')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('departments.delete')
+  @ApiOperation({
+    summary: 'What is blocking this department from being deleted',
+    description:
+      'Employee count, designation count and how many of those designations ' +
+      'somebody actually holds. Lets the delete dialog name the blockers ' +
+      'before the user commits.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Department UUID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Impact summary returned.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Department not found.',
+  })
+  deleteImpact(@Param('id') id: string) {
+    return this.departmentService.getDeleteImpact(id);
+  }
+
+  @Post(':id/reassign-and-delete')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('departments.delete')
+  @ApiOperation({
+    summary: 'Move employees and designations elsewhere, then delete',
+    description:
+      'Single transaction. Every employee and designation in this department ' +
+      'is moved to the target department, then this department is deleted.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Department UUID to delete',
+  })
+  @ApiBody({
+    type: ReassignAndDeleteDepartmentDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Everything moved and the department deleted.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Department or target department not found.',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Target department is the one being deleted.',
+  })
+  reassignAndDelete(
+    @Param('id') id: string,
+    @Body() dto: ReassignAndDeleteDepartmentDto,
+  ) {
+    return this.departmentService.reassignAndDelete(
+      id,
+      dto.target_department_id,
+    );
   }
 }

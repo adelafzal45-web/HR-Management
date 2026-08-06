@@ -59,6 +59,7 @@ import {
   type CreateEmployeePayload,
   type DepartmentRef,
   type Employee,
+  type EmployeeDocument,
   type JobCategoryRef,
   type LeaveTypeCatalogItem,
   type UpdateEmployeePayload,
@@ -329,6 +330,7 @@ export default function EmployeeForm({
   const [photoCleared, setPhotoCleared] = useState(false);
   const [leaveRows, setLeaveRows] = useState<LeaveSelection[]>([]);
   const [documents, setDocuments] = useState<SessionDocument[]>([]);
+  const [storedDocuments, setStoredDocuments] = useState<EmployeeDocument[]>([]);
 
   const [departments, setDepartments] = useState<DepartmentRef[]>([]);
   const [designations, setDesignations] = useState<DesignationOption[]>([]);
@@ -403,6 +405,28 @@ export default function EmployeeForm({
         // Non-fatal: the picker simply starts empty. Surfacing a toast here
         // would fire on every edit-page open for an employee who has no
         // balances yet, which is the normal case.
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [isEdit, employee?.user_id]);
+
+  // Documents already on file, so the edit form shows what is stored rather
+  // than looking empty until something new is attached.
+  useEffect(() => {
+    if (!isEdit || !employee?.user_id) return;
+    let alive = true;
+
+    employeeService
+      .listDocuments(employee.user_id)
+      .then((docs) => {
+        if (alive) setStoredDocuments(docs);
+      })
+      .catch(() => {
+        // Non-fatal, and silent for the same reason as leave balances: a user
+        // without `employees.documents.view` gets a 403 here on every open, and
+        // a toast for it would be noise on a section they cannot use anyway.
       });
 
     return () => {
@@ -722,6 +746,37 @@ export default function EmployeeForm({
     [canAssignLeave, leaveRows, toast],
   );
 
+  /** Uploads documents attached during this session. */
+  const uploadDeferredDocuments = useCallback(
+    async (employeeId: string) => {
+      if (!documents.length) return;
+      try {
+        const files = documents.map((doc) => doc.file);
+        const categories = documents.map((doc) => doc.category);
+        await employeeService.uploadDocuments(employeeId, files, categories);
+      } catch (error) {
+        toast.showError(
+          "Employee saved, but documents didn't upload.",
+          error instanceof ApiError
+            ? error.message
+            : "You can attach documents from the employee's profile.",
+        );
+      }
+    },
+    [documents, toast],
+  );
+
+  /** Deletes a stored document immediately. */
+  const handleDeleteStoredDocument = useCallback(
+    async (documentId: string) => {
+      if (!employee?.user_id) return;
+      await employeeService.deleteDocument(employee.user_id, documentId);
+      setStoredDocuments((prev) => prev.filter((doc) => doc.document_id !== documentId));
+      toast.showSuccess("Document deleted.");
+    },
+    [employee?.user_id, toast],
+  );
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitError(null);
@@ -762,6 +817,7 @@ export default function EmployeeForm({
           if (withPhoto) saved = withPhoto;
         }
         await saveLeaveAssignments(saved.user_id);
+        await uploadDeferredDocuments(saved.user_id);
 
         toast.showSuccess(
           "Employee updated.",
@@ -781,6 +837,7 @@ export default function EmployeeForm({
           const withPhoto = await uploadDeferredPhoto(saved.user_id);
           if (withPhoto) saved = withPhoto;
         }
+        await uploadDeferredDocuments(saved.user_id);
 
         toast.showSuccess(
           "Employee created.",
@@ -1374,6 +1431,8 @@ export default function EmployeeForm({
             <DocumentsUpload
               value={documents}
               onChange={setDocuments}
+              stored={storedDocuments}
+              onDeleteStored={isEdit ? handleDeleteStoredDocument : undefined}
               disabled={saving}
             />
           </SectionCard>

@@ -3,12 +3,16 @@ import { Network, Plus, Pencil, Trash2 } from "lucide-react";
 import SettingsLayout from "@/modules/settings/pages/SettingsLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import Modal from "@/components/dialogs/Modal";
-import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
+import ReassignDeleteDialog, { type ReassignBlocker } from "@/components/dialogs/ReassignDeleteDialog";
 import { FormField, PrimaryButton } from "@/components/forms/FormField";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useToast } from "@/app/providers/ToastContext";
-import { departmentsApi, type Department } from "@/modules/settings/api/settingsApi";
+import {
+ departmentsApi,
+ type Department,
+ type DepartmentDeleteImpact,
+} from "@/modules/settings/api/settingsApi";
 
 
 type FormState = { name: string; description: string; status: "active" | "inactive" };
@@ -33,6 +37,12 @@ export default function DepartmentsPage() {
 
  const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
  const [deleting, setDeleting] = useState(false);
+ const [impact, setImpact] = useState<DepartmentDeleteImpact | null>(null);
+ const [impactLoading, setImpactLoading] = useState(false);
+ const [deleteError, setDeleteError] = useState<string | null>(null);
+ // Every department, not just the current page — the move-to dropdown has to
+ // offer all of them, and `rows` only holds one page's worth.
+ const [allDepartments, setAllDepartments] = useState<Department[]>([]);
 
  const load = () => {
  setLoading(true);
@@ -92,20 +102,73 @@ export default function DepartmentsPage() {
  }
  };
 
- const handleDelete = async () => {
+ const openDelete = (dept: Department) => {
+ setDeleteTarget(dept);
+ setImpact(null);
+ setDeleteError(null);
+ setImpactLoading(true);
+
+ // Both in parallel: the counts that decide what the dialog says, and the
+ // full list that populates the move-to dropdown.
+ Promise.all([
+ departmentsApi.deleteImpact(dept.departmentId),
+ departmentsApi.listAll().then(
+ (res) => res.data,
+ () => [] as Department[],
+ ),
+ ])
+ .then(([res, all]) => {
+ setImpact(res);
+ setAllDepartments(all);
+ })
+ .catch(() => {
+ // Impact unknown — the dialog falls back to a plain confirm. The server
+ // still refuses with its 409 if anything is attached, so the worst case
+ // here is the old behaviour, not a bad delete.
+ setImpact(null);
+ setDeleteError("Couldn't check what's attached. Deleting will still be blocked if anything is.");
+ })
+ .finally(() => setImpactLoading(false));
+ };
+
+ // targetId is null when nothing is attached (plain delete) and a department id
+ // when the user picked somewhere to move the contents.
+ const handleDelete = async (targetId: string | null) => {
  if (!deleteTarget) return;
  setDeleting(true);
+ setDeleteError(null);
  try {
+ if (targetId) {
+ const res = await departmentsApi.reassignAndDelete(deleteTarget.departmentId, targetId);
+ toast.showSuccess(res.message);
+ } else {
  await departmentsApi.remove(deleteTarget.departmentId);
  toast.showSuccess("Department deleted.");
+ }
  setDeleteTarget(null);
  load();
  } catch (err) {
- toast.showError(err instanceof Error ? err.message : "Couldn't delete department.");
+ // Kept in the dialog rather than a toast: the dialog stays open so the
+ // user can pick a different target instead of starting the whole flow over.
+ setDeleteError(err instanceof Error ? err.message : "Couldn't delete department.");
  } finally {
  setDeleting(false);
  }
  };
+
+ const blockers: ReassignBlocker[] | null = impact
+ ? [
+ impact.employee_count > 0
+ ? { label: `${impact.employee_count} employee${impact.employee_count === 1 ? "" : "s"}` }
+ : null,
+ impact.designation_count > 0
+ ? {
+ label: `${impact.designation_count} designation${impact.designation_count === 1 ? "" : "s"}`,
+ detail: impact.designations_in_use > 0 ? `(${impact.designations_in_use} in use)` : undefined,
+ }
+ : null,
+ ].filter((b): b is ReassignBlocker => b !== null)
+ : null;
 
  const columns: DataTableColumn<Department>[] = [
  { key: "name", label: "Department Name", render: (d) => <span className="font-medium text-gray-900">{d.name}</span> },
@@ -159,7 +222,7 @@ export default function DepartmentsPage() {
  </button>
  <button
  type="button"
- onClick={() => setDeleteTarget(d)}
+ onClick={() => openDelete(d)}
  aria-label={`Delete ${d.name}`}
  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
  >
@@ -212,13 +275,23 @@ export default function DepartmentsPage() {
  </form>
  </Modal>
 
- <ConfirmDialog
+ <ReassignDeleteDialog
  open={!!deleteTarget}
  title={`Delete "${deleteTarget?.name}"?`}
- description="This will also remove any designations linked to this department. This action cannot be undone."
- confirmLabel="Delete"
- tone="danger"
- loading={deleting}
+ blockers={blockers}
+ loadingImpact={impactLoading}
+ // Nothing cascades here — designations.department_id and
+ // users.department_id are both ON DELETE NO ACTION — so anything attached
+ // has to be moved somewhere first. The dropdown offers every other
+ // department; the current one is filtered out because the server rejects
+ // moving a department into itself.
+ targets={allDepartments
+ .filter((d) => d.departmentId !== deleteTarget?.departmentId)
+ .map((d) => ({ id: d.departmentId, label: d.name }))}
+ targetLabel="Department"
+ emptyDescription="Nothing is attached to this department. This action cannot be undone."
+ submitting={deleting}
+ error={deleteError}
  onConfirm={handleDelete}
  onCancel={() => setDeleteTarget(null)}
  />

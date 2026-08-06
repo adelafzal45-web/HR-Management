@@ -97,6 +97,21 @@ export class AppraisalFormQuestion {
   is_active!: boolean;
 
   // ==========================================
+  // Versioning
+  //
+  // Which form version this question snapshot belongs to. Multiple snapshots of
+  // the same question can exist with different versions, so when a published form
+  // is edited its old questions stay for old reviews while new rows hold the
+  // latest version.
+  // ==========================================
+
+  @Column({
+    type: 'int',
+    default: 1,
+  })
+  version!: number;
+
+  // ==========================================
   // Rating scale
   // The reviewer rates this question from 1..rating_scale. Stored per question
   // so HR can mix (e.g. a 1–5 behavioural item next to a 1–10 delivery item).

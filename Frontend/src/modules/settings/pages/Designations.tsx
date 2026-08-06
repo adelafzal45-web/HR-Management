@@ -3,12 +3,18 @@ import { IdCard, Plus, Pencil, Trash2 } from "lucide-react";
 import SettingsLayout from "@/modules/settings/pages/SettingsLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import Modal from "@/components/dialogs/Modal";
-import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
+import ReassignDeleteDialog, { type ReassignBlocker } from "@/components/dialogs/ReassignDeleteDialog";
 import { FormField, PrimaryButton } from "@/components/forms/FormField";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useToast } from "@/app/providers/ToastContext";
-import { designationsApi, departmentsApi, type Designation, type Department } from "@/modules/settings/api/settingsApi";
+import {
+ designationsApi,
+ departmentsApi,
+ type Designation,
+ type Department,
+ type DesignationDeleteImpact,
+} from "@/modules/settings/api/settingsApi";
 
 
 type FormState = { name: string; departmentId: string; description: string; status: "active" | "inactive" };
@@ -34,6 +40,11 @@ export default function DesignationsPage() {
 
  const [deleteTarget, setDeleteTarget] = useState<Designation | null>(null);
  const [deleting, setDeleting] = useState(false);
+ const [impact, setImpact] = useState<DesignationDeleteImpact | null>(null);
+ const [impactLoading, setImpactLoading] = useState(false);
+ const [deleteError, setDeleteError] = useState<string | null>(null);
+ // `rows` is one page; the move-to dropdown needs every designation.
+ const [allDesignations, setAllDesignations] = useState<Designation[]>([]);
 
  const load = () => {
  setLoading(true);
@@ -104,20 +115,63 @@ export default function DesignationsPage() {
  }
  };
 
- const handleDelete = async () => {
+ const openDelete = (item: Designation) => {
+ setDeleteTarget(item);
+ setImpact(null);
+ setDeleteError(null);
+ setImpactLoading(true);
+
+ Promise.all([
+ designationsApi.deleteImpact(item.designationId),
+ designationsApi.list({ pageSize: 1000 }).then(
+ (res) => res.data,
+ () => [] as Designation[],
+ ),
+ ])
+ .then(([res, all]) => {
+ setImpact(res);
+ setAllDesignations(all);
+ })
+ .catch(() => {
+ setImpact(null);
+ setDeleteError("Couldn't check who holds this designation. Deleting will still be blocked if anyone does.");
+ })
+ .finally(() => setImpactLoading(false));
+ };
+
+ // targetId is null when nobody holds it (plain delete) and a designation id
+ // when the user picked somewhere to move the holders.
+ const handleDelete = async (targetId: string | null) => {
  if (!deleteTarget) return;
  setDeleting(true);
+ setDeleteError(null);
  try {
+ if (targetId) {
+ const res = await designationsApi.reassignAndDelete(deleteTarget.designationId, targetId);
+ toast.showSuccess(res.message);
+ } else {
  await designationsApi.remove(deleteTarget.designationId);
  toast.showSuccess("Designation deleted.");
+ }
  setDeleteTarget(null);
  load();
  } catch (err) {
- toast.showError(err instanceof Error ? err.message : "Couldn't delete designation.");
+ setDeleteError(err instanceof Error ? err.message : "Couldn't delete designation.");
  } finally {
  setDeleting(false);
  }
  };
+
+ const blockers: ReassignBlocker[] | null = impact
+ ? impact.employee_count > 0
+ ? [
+ {
+ label: `${impact.employee_count} employee${impact.employee_count === 1 ? "" : "s"}`,
+ detail: "hold this designation",
+ },
+ ]
+ : []
+ : null;
 
  const columns: DataTableColumn<Designation>[] = [
  { key: "name", label: "Designation Name", render: (d) => <span className="font-medium text-gray-900">{d.name}</span> },
@@ -167,7 +221,7 @@ export default function DesignationsPage() {
  </button>
  <button
  type="button"
- onClick={() => setDeleteTarget(d)}
+ onClick={() => openDelete(d)}
  aria-label={`Delete ${d.name}`}
  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
  >
@@ -238,13 +292,21 @@ export default function DesignationsPage() {
  </form>
  </Modal>
 
- <ConfirmDialog
+ <ReassignDeleteDialog
  open={!!deleteTarget}
  title={`Delete "${deleteTarget?.name}"?`}
- description="This action cannot be undone."
- confirmLabel="Delete"
- tone="danger"
- loading={deleting}
+ blockers={blockers}
+ loadingImpact={impactLoading}
+ // `users.designation_id` is ON DELETE NO ACTION, so holders have to go
+ // somewhere before this row can go. Moving them also realigns their
+ // department to the target's, which is why the labels name it.
+ targets={allDesignations
+ .filter((d) => d.designationId !== deleteTarget?.designationId)
+ .map((d) => ({ id: d.designationId, label: `${d.name} — ${d.departmentName}` }))}
+ targetLabel="Designation"
+ emptyDescription="Nobody holds this designation. This action cannot be undone."
+ submitting={deleting}
+ error={deleteError}
  onConfirm={handleDelete}
  onCancel={() => setDeleteTarget(null)}
  />

@@ -74,6 +74,9 @@ export const ENDPOINTS = {
  attendance: {
  base: "/attendance",
  byId: (id: string) => `/attendance/${id}`,
+ // HR/Admin marks many employees (or a whole department / all active) for a
+ // single day in one request.
+ bulkMark: "/attendance/bulk-mark",
  // Self-service. The server takes the employee from the JWT, stamps its
  // own clock, decides Late from the assigned shift's start time and grace
  // period, and derives the hours — none of which the browser may supply.

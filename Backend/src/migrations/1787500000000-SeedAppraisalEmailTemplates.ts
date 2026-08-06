@@ -1,6 +1,6 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
-import { DEFAULT_EMAIL_TEMPLATES } from "../mail/templates/default-templates";
+import { DEFAULT_EMAIL_TEMPLATES } from '../mail/templates/default-templates';
 
 /**
  * Seeds the two appraisal email templates.
@@ -26,11 +26,11 @@ import { DEFAULT_EMAIL_TEMPLATES } from "../mail/templates/default-templates";
 export class SeedAppraisalEmailTemplates1787500000000
   implements MigrationInterface
 {
-  name = "SeedAppraisalEmailTemplates1787500000000";
+  name = 'SeedAppraisalEmailTemplates1787500000000';
 
   private static readonly KEYS = [
-    "appraisal_pending_reminder",
-    "appraisal_status_changed",
+    'appraisal_pending_reminder',
+    'appraisal_status_changed',
   ];
 
   public async up(queryRunner: QueryRunner): Promise<void> {

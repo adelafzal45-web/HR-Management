@@ -30,6 +30,8 @@ import { AppraisalQuestionBankService } from './appraisal-question-bank.service'
 import { AppraisalWorkflowService } from './appraisal-workflow.service';
 import { AppraisalStatsService } from './appraisal-stats.service';
 import { CreateFormDto, UpdateFormDto } from './dto/form.dto';
+import { FormQueryDto } from './dto/form-query.dto';
+import { ChangeFormStatusDto } from './dto/change-form-status.dto';
 import { SaveFormQuestionsDto } from './dto/save-form-questions.dto';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { SubmitEvaluationDto } from './dto/submit-evaluation.dto';
@@ -79,10 +81,39 @@ export class AppraisalFacadeController {
   @Get('forms')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal-forms.view')
-  @ApiOperation({ summary: 'List all appraisal forms' })
+  @ApiOperation({
+    summary: 'List appraisal forms — searched, filtered, sorted and paged',
+    description:
+      'Returns one page of forms in a `{ data, total, page, pageSize, totalPages }` envelope. Filtering, sorting and paging all happen in the database.',
+  })
   @ApiResponse({ status: 200, description: 'Forms retrieved.' })
-  listForms() {
-    return this.appraisalFacadeService.listForms();
+  listForms(@Query() query: FormQueryDto) {
+    return this.appraisalFacadeService.listForms(query);
+  }
+
+  /*
+   * Declared before `forms/:formId` — Nest matches routes in declaration order,
+   * and the param route would otherwise swallow "export" and reject it as a
+   * malformed UUID.
+   */
+  @Get('forms/export/excel')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('appraisal.export')
+  @ApiOperation({
+    summary: 'Export the filtered forms list to .xlsx',
+    description:
+      'Applies the same filters as the list endpoint but ignores paging, so the file always covers the whole filtered set.',
+  })
+  @ApiResponse({ status: 200, description: 'Excel file.' })
+  async exportForms(@Query() query: FormQueryDto, @Res() res: Response) {
+    const buffer = await this.appraisalFacadeService.exportFormsToExcel(query);
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="appraisal-forms.xlsx"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get('forms/:formId')
@@ -138,6 +169,34 @@ export class AppraisalFacadeController {
     return this.appraisalFacadeService.publishForm(formId);
   }
 
+  @Patch('forms/:formId/status')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('appraisal-forms.update')
+  @ApiOperation({
+    summary: 'Change a form’s lifecycle status and/or active flag',
+    description:
+      'Publish, unpublish, archive, restore, activate or deactivate. Publishing runs the same weight and snapshot rules as the publish endpoint. Unpublishing is refused once evaluations exist.',
+  })
+  @ApiParam({ name: 'formId', description: 'Form UUID' })
+  @ApiBody({ type: ChangeFormStatusDto })
+  @ApiResponse({ status: 200, description: 'Status changed.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Transition not allowed, or the body sets nothing.',
+  })
+  @ApiResponse({ status: 404, description: 'Form not found.' })
+  changeFormStatus(
+    @CurrentUser() user: JwtUser,
+    @Param('formId', ParseUUIDPipe) formId: string,
+    @Body() dto: ChangeFormStatusDto,
+  ) {
+    return this.appraisalFacadeService.changeFormStatus(
+      formId,
+      dto,
+      user.user_id,
+    );
+  }
+
   @Post('forms/:formId/duplicate')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal-forms.create')
@@ -154,6 +213,43 @@ export class AppraisalFacadeController {
     @Param('formId', ParseUUIDPipe) formId: string,
   ) {
     return this.appraisalFacadeService.duplicateForm(formId, user.user_id);
+  }
+
+  @Post('forms/:formId/versions')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('appraisal-forms.update')
+  @ApiOperation({
+    summary: 'Start a new version of a published form so it can be edited',
+    description:
+      "Copies the current version's questions into a new version and returns the form to Draft. Existing reviews keep pointing at the old version's questions, so their scores are untouched. Publishing again makes the new version the one new evaluations use.",
+  })
+  @ApiParam({ name: 'formId', description: 'Published form UUID' })
+  @ApiResponse({ status: 201, description: 'New version created as Draft.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Form is already a Draft, or is archived.',
+  })
+  @ApiResponse({ status: 404, description: 'Form not found.' })
+  createFormVersion(
+    @CurrentUser() user: JwtUser,
+    @Param('formId', ParseUUIDPipe) formId: string,
+  ) {
+    return this.appraisalFacadeService.createFormVersion(formId, user.user_id);
+  }
+
+  @Get('forms/:formId/versions')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('appraisal-forms.view')
+  @ApiOperation({
+    summary: "A form's revision history",
+    description:
+      'One entry per version, newest first, with the question count and the number of evaluations scored against it.',
+  })
+  @ApiParam({ name: 'formId', description: 'Form UUID' })
+  @ApiResponse({ status: 200, description: 'Version history retrieved.' })
+  @ApiResponse({ status: 404, description: 'Form not found.' })
+  listFormVersions(@Param('formId', ParseUUIDPipe) formId: string) {
+    return this.appraisalFacadeService.listFormVersions(formId);
   }
 
   @Delete('forms/:formId')
@@ -235,9 +331,7 @@ export class AppraisalFacadeController {
   @ApiOperation({ summary: 'Remove an assignment' })
   @ApiParam({ name: 'assignmentId', description: 'Assignment UUID' })
   @ApiResponse({ status: 200, description: 'Assignment removed.' })
-  deleteAssignment(
-    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
-  ) {
+  deleteAssignment(@Param('assignmentId', ParseUUIDPipe) assignmentId: string) {
     return this.appraisalFacadeService.deleteAssignment(assignmentId);
   }
 
@@ -341,11 +435,32 @@ export class AppraisalFacadeController {
     return this.appraisalFacadeService.getAllEvaluations();
   }
 
+  @Get('employees/:employeeId/evaluations')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('appraisal.viewAll')
+  @ApiOperation({
+    summary: "One employee's evaluation history, breakdown and trend",
+  })
+  @ApiParam({ name: 'employeeId', description: 'Employee UUID' })
+  @ApiResponse({ status: 200, description: 'Evaluations retrieved.' })
+  getEmployeeEvaluations(
+    @Param('employeeId', ParseUUIDPipe) employeeId: string,
+    @CurrentUser() user: JwtUser,
+  ) {
+    // Scope is resolved from the signed JWT role, not the param, so a Team Lead
+    // cannot read an employee outside their roster even with a valid id.
+    return this.appraisalFacadeService.getEmployeeEvaluations(
+      employeeId,
+      this.toViewer(user),
+    );
+  }
+
   @Get('analytics')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.viewAll')
   @ApiOperation({
-    summary: 'Org-wide averages, distribution, and department/designation splits',
+    summary:
+      'Org-wide averages, distribution, and department/designation splits',
   })
   @ApiResponse({ status: 200, description: 'Analytics retrieved.' })
   getAnalytics() {
@@ -444,37 +559,52 @@ export class AppraisalFacadeController {
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.teamlead.assign')
   @ApiOperation({ summary: 'List all Team Lead roster assignments' })
-  @ApiQuery({ name: 'teamLeadId', required: false, description: 'Filter by lead UUID' })
+  @ApiQuery({
+    name: 'teamLeadId',
+    required: false,
+    description: 'Filter by lead UUID',
+  })
   @ApiResponse({ status: 200, description: 'Assignments retrieved.' })
-  listTeamLeadAssignments(
-    @Query('teamLeadId') teamLeadId?: string,
-  ) {
+  listTeamLeadAssignments(@Query('teamLeadId') teamLeadId?: string) {
     return this.appraisalFacadeService.listTeamLeadAssignments(teamLeadId);
   }
 
   @Post('team-lead-assignments')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.teamlead.assign')
-  @ApiOperation({ summary: 'Create a Team Lead assignment (DEPARTMENT or MEMBERS mode)' })
+  @ApiOperation({
+    summary: 'Create a Team Lead assignment (DEPARTMENT or MEMBERS mode)',
+  })
   @ApiBody({ type: CreateTeamLeadAssignmentDto })
   @ApiResponse({ status: 201, description: 'Assignment created.' })
   @ApiResponse({ status: 400, description: 'Invalid mode/field combination.' })
-  @ApiResponse({ status: 409, description: 'A department-wide assignment already exists for this lead.' })
+  @ApiResponse({
+    status: 409,
+    description: 'A department-wide assignment already exists for this lead.',
+  })
   createTeamLeadAssignment(
     @CurrentUser() user: JwtUser,
     @Body() dto: CreateTeamLeadAssignmentDto,
   ) {
-    return this.appraisalFacadeService.createTeamLeadAssignment(dto, user.user_id);
+    return this.appraisalFacadeService.createTeamLeadAssignment(
+      dto,
+      user.user_id,
+    );
   }
 
   @Put('team-lead-assignments/:assignmentId/members')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.teamlead.assign')
-  @ApiOperation({ summary: 'Replace the member list of a MEMBERS-mode assignment' })
+  @ApiOperation({
+    summary: 'Replace the member list of a MEMBERS-mode assignment',
+  })
   @ApiParam({ name: 'assignmentId', description: 'Assignment UUID' })
   @ApiBody({ type: UpdateTeamLeadAssignmentMembersDto })
   @ApiResponse({ status: 200, description: 'Members updated.' })
-  @ApiResponse({ status: 400, description: 'Assignment is not in MEMBERS mode.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Assignment is not in MEMBERS mode.',
+  })
   updateTeamLeadAssignmentMembers(
     @CurrentUser() user: JwtUser,
     @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
@@ -515,7 +645,10 @@ export class AppraisalFacadeController {
   @ApiParam({ name: 'reviewId', description: 'Review UUID' })
   @ApiBody({ type: WorkflowActionDto })
   @ApiResponse({ status: 200, description: 'Review approved.' })
-  @ApiResponse({ status: 409, description: 'Review is not in Submitted status.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Review is not in Submitted status.',
+  })
   approveReview(
     @CurrentUser() user: JwtUser,
     @Param('reviewId', ParseUUIDPipe) reviewId: string,
@@ -533,7 +666,10 @@ export class AppraisalFacadeController {
   @ApiBody({ type: WorkflowActionDto })
   @ApiResponse({ status: 200, description: 'Review rejected.' })
   @ApiResponse({ status: 400, description: 'Comment is required.' })
-  @ApiResponse({ status: 409, description: 'Review is not in Submitted status.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Review is not in Submitted status.',
+  })
   rejectReview(
     @CurrentUser() user: JwtUser,
     @Param('reviewId', ParseUUIDPipe) reviewId: string,
@@ -546,7 +682,9 @@ export class AppraisalFacadeController {
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reopen a locked review for editing (comment required)' })
+  @ApiOperation({
+    summary: 'Reopen a locked review for editing (comment required)',
+  })
   @ApiParam({ name: 'reviewId', description: 'Review UUID' })
   @ApiBody({ type: WorkflowActionDto })
   @ApiResponse({ status: 200, description: 'Review reopened.' })
@@ -571,6 +709,16 @@ export class AppraisalFacadeController {
   @ApiResponse({ status: 200, description: 'Approval trail retrieved.' })
   listApprovals(@Param('reviewId', ParseUUIDPipe) reviewId: string) {
     return this.workflowService.getApprovals(reviewId);
+  }
+
+  @Get('reviews/:reviewId/detail')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('appraisal.stats')
+  @ApiOperation({ summary: 'Full submitted review with per-question scores' })
+  @ApiParam({ name: 'reviewId', description: 'Review UUID' })
+  @ApiResponse({ status: 200, description: 'Review detail retrieved.' })
+  getReviewDetail(@Param('reviewId', ParseUUIDPipe) reviewId: string) {
+    return this.appraisalFacadeService.getEvaluationById(reviewId);
   }
 
   // ==========================================================================
@@ -631,7 +779,10 @@ export class AppraisalFacadeController {
   @RequirePermission('appraisal.compare')
   @ApiOperation({ summary: 'Side-by-side comparison of 2–6 employees' })
   @ApiResponse({ status: 200, description: 'Comparison retrieved.' })
-  @ApiResponse({ status: 400, description: 'Fewer than 2 or more than 6 employees.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Fewer than 2 or more than 6 employees.',
+  })
   compareStats(
     @CurrentUser() user: JwtUser,
     @Query() query: CompareStatsQueryDto,
@@ -699,7 +850,9 @@ export class AppraisalFacadeController {
   @Get('dashboard/team-lead')
   @UseGuards(PermissionGuard)
   @RequirePermission('appraisal.view')
-  @ApiOperation({ summary: 'Team Lead dashboard: counts + roster + pending alerts' })
+  @ApiOperation({
+    summary: 'Team Lead dashboard: counts + roster + pending alerts',
+  })
   @ApiResponse({ status: 200, description: 'Dashboard retrieved.' })
   getTeamLeadDashboard(@CurrentUser() user: JwtUser) {
     return this.appraisalFacadeService.getTeamLeadDashboard(user.user_id);

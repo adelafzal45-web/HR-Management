@@ -17,7 +17,9 @@ import {
  * `questionId` is the existing form_question_id when editing, absent when new.
  */
 export class CriterionInputDto {
-  @ApiPropertyOptional({ description: 'Existing form_question_id (omit for new)' })
+  @ApiPropertyOptional({
+    description: 'Existing form_question_id (omit for new)',
+  })
   @IsOptional()
   @IsString()
   questionId?: string;

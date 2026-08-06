@@ -89,6 +89,29 @@ type DataTableProps<T> = {
   * Sort options for the unified filter. Pair with `unifiedFilter: true`.
   */
  sortOptions?: Array<{ value: string; label: string }>;
+ /**
+  * Drops the Ascending/Descending select from the filter popover, leaving only
+  * the field picker. The column headers already toggle direction, so on tables
+  * whose headers are sortable this select was a second control for the same
+  * thing — and reading it as a "filter" is what made people expect it to be
+  * cleared by "Clear all".
+  */
+ hideSortDirection?: boolean;
+ /**
+  * Extra controls rendered inside the unified filter popover, below the column
+  * dropdowns. For filters a plain `<select>` cannot express — searchable
+  * multi-selects, date ranges — that still belong in the same compact popup
+  * rather than a second filter bar.
+  */
+ extraFilters?: React.ReactNode;
+ /**
+  * How many of `extraFilters` are currently set, so the trigger badge and the
+  * "N filters active" line stay truthful. Without it those controls would be
+  * invisible to the count.
+  */
+ extraFilterCount?: number;
+ /** Reset handler for `extraFilters`, invoked by "Clear all". */
+ onClearExtraFilters?: () => void;
 };
 
 const HIDE_CLASS: Record<NonNullable<DataTableColumn<unknown>["hideBelow"]>, string> = {
@@ -215,6 +238,10 @@ export default function DataTable<T>({
  onFiltersChange,
  unifiedFilter = false,
  sortOptions,
+ hideSortDirection = false,
+ extraFilters,
+ extraFilterCount = 0,
+ onClearExtraFilters,
 }: DataTableProps<T>) {
  const [panelOpen, setPanelOpen] = useState(false);
  const panelAnchorRef = useRef<HTMLDivElement>(null);
@@ -256,15 +283,26 @@ export default function DataTable<T>({
  /*
   * When the unified filter is on, the search box and every column filter live
   * in the modal, so the active-filter count on the trigger includes them all.
+  *
+  * Sort is deliberately *not* counted. It never hides a row, and counting it
+  * broke "Clear all": every table here ships a default sort field, so the badge
+  * sat permanently at 1 and clearing the filters could not bring it back to
+  * zero — which read as a filter that refused to clear.
   */
  const unifiedCount = useMemo(() => {
   if (!unifiedFilter) return 0;
   let count = 0;
   if (search.trim()) count++;
-  if (sortKey) count++;
   count += activeFilters.length;
+  count += extraFilterCount;
   return count;
- }, [unifiedFilter, search, sortKey, activeFilters.length]);
+ }, [unifiedFilter, search, activeFilters.length, extraFilterCount]);
+
+ const clearAll = () => {
+  onSearchChange("");
+  onFiltersChange?.({});
+  onClearExtraFilters?.();
+ };
 
  const sortFieldFor = (col: DataTableColumn<T>) => col.sortKey ?? col.key;
 
@@ -353,7 +391,7 @@ export default function DataTable<T>({
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  {sortOptions && sortOptions.length > 0 && onSortChange && (
  <>
- <label className="block">
+ <label className={`block ${hideSortDirection ? "sm:col-span-2" : ""}`}>
  <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
  Sort by
  </span>
@@ -369,6 +407,7 @@ export default function DataTable<T>({
  ))}
  </select>
  </label>
+ {!hideSortDirection && (
  <label className="block">
  <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
  Direction
@@ -384,6 +423,7 @@ export default function DataTable<T>({
  <option value="ASC">Ascending</option>
  </select>
  </label>
+ )}
  </>
  )}
 
@@ -408,6 +448,8 @@ export default function DataTable<T>({
  ))}
  </div>
 
+ {extraFilters && <div className="space-y-3">{extraFilters}</div>}
+
  <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
  <span className="text-xs text-gray-500">
  {unifiedCount === 0
@@ -418,10 +460,7 @@ export default function DataTable<T>({
  {unifiedCount > 0 && (
  <button
  type="button"
- onClick={() => {
- onSearchChange("");
- onFiltersChange?.({});
- }}
+ onClick={clearAll}
  className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
  >
  Clear all
@@ -443,10 +482,7 @@ export default function DataTable<T>({
  {unifiedCount > 0 && (
  <button
  type="button"
- onClick={() => {
- onSearchChange("");
- onFiltersChange?.({});
- }}
+ onClick={clearAll}
  className="text-xs font-medium text-gray-500 transition hover:text-red-600"
  >
  Clear all
@@ -520,8 +556,11 @@ export default function DataTable<T>({
  horizontally rather than ever overflowing the viewport */}
  <div className="hidden overflow-x-auto sm:block">
  <table className="w-full min-w-[640px] text-left text-sm">
- <thead>
- <tr className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wide text-gray-500">
+ <thead className="sticky top-0 z-10">
+ {/* Opaque bg (not /80) and an inset bottom border rather than `border-b`:
+ a translucent sticky header shows the rows sliding under it, and
+ borders on a sticky element scroll away with the cell box. */}
+ <tr className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500 shadow-[inset_0_-1px_0_0_rgb(243_244_246)]">
  {columns.map((col) => {
  const isSortable = Boolean(col.sortable && onSortChange);
  const isActiveSort = isSortable && sortKey === sortFieldFor(col);

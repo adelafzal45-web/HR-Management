@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-import {
-  DEFAULT_EMAIL_TEMPLATES,
-} from '../mail/templates/default-templates';
+import { DEFAULT_EMAIL_TEMPLATES } from '../mail/templates/default-templates';
 
 /**
  * Mail infrastructure: SMTP configuration, managed templates with version
@@ -47,7 +45,10 @@ export class CreateMailInfrastructure1787100000000
     ['email-settings.update', 'Change SMTP configuration'],
     ['email-settings.test', 'Send a test email using the SMTP configuration'],
     ['email-templates.view', 'View email templates'],
-    ['email-templates.update', 'Edit, enable, disable and restore email templates'],
+    [
+      'email-templates.update',
+      'Edit, enable, disable and restore email templates',
+    ],
     ['email-queue.view', 'View the outbound email queue and delivery status'],
     ['email-queue.manage', 'Retry or cancel queued emails'],
   ];
@@ -235,8 +236,10 @@ export class CreateMailInfrastructure1787100000000
   }
 
   private async seedPermissions(queryRunner: QueryRunner): Promise<void> {
-    for (const [name, description] of CreateMailInfrastructure1787100000000
-      .PERMISSIONS) {
+    for (const [
+      name,
+      description,
+    ] of CreateMailInfrastructure1787100000000.PERMISSIONS) {
       await queryRunner.query(
         `INSERT INTO "permissions" ("permission_name", "description")
          VALUES ($1, $2)

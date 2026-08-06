@@ -8,11 +8,11 @@ import {
   ChevronUp,
   Copy,
   Eye,
+  GitBranch,
   GripVertical,
   Layers,
   Library,
   Lock,
-  Pencil,
   Plus,
   Save,
   Search,
@@ -167,19 +167,19 @@ const SCHEDULES: Array<{
     type: "Daily",
     when: "Every working day, before the shift starts",
     detail:
-      "A new evaluation is generated each working day ahead of the employee's shift, so the reviewer finds it waiting. Non-working days are skipped.",
+      "",
   },
   {
     type: "Weekly",
     when: "On the last working day of each week",
     detail:
-      "One evaluation per week, generated on the week's final working day. A week missed while the system was down is generated once, retroactively.",
+      "",
   },
   {
     type: "Monthly",
     when: "On the last working day of each month",
     detail:
-      "One evaluation per month, generated on the month's final working day. A missed month is generated once, retroactively.",
+      "",
   },
 ];
 
@@ -1113,14 +1113,6 @@ export type FormEditorProps = {
   designations: Designation[];
   canUpdate: boolean;
   canAssign: boolean;
-  /**
-   * Read-only preview: every input disabled and the write actions hidden, so the
-   * same component answers "what is on this form" without the risk of a stray
-   * keystroke being saved.
-   */
-  viewOnly?: boolean;
-  /** Offered in view mode to switch this same form into edit mode in place. */
-  onEdit?: () => void;
   onClose: () => void;
   /** Called after every successful write so the parent list stays in step. */
   onSaved: (formId: string) => Promise<void>;
@@ -1134,8 +1126,6 @@ export default function FormEditor({
   designations,
   canUpdate,
   canAssign,
-  viewOnly = false,
-  onEdit,
   onClose,
   onSaved,
   onError,
@@ -1164,20 +1154,17 @@ export default function FormEditor({
   const [bankOpen, setBankOpen] = useState(false);
   /** localId of the question currently being written to the bank, if any. */
   const [bankSaving, setBankSaving] = useState<string | null>(null);
-  const [saving, setSaving] = useState<null | "draft" | "publish" | "duplicate">(null);
+  const [saving, setSaving] = useState<
+    null | "draft" | "publish" | "duplicate" | "version"
+  >(null);
   const [showProblems, setShowProblems] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const status = form?.status ?? "Draft";
   const isDraft = status === "Draft";
-  /*
-   * Two independent reasons a field can be inert: this user cannot write forms,
-   * or the form was opened for viewing. Collapsed here so every control below
-   * asks one question instead of repeating the pair.
-   */
-  const editable = canUpdate && !viewOnly;
-  const audienceEditable = canAssign && !viewOnly;
+  const editable = canUpdate;
+  const audienceEditable = canAssign;
   // Questions freeze on publish — that is what protects in-flight reviews. The
   // form's name, cadence and audience stay editable.
   const questionsLocked = !isDraft || !editable;
@@ -1467,6 +1454,43 @@ export default function FormEditor({
     }
   };
 
+  /**
+   * Reopens a published form for editing by starting the next version of it.
+   *
+   * Unlike Duplicate, this keeps the form's identity — same name, same audience,
+   * same history. The evaluations already submitted stay scored against the
+   * version they were answered on; only new ones use what is edited here. The
+   * form drops to Draft until it is published again, so it is deliberately not
+   * offered as a casual click: the confirm spells out that reviewers cannot use
+   * the form in the meantime.
+   */
+  const startNewVersion = async () => {
+    if (!form) return;
+
+    const next = (form.version ?? 1) + 1;
+    const confirmed = window.confirm(
+      `Start version ${next} of "${form.formName}"?\n\n` +
+        `The ${form.reviewCount} evaluation(s) already submitted keep their ` +
+        `current questions and scores — they are not touched.\n\n` +
+        `The form returns to Draft while you edit, so reviewers cannot submit ` +
+        `against it until you publish version ${next}.`,
+    );
+    if (!confirmed) return;
+
+    setSaving("version");
+    try {
+      await formsApi.createVersion(form.formId);
+      onNotice(
+        `Started version ${next}. Edit the questions, then publish to make it live.`,
+      );
+      await onSaved(form.formId);
+    } catch (err) {
+      onError(err, "Could not start a new version of the form.");
+    } finally {
+      setSaving(null);
+    }
+  };
+
   const busy = saving !== null;
   const activeCount = questions.filter((q) => q.isActive).length;
 
@@ -1480,11 +1504,9 @@ export default function FormEditor({
             <StatusBadge status={status} />
           </h2>
           <p className="mt-0.5 text-sm text-gray-500">
-            {viewOnly
-              ? `Viewing only — nothing here can be changed. ${activeCount} active question(s) · ${form?.reviewCount ?? 0} submitted evaluation(s)`
-              : form
-                ? `${activeCount} active question(s) · ${form.reviewCount} submitted evaluation(s)`
-                : "Everything for this form is on this page — fill it in and save when you are ready."}
+            {form
+              ? `${activeCount} active question(s) · ${form.reviewCount} submitted evaluation(s)`
+              : "Everything for this form is on this page — fill it in and save when you are ready."}
           </p>
         </div>
         <button
@@ -1497,25 +1519,30 @@ export default function FormEditor({
         </button>
       </div>
 
-      {viewOnly ? (
-        <div className="flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          <Eye size={15} className="mt-0.5 shrink-0 text-gray-400" />
-          <span>
-            Read-only view of this {status.toLowerCase()} form. Use Edit Form below to
-            make changes.
+      {!isDraft && (
+        <div className="flex flex-wrap items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <Lock size={15} className="mt-0.5 shrink-0" />
+          <span className="min-w-0 flex-1">
+            This form is {status}, so its questions are frozen — that is what keeps
+            already-submitted reviews consistent. Its name, schedule and audience can
+            still be changed. To rework the questions, start version{" "}
+            {(form?.version ?? 1) + 1}: the evaluations already scored against
+            version {form?.version ?? 1} keep their original questions.
           </span>
+          {canUpdate && form && status === "Published" && (
+            <button
+              type="button"
+              onClick={startNewVersion}
+              disabled={busy}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+            >
+              <GitBranch size={13} />
+              {saving === "version"
+                ? "Starting…"
+                : `Edit as v${(form.version ?? 1) + 1}`}
+            </button>
+          )}
         </div>
-      ) : (
-        !isDraft && (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <Lock size={15} className="mt-0.5 shrink-0" />
-            <span>
-              This form is {status}, so its questions are frozen — that is what keeps
-              already-submitted reviews consistent. Its name, schedule and audience can
-              still be changed. To rework the questions, duplicate it into a new draft.
-            </span>
-          </div>
-        )
       )}
 
       {/* ---- 1. Form information ---- */}
@@ -1751,27 +1778,21 @@ export default function FormEditor({
                   <span className="ml-1 text-xs font-normal text-gray-400">/ 100%</span>
                 </p>
               </div>
-              {/*
-               * The publish-readiness badge is advice for someone who can act on it.
-               * In view mode there is nothing to fix from here, so it is dropped
-               * rather than shown as an instruction the reader cannot follow.
-               */}
-              {!viewOnly &&
-                (blocking.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowProblems((prev) => !prev)}
-                    className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
-                  >
-                    <AlertTriangle size={12} />
-                    {blocking.length} to fix before publishing
-                  </button>
-                ) : (
-                  <span className="flex items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700">
-                    <CheckCircle2 size={12} />
-                    Ready to publish
-                  </span>
-                ))}
+              {blocking.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowProblems((prev) => !prev)}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
+                >
+                  <AlertTriangle size={12} />
+                  {blocking.length} to fix before publishing
+                </button>
+              ) : (
+                <span className="flex items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700">
+                  <CheckCircle2 size={12} />
+                  Ready to publish
+                </span>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1781,25 +1802,10 @@ export default function FormEditor({
                 disabled={busy}
                 className="rounded-lg border border-gray-200 px-3.5 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
               >
-                {viewOnly ? "Close" : "Cancel"}
+                Cancel
               </button>
 
-              {/*
-               * View mode offers exactly one way forward — switch this same form
-               * into edit mode — so the reader is never hunting for it.
-               */}
-              {viewOnly && onEdit && canUpdate && (
-                <button
-                  type="button"
-                  onClick={onEdit}
-                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand to-brand-dark px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
-                >
-                  <Pencil size={14} />
-                  Edit Form
-                </button>
-              )}
-
-              {!viewOnly && form && canUpdate && (
+              {form && canUpdate && (
                 <button
                   type="button"
                   onClick={duplicate}
@@ -1812,7 +1818,7 @@ export default function FormEditor({
                 </button>
               )}
 
-              {!viewOnly && canUpdate && (
+              {canUpdate && (
                 <button
                   type="button"
                   onClick={saveDraft}
@@ -1824,7 +1830,7 @@ export default function FormEditor({
                 </button>
               )}
 
-              {!viewOnly && canUpdate && isDraft && (
+              {canUpdate && isDraft && (
                 <button
                   type="button"
                   onClick={publish}

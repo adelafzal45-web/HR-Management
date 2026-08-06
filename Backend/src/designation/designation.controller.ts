@@ -20,6 +20,7 @@ import {
 import { DesignationService } from './designation.service';
 import { CreateDesignationDto } from './dto/create-designation.dto';
 import { UpdateDesignationDto } from './dto/update-designation.dto';
+import { ReassignAndDeleteDesignationDto } from './dto/reassign-designation.dto';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 
@@ -134,5 +135,69 @@ export class DesignationController {
   })
   remove(@Param('id') id: string) {
     return this.designationService.remove(id);
+  }
+
+  @Get(':id/delete-impact')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('designation.delete')
+  @ApiOperation({
+    summary: 'What is blocking this designation from being deleted',
+    description:
+      'How many employees still hold it. Lets the delete dialog name the ' +
+      'blocker before the user commits.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Designation ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Impact summary returned.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Designation not found.',
+  })
+  deleteImpact(@Param('id') id: string) {
+    return this.designationService.getDeleteImpact(id);
+  }
+
+  @Post(':id/reassign-and-delete')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('designation.delete')
+  @ApiOperation({
+    summary: 'Move the holders to another designation, then delete',
+    description:
+      'Single transaction. Employees holding this designation are moved to ' +
+      'the target — including their department, which is realigned to the ' +
+      "target's — then this designation is deleted.",
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Designation ID to delete',
+  })
+  @ApiBody({ type: ReassignAndDeleteDesignationDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Employees moved and the designation deleted.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Designation or target designation not found.',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Target designation is the one being deleted.',
+  })
+  reassignAndDelete(
+    @Param('id') id: string,
+    @Body() dto: ReassignAndDeleteDesignationDto,
+  ) {
+    return this.designationService.reassignAndDelete(
+      id,
+      dto.target_designation_id,
+    );
   }
 }

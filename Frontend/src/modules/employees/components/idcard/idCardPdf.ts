@@ -80,10 +80,7 @@ function drawCircularImage(
   try {
     doc.saveGraphicsState();
     doc.circle(cx, cy, radius, null as unknown as "S");
-    // @ts-expect-error — `clip` exists at runtime in jsPDF 4 but is absent
-    // from the shipped type definitions.
     doc.clip();
-    // @ts-expect-error — same: needed so the clip path itself isn't stroked.
     if (typeof doc.discardPath === "function") doc.discardPath();
     doc.addImage(dataUrl, format, cx - radius, cy - radius, radius * 2, radius * 2, undefined, "FAST");
     doc.restoreGraphicsState();

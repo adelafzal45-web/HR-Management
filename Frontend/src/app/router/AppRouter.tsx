@@ -32,6 +32,7 @@ const LeaveRequestsPage = lazy(() => import("@/modules/leave/pages/LeaveRequests
 const Payroll = lazy(() => import("@/modules/payroll/pages/Payroll"));
 const ProcessPayrollPage = lazy(() => import("@/modules/payroll/pages/ProcessPayroll"));
 const Appraisal = lazy(() => import("@/modules/appraisal/pages/Appraisal"));
+const CompareStats = lazy(() => import("@/modules/appraisal/pages/CompareStats"));
 const Notifications = lazy(() => import("@/modules/notifications/pages/Notifications"));
 
 // Team Lead workspace
@@ -59,7 +60,9 @@ const ShiftsPage = lazy(() => import("@/modules/settings/pages/Shifts"));
 const LeaveTypesPage = lazy(() => import("@/modules/settings/pages/LeaveTypes"));
 const WorkingDaysPage = lazy(() => import("@/modules/settings/pages/WorkingDays"));
 const RolesPage = lazy(() => import("@/modules/settings/pages/Roles"));
+const RoleDetailPage = lazy(() => import("@/modules/settings/pages/RoleDetail"));
 const PermissionsPage = lazy(() => import("@/modules/settings/pages/Permissions"));
+const FilterPanelDemoPage = lazy(() => import("@/modules/settings/pages/FilterPanelDemo"));
 const BrandingPage = lazy(() => import("@/modules/settings/pages/Branding"));
 const SmtpSettingsPage = lazy(() => import("@/modules/settings/pages/SmtpSettings"));
 const EmailTemplatesPage = lazy(() => import("@/modules/settings/pages/EmailTemplates"));
@@ -151,6 +154,17 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute>
  <Appraisal />
+ </ProtectedRoute>,
+ )}
+ />
+ {/* The Compare tab `getAppraisalTabs` offers to management roles. Gated on
+ EVALUATOR_ROLES, the same set that tab builder treats as management —
+ without a route of its own the tab fell through the catch-all to /login. */}
+ <Route
+ path="/appraisal/compare"
+ element={withSuspense(
+ <ProtectedRoute roles={EVALUATOR_ROLES}>
+ <CompareStats />
  </ProtectedRoute>,
  )}
  />
@@ -407,11 +421,46 @@ export function AppRouter() {
  </ProtectedRoute>,
  )}
  />
+ {/* Create / edit / view a role. `new` is declared before `:roleId` so the
+ literal wins the match — otherwise "new" would be read as a role id and
+ the create page would try to fetch a role that does not exist. */}
+ <Route
+ path="/settings/roles/new"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <RoleDetailPage mode="create" />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/settings/roles/:roleId/edit"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <RoleDetailPage mode="edit" />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/settings/roles/:roleId"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <RoleDetailPage mode="view" />
+ </ProtectedRoute>,
+ )}
+ />
  <Route
  path="/settings/permissions"
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
  <PermissionsPage />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/settings/filter-demo"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <FilterPanelDemoPage />
  </ProtectedRoute>,
  )}
  />

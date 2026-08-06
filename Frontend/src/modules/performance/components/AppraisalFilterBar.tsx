@@ -19,6 +19,12 @@ type AppraisalFilterBarProps = {
   showStatus?: boolean;
   /** Extra controls (export buttons) rendered on the right. */
   right?: React.ReactNode;
+  /**
+   * "card" (default) renders the self-contained panel with its own header.
+   * "bare" renders only the field grid, for hosting inside a popover whose
+   * chrome (header, Clear) the caller owns.
+   */
+  variant?: "card" | "bare";
 };
 
 const EVALUATION_TYPES: EvaluationType[] = ["Daily", "Weekly", "Monthly"];
@@ -40,6 +46,7 @@ export default function AppraisalFilterBar({
   onChange,
   showStatus = true,
   right,
+  variant = "card",
 }: AppraisalFilterBarProps) {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
@@ -65,6 +72,126 @@ export default function AppraisalFilterBar({
 
   const field =
     "rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60";
+
+  const fields = (
+    <div
+      className={
+        variant === "bare"
+          ? "grid grid-cols-2 gap-3"
+          : "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      }
+    >
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">From</span>
+        <input
+          type="date"
+          value={value.dateFrom ?? ""}
+          onChange={(e) => set({ dateFrom: e.target.value || undefined })}
+          className={field}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">To</span>
+        <input
+          type="date"
+          value={value.dateTo ?? ""}
+          onChange={(e) => set({ dateTo: e.target.value || undefined })}
+          className={field}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Department</span>
+        <select
+          value={value.departmentId ?? ""}
+          onChange={(e) => set({ departmentId: e.target.value || undefined })}
+          className={field}
+        >
+          <option value="">All departments</option>
+          {departments.map((d) => (
+            <option key={d.departmentId} value={d.departmentId}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Designation</span>
+        <select
+          value={value.designationId ?? ""}
+          onChange={(e) => set({ designationId: e.target.value || undefined })}
+          className={field}
+        >
+          <option value="">All designations</option>
+          {designations.map((d) => (
+            <option key={d.designationId} value={d.designationId}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Type</span>
+        <select
+          value={value.evaluationType ?? ""}
+          onChange={(e) =>
+            set({ evaluationType: (e.target.value || undefined) as EvaluationType | undefined })
+          }
+          className={field}
+        >
+          <option value="">All types</option>
+          {EVALUATION_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {showStatus && (
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Status</span>
+          <select
+            value={value.status ?? ""}
+            onChange={(e) => set({ status: e.target.value || undefined })}
+            className={field}
+          >
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+
+  // Popover body: just the fields plus a lightweight Clear affordance. The
+  // caller owns the trigger button, the active-count badge and the panel chrome.
+  if (variant === "bare") {
+    return (
+      <div className="space-y-3">
+        {fields}
+        {activeCount > 0 && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => onChange({})}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:border-brand/60 hover:text-brand-dark"
+            >
+              <X size={14} />
+              Clear all
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
@@ -93,95 +220,7 @@ export default function AppraisalFilterBar({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">From</span>
-          <input
-            type="date"
-            value={value.dateFrom ?? ""}
-            onChange={(e) => set({ dateFrom: e.target.value || undefined })}
-            className={field}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">To</span>
-          <input
-            type="date"
-            value={value.dateTo ?? ""}
-            onChange={(e) => set({ dateTo: e.target.value || undefined })}
-            className={field}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Department</span>
-          <select
-            value={value.departmentId ?? ""}
-            onChange={(e) => set({ departmentId: e.target.value || undefined })}
-            className={field}
-          >
-            <option value="">All departments</option>
-            {departments.map((d) => (
-              <option key={d.departmentId} value={d.departmentId}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Designation</span>
-          <select
-            value={value.designationId ?? ""}
-            onChange={(e) => set({ designationId: e.target.value || undefined })}
-            className={field}
-          >
-            <option value="">All designations</option>
-            {designations.map((d) => (
-              <option key={d.designationId} value={d.designationId}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Type</span>
-          <select
-            value={value.evaluationType ?? ""}
-            onChange={(e) =>
-              set({ evaluationType: (e.target.value || undefined) as EvaluationType | undefined })
-            }
-            className={field}
-          >
-            <option value="">All types</option>
-            {EVALUATION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {showStatus && (
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Status</span>
-            <select
-              value={value.status ?? ""}
-              onChange={(e) => set({ status: e.target.value || undefined })}
-              className={field}
-            >
-              <option value="">All statuses</option>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
+      {fields}
     </div>
   );
 }

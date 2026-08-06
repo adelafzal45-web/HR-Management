@@ -1,17 +1,23 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 
 import { PerformanceReview } from './performance-review.entity';
+import { LOCKED_REVIEW_STATUSES } from './performance-review.constants';
 import { User } from '../users/user.entity';
 import { Attendance } from '../attendance/attendance.entity';
 import { AppraisalForms } from '../appraisal-forms/appraisal-forms.entity';
+import { AppraisalFormResolverService } from '../appraisal-forms/appraisal-form-resolver.service';
+import { cadenceFor } from '../appraisal-facade/evaluation-cadence';
+import { isUniqueViolation } from '../common/typeorm-errors';
 
 import { CreatePerformanceReviewDto } from './dto/create-performance-review.dto';
 import { UpdatePerformanceReviewDto } from './dto/update-performance-review.dto';
 
 @Injectable()
 export class PerformanceReviewService {
+  private readonly logger = new Logger(PerformanceReviewService.name);
+
   constructor(
     @InjectRepository(PerformanceReview)
     private readonly performanceReviewRepository: Repository<PerformanceReview>,
@@ -24,6 +30,8 @@ export class PerformanceReviewService {
 
     @InjectRepository(Attendance)
     private readonly attendanceRepository: Repository<Attendance>,
+
+    private readonly formResolver: AppraisalFormResolverService,
   ) {}
 
   // ======================================================
@@ -91,17 +99,50 @@ export class PerformanceReviewService {
   // CREATE AUTO ZERO REVIEW
   // ======================================================
 
-  async createAbsentReview(attendance: Attendance) {
+  /**
+   * Writes the zero-score review that stands in for an absent day.
+   *
+   * Everything here is best-effort by design: the attendance row it belongs to
+   * has already been committed by the caller, so throwing would report a failure
+   * for a save that actually succeeded. Each way this can legitimately not apply
+   * returns null with a log line instead.
+   *
+   * Returns the review when one was written or already existed, null when the
+   * absence produced none.
+   */
+  async createAbsentReview(
+    attendance: Attendance,
+  ): Promise<PerformanceReview | null> {
     const user = attendance.user;
 
-    const appraisalForm = await this.appraisalFormsRepository.findOne({
-      where: {
-        status: 'Published',
-      },
-    });
+    if (!user?.user_id) {
+      this.logger.warn(
+        `Attendance ${attendance.attendance_id} is marked Absent but carries no user; skipping the auto-zero review.`,
+      );
+      return null;
+    }
+
+    // The employee's *assigned* form, resolved exactly the way the scheduler and
+    // the evaluate-permission check resolve it: direct -> designation ->
+    // department, Published and active only.
+    //
+    // This used to be `findOne({ where: { status: 'Published' } })` — the first
+    // published form in the table, whichever that happened to be. Every absence
+    // in the company was scored against that one form regardless of who the
+    // employee was, which put rows in `performance_reviews` for a form the
+    // employee was never assigned and then collided with the real review when
+    // the lead came to write it.
+    const appraisalForm = await this.formResolver.resolveFormForEmployee(
+      user.user_id,
+    );
 
     if (!appraisalForm) {
-      throw new NotFoundException('Published appraisal form not found');
+      // Not an error. An employee HR has not covered by any assignment simply
+      // has no appraisal, and their attendance still needs recording.
+      this.logger.log(
+        `No published appraisal form is assigned to ${user.user_id}; no auto-zero review written for ${attendance.attendance_id}.`,
+      );
+      return null;
     }
 
     // attendance_date is declared as a Date but does not always hold one: the
@@ -115,17 +156,76 @@ export class PerformanceReviewService {
     const attendanceDate =
       attendance.attendance_date instanceof Date
         ? attendance.attendance_date
-        : new Date(`${String(attendance.attendance_date).slice(0, 10)}T00:00:00Z`);
+        : new Date(
+            `${String(attendance.attendance_date).slice(0, 10)}T00:00:00Z`,
+          );
 
-    const review = this.performanceReviewRepository.create({
+    const cadence = cadenceFor(appraisalForm.evaluation_type);
+
+    // One absent day only speaks for the whole period when the period *is* one
+    // day. On a Weekly or Monthly form, zeroing and locking the period over a
+    // single absence would destroy the lead's real evaluation for that week or
+    // month — four days of good work included. Asked cadence-agnostically, so
+    // this stays correct if Quarterly or Yearly is added later.
+    const periodStart = cadence.periodStart(attendanceDate);
+    const periodEnd = cadence.periodEnd(attendanceDate);
+    if (periodStart.getTime() !== periodEnd.getTime()) {
+      this.logger.log(
+        `${appraisalForm.form_name} is ${appraisalForm.evaluation_type}; one absent day does not zero the whole period, so no auto-zero review was written for ${user.user_id}.`,
+      );
+      return null;
+    }
+
+    // Cadence-aware, so this matches the key the scheduler and the submit path
+    // write. A hardcoded 'YYYY-MM-DD' put the absence in a period no other code
+    // would ever look for.
+    const reviewPeriod = cadence.periodKey(attendanceDate);
+
+    // The unique index is on (reviewee_id, form_id, review_period), so that is
+    // exactly what is looked up — a narrower query is a query that misses a row
+    // the insert will then collide with.
+    const existing = await this.performanceReviewRepository.findOne({
+      where: {
+        reviewee: { user_id: user.user_id },
+        appraisalForm: { form_id: appraisalForm.form_id },
+        review_period: reviewPeriod,
+      },
+      relations: { answers: true },
+    });
+
+    if (existing && LOCKED_REVIEW_STATUSES.includes(existing.status)) {
+      // Already submitted — by the lead, by HR, or by an earlier run of this
+      // same code. Nothing to do, and certainly nothing to overwrite.
+      this.logger.log(
+        `Review ${existing.review_id} already covers ${user.user_id} for ${reviewPeriod}; leaving it as ${existing.status}.`,
+      );
+      return existing;
+    }
+
+    if (existing && (existing.answers?.length ?? 0) > 0) {
+      // A Draft someone has actually started answering. Forcing it to zero would
+      // throw away their work and leave the stored answers contradicting the
+      // total, so the absence is recorded on the attendance row only and the
+      // reviewer decides what the day was worth.
+      this.logger.log(
+        `Review ${existing.review_id} for ${reviewPeriod} already has answers; leaving the in-progress draft alone rather than zeroing it.`,
+      );
+      return existing;
+    }
+
+    // An empty Draft here is the scheduler's placeholder for the same period.
+    // Taking it over rather than inserting alongside it is what makes the
+    // absence visible at all: on a Daily form the placeholder exists by the time
+    // the shift starts, so an insert would always lose to the index.
+    const review = existing ?? new PerformanceReview();
+
+    Object.assign(review, {
       appraisalForm,
       reviewer: user,
       reviewee: user,
       attendance,
       evaluation_type: appraisalForm.evaluation_type,
-      // Date-only: the column is varchar(50) and the period is a day, so the
-      // full timestamp added noise without adding information.
-      review_period: attendanceDate.toISOString().slice(0, 10),
+      review_period: reviewPeriod,
       review_date: attendanceDate,
       total_score_percentage: 0,
       // 'Submitted', not the legacy 'Completed' the AppraisalDynamicForms
@@ -139,7 +239,20 @@ export class PerformanceReviewService {
       comments: 'Automatic zero evaluation because employee was absent',
     });
 
-    return await this.performanceReviewRepository.save(review);
+    try {
+      return await this.performanceReviewRepository.save(review);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        // The scheduler or a concurrent request landed the row between the
+        // lookup above and this write. Their row is as good as ours, so this is
+        // a no-op rather than a failure.
+        this.logger.warn(
+          `A review for ${user.user_id} / ${reviewPeriod} was created concurrently; the auto-zero write was skipped.`,
+        );
+        return null;
+      }
+      throw error;
+    }
   }
 
   // ======================================================

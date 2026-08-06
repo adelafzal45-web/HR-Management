@@ -29,6 +29,7 @@ import { Department } from '../department/department.entity';
 import { Designation } from '../designation/designation.entity';
 
 import { AuthorizationModule } from '../authorization/authorization.module';
+import { AppraisalFormsModule } from '../appraisal-forms/appraisal-forms.module';
 import { PerformanceReviewModule } from '../performance-review/performance-review.module';
 import { AuditModule } from '../audit/audit.module';
 import { MailModule } from '../mail/mail.module';
@@ -56,6 +57,7 @@ import { WorkingDaySchedulesModule } from '../working-day-schedules/working-day-
       Designation,
     ]),
     AuthorizationModule,
+    AppraisalFormsModule,
     PerformanceReviewModule,
     AuditModule,
     MailModule,

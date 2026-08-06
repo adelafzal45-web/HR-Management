@@ -7,12 +7,16 @@ import { IsOptional, IsUUID } from 'class-validator';
  * target (the DB has a matching CHECK constraint as a backstop).
  */
 export class CreateAssignmentDto {
-  @ApiPropertyOptional({ description: 'Assign to every employee in this department' })
+  @ApiPropertyOptional({
+    description: 'Assign to every employee in this department',
+  })
   @IsOptional()
   @IsUUID()
   departmentId?: string;
 
-  @ApiPropertyOptional({ description: 'Assign to every employee with this designation' })
+  @ApiPropertyOptional({
+    description: 'Assign to every employee with this designation',
+  })
   @IsOptional()
   @IsUUID()
   designationId?: string;

@@ -35,6 +35,10 @@ export type AdminAttendanceRecord = {
  checkOut: string | null; // HH:mm
  workingHours: number | null;
  status: AdminAttendanceStatus;
+ checkInPunctuality: "early" | "on-time" | "late" | null;
+ checkInVarianceMinutes: number | null;
+ checkOutPunctuality: "early" | "on-time" | "late" | null;
+ checkOutVarianceMinutes: number | null;
 };
 
 export type AttendanceListParams = {
@@ -50,6 +54,34 @@ export type AttendanceListParams = {
 };
 
 export type AttendanceCorrection = { checkIn: string | null; checkOut: string | null; status: AdminAttendanceStatus };
+
+// HR/Admin "mark attendance" payloads. Times are "HH:mm" (the mock's display
+// precision); the API layer pads them to "HH:mm:ss" for the live backend.
+export type MarkAttendancePayload = {
+ attendanceDate: string; // YYYY-MM-DD
+ status: AdminAttendanceStatus;
+ checkIn?: string | null; // HH:mm
+ checkOut?: string | null; // HH:mm
+};
+
+export type BulkMarkPayload = MarkAttendancePayload & {
+ employeeIds?: string[];
+ departmentId?: string;
+ allActive?: boolean;
+};
+
+export type BulkMarkResult = {
+ marked: number;
+ skipped: number;
+ total: number;
+ results: Array<{
+ employeeId: string;
+ employeeCode: string;
+ employeeName: string;
+ ok: boolean;
+ reason?: string;
+ }>;
+};
 
 let attendanceRecords: AdminAttendanceRecord[] = [];
 
@@ -148,6 +180,77 @@ function addDays(base: Date, days: number) {
 }
 const toIso = (d: Date) => d.toISOString().slice(0, 10);
 
+// Demo shift the mock attendance is scored against — 09:00 start, 17:00 end,
+// 5-minute grace either side. The real backend derives punctuality from each
+// employee's assigned shift; here every seeded row uses this one so the
+// Early/Late arrival & departure flags have something to compare against.
+const MOCK_SHIFT = { start: "09:00", end: "17:00", grace: 5 };
+
+const minutesOf = (t: string) => {
+ const [h, m] = t.split(":").map(Number);
+ return (h || 0) * 60 + (m || 0);
+};
+
+type PunctualityFields = Pick<
+ AdminAttendanceRecord,
+ "checkInPunctuality" | "checkInVarianceMinutes" | "checkOutPunctuality" | "checkOutVarianceMinutes"
+>;
+
+// Mirrors the backend's derivePunctuality (attendance-punctuality.ts): lateness
+// uses the shift grace period, earliness a flat 5-minute tolerance.
+function derivePunctuality(checkIn: string | null, checkOut: string | null): PunctualityFields {
+ const out: PunctualityFields = {
+ checkInPunctuality: null,
+ checkInVarianceMinutes: null,
+ checkOutPunctuality: null,
+ checkOutVarianceMinutes: null,
+ };
+ if (checkIn) {
+ const variance = minutesOf(checkIn) - minutesOf(MOCK_SHIFT.start);
+ out.checkInVarianceMinutes = variance;
+ out.checkInPunctuality = variance > MOCK_SHIFT.grace ? "late" : variance < -5 ? "early" : "on-time";
+ }
+ if (checkOut) {
+ const variance = minutesOf(checkOut) - minutesOf(MOCK_SHIFT.end);
+ out.checkOutVarianceMinutes = variance;
+ out.checkOutPunctuality = variance < -5 ? "early" : variance > 5 ? "late" : "on-time";
+ }
+ return out;
+}
+
+// Statuses that carry no time stamps by definition — an Absent or On-Leave day
+// has no arrival, so any check-in/out passed alongside them is dropped.
+const NON_WORKING_STATUSES: AdminAttendanceStatus[] = ["Absent", "Leave", "On Leave", "Holiday"];
+
+// Builds one attendance row from a mark/bulk-mark payload, computing working
+// hours from the two stamps and dropping stamps for non-working statuses.
+function buildMarkedRecord(emp: Employee, payload: MarkAttendancePayload): AdminAttendanceRecord {
+ const nonWorking = NON_WORKING_STATUSES.includes(payload.status);
+ const checkIn = nonWorking ? null : payload.checkIn || null;
+ const checkOut = nonWorking ? null : payload.checkOut || null;
+
+ let workingHours: number | null = null;
+ if (checkIn && checkOut) {
+ const mins = minutesOf(checkOut) - minutesOf(checkIn);
+ workingHours = Math.max(0, Math.round((mins / 60) * 100) / 100);
+ }
+
+ return {
+ attendanceId: uuid(),
+ employeeId: emp.employeeId,
+ employeeName: `${emp.firstName} ${emp.lastName}`,
+ employeeCode: emp.employeeCode,
+ departmentId: emp.departmentId,
+ departmentName: emp.departmentName,
+ shiftName: emp.shiftName,
+ attendanceDate: payload.attendanceDate,
+ checkIn,
+ checkOut,
+ workingHours,
+ status: payload.status,
+ ...derivePunctuality(checkIn, checkOut),
+ };
+}
 function buildAttendanceForEmployee(emp: Employee): AdminAttendanceRecord[] {
  const rows: AdminAttendanceRecord[] = [];
  const now = new Date();
@@ -191,6 +294,7 @@ function buildAttendanceForEmployee(emp: Employee): AdminAttendanceRecord[] {
  checkOut,
  workingHours,
  status,
+ ...derivePunctuality(checkIn, checkOut),
  });
  }
  return rows;
@@ -281,6 +385,9 @@ async function ensureSeeded(): Promise<void> {
 }
 
 function paginate<T>(rows: T[], params: { page?: number; pageSize?: number }): ListResult<T> {
+ // An explicit pageSize of 0 means "all rows" (used by CSV export to pull the
+ // full filtered set); only an absent/negative value falls back to 10.
+ if (params.pageSize === 0) return { data: rows, total: rows.length };
  const page = params.page && params.page > 0 ? params.page : 1;
  const pageSize = params.pageSize && params.pageSize > 0 ? params.pageSize : 10;
  const start = (page - 1) * pageSize;
@@ -341,6 +448,7 @@ export const mockAdminAttendanceApi = {
  if (existing) {
  existing.checkIn = checkIn;
  existing.status = isLate ? "Late" : "Present";
+ Object.assign(existing, derivePunctuality(existing.checkIn, existing.checkOut));
  return existing;
  }
 
@@ -357,6 +465,7 @@ export const mockAdminAttendanceApi = {
  checkOut: null,
  workingHours: null,
  status: isLate ? "Late" : "Present",
+ ...derivePunctuality(checkIn, null),
  };
  attendanceRecords = [record, ...attendanceRecords];
  return record;
@@ -376,7 +485,71 @@ export const mockAdminAttendanceApi = {
  const [outH, outM] = existing.checkOut.split(":").map(Number);
  const hours = Math.max(0, Math.round(((outH * 60 + outM - (inH * 60 + inM)) / 60) * 100) / 100);
  existing.workingHours = hours;
+ Object.assign(existing, derivePunctuality(existing.checkIn, existing.checkOut));
  return existing;
+ },
+
+ // HR/Admin marks a single employee for a given day (mirrors POST /attendance
+ // with an explicit user_id). Upserts on (employeeId, attendanceDate).
+ async markFor(employeeId: string, payload: MarkAttendancePayload): Promise<AdminAttendanceRecord> {
+ await ensureSeeded();
+ await delay(300);
+ const emp = (await mockEmployeesApi.getById(employeeId)) as Employee;
+ const record = buildMarkedRecord(emp, payload);
+ attendanceRecords = [
+ record,
+ ...attendanceRecords.filter(
+ (r) => !(r.employeeId === employeeId && r.attendanceDate === payload.attendanceDate),
+ ),
+ ];
+ return record;
+ },
+
+ // Bulk-mark: a set of employees, a whole department, or every active
+ // employee, for one day (mirrors POST /attendance/bulk-mark). Skips anyone
+ // already marked that day, matching the backend's idempotent behaviour.
+ async bulkMark(payload: BulkMarkPayload): Promise<BulkMarkResult> {
+ await ensureSeeded();
+ await delay(500);
+ const res = await mockEmployeesApi.list({ pageSize: 100 });
+ let targets = res.data.filter((e) => e.status === "active");
+ if (!payload.allActive) {
+ if (payload.departmentId) targets = targets.filter((e) => e.departmentId === payload.departmentId);
+ if (payload.employeeIds?.length) {
+ const set = new Set(payload.employeeIds);
+ targets = targets.filter((e) => set.has(e.employeeId));
+ }
+ }
+
+ const results: BulkMarkResult["results"] = [];
+ let marked = 0;
+ let skipped = 0;
+ for (const emp of targets) {
+ const already = attendanceRecords.find(
+ (r) => r.employeeId === emp.employeeId && r.attendanceDate === payload.attendanceDate,
+ );
+ if (already) {
+ skipped++;
+ results.push({
+ employeeId: emp.employeeId,
+ employeeCode: emp.employeeCode,
+ employeeName: `${emp.firstName} ${emp.lastName}`,
+ ok: false,
+ reason: "Already marked for this date",
+ });
+ continue;
+ }
+ const record = buildMarkedRecord(emp, payload);
+ attendanceRecords = [record, ...attendanceRecords];
+ marked++;
+ results.push({
+ employeeId: emp.employeeId,
+ employeeCode: emp.employeeCode,
+ employeeName: `${emp.firstName} ${emp.lastName}`,
+ ok: true,
+ });
+ }
+ return { marked, skipped, total: targets.length, results };
  },
 };
 

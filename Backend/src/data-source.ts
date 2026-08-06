@@ -36,6 +36,7 @@ import { LeaveType } from './leave-types/leave-types.entity';
 import { WorkingDaySchedule } from './working-day-schedules/working-day-schedules.entity';
 import { UserLeaveBalance } from './users/user-leave-balance.entity';
 import { AuditLog } from './audit/audit-log.entity';
+import { EmployeeDocument } from './employee-documents/employee-document.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -82,6 +83,7 @@ export const AppDataSource = new DataSource({
     WorkingDaySchedule,
     UserLeaveBalance,
     AuditLog,
+    EmployeeDocument,
   ],
 
   migrations: ['src/migrations/*.ts'],

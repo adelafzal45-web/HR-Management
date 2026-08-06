@@ -120,7 +120,7 @@ export default function PermissionsPage() {
 
  <p className="mb-4 text-sm text-gray-500">
  Permissions are the individual capabilities you can bundle into a Role. Assign them to roles from the{" "}
- <span className="font-medium text-gray-700">Roles</span> tab.
+ <span className="font-medium text-gray-700">Roles &amp; Permissions</span> screen.
  </p>
 
  <DataTable

@@ -31,6 +31,9 @@ import {
  type AdminAttendanceRecord,
  type AttendanceCorrection,
  type AttendanceListParams,
+ type MarkAttendancePayload,
+ type BulkMarkPayload,
+ type BulkMarkResult,
  type AdminLeaveRequest,
  type LeaveListParams,
  type AdminPayrollRecord,
@@ -44,6 +47,9 @@ export type {
  AdminAttendanceStatus,
  AttendanceCorrection,
  AttendanceListParams,
+ MarkAttendancePayload,
+ BulkMarkPayload,
+ BulkMarkResult,
  AdminLeaveRequest,
  AdminLeaveStatus,
  LeaveListParams,
@@ -175,6 +181,10 @@ async function adaptAdminAttendanceRows(raw: unknown): Promise<AdminAttendanceRe
  checkOut: r.checkOut,
  workingHours: r.workingHours,
  status: r.status as AdminAttendanceRecord["status"],
+ checkInPunctuality: r.checkInPunctuality,
+ checkInVarianceMinutes: r.checkInVarianceMinutes,
+ checkOutPunctuality: r.checkOutPunctuality,
+ checkOutVarianceMinutes: r.checkOutVarianceMinutes,
  };
  });
 }
@@ -303,6 +313,10 @@ export const adminAttendanceApi = {
  checkOut: parsed.checkOut,
  workingHours: parsed.workingHours,
  status: parsed.status as AdminAttendanceRecord["status"],
+ checkInPunctuality: parsed.checkInPunctuality,
+ checkInVarianceMinutes: parsed.checkInVarianceMinutes,
+ checkOutPunctuality: parsed.checkOutPunctuality,
+ checkOutVarianceMinutes: parsed.checkOutVarianceMinutes,
  };
  },
  () => mockAdminAttendanceApi.correct(id, payload),
@@ -356,6 +370,10 @@ export const adminAttendanceApi = {
  checkOut: parsed.checkOut,
  workingHours: parsed.workingHours,
  status: parsed.status as AdminAttendanceRecord["status"],
+ checkInPunctuality: parsed.checkInPunctuality,
+ checkInVarianceMinutes: parsed.checkInVarianceMinutes,
+ checkOutPunctuality: parsed.checkOutPunctuality,
+ checkOutVarianceMinutes: parsed.checkOutVarianceMinutes,
  };
  },
  () => mockAdminAttendanceApi.checkInEmployee(employeeId),
@@ -389,6 +407,86 @@ export const adminAttendanceApi = {
  };
  },
  () => mockAdminAttendanceApi.checkOutEmployee(employeeId),
+ ),
+
+ // HR/Admin marks a single employee for a specific day with an explicit
+ // status/times (POST /attendance honours the optional user_id on the
+ // permission-guarded route). Working hours are computed when both stamps
+ // are present, matching the correction path above.
+ markFor: (employeeId: string, payload: MarkAttendancePayload) =>
+ withDemoFallback<AdminAttendanceRecord>(
+ async () => {
+ const hasTimes = Boolean(payload.checkIn && payload.checkOut);
+ const hours = hasTimes ? computeHours(payload.checkIn as string, payload.checkOut as string) : null;
+ const created = await apiRequest<Record<string, unknown>>(ENDPOINTS.attendance.base, {
+ method: "POST",
+ body: {
+ user_id: employeeId,
+ attendance_date: payload.attendanceDate,
+ attendance_status: payload.status,
+ ...(payload.checkIn ? { check_in: `${payload.checkIn}:00` } : {}),
+ ...(payload.checkOut ? { check_out: `${payload.checkOut}:00` } : {}),
+ ...(hours
+ ? { working_hours: hours.workingHours, overtime_hours: hours.overtimeHours, is_overtime: hours.isOvertime }
+ : {}),
+ },
+ });
+ const parsed = parseAttendanceRow(created);
+ return {
+ attendanceId: parsed.attendanceId,
+ employeeId: parsed.employeeId || employeeId,
+ employeeName: parsed.employeeName,
+ employeeCode: parsed.employeeCode,
+ departmentId: "",
+ departmentName: "—",
+ shiftName: parsed.shiftName,
+ attendanceDate: parsed.attendanceDate,
+ checkIn: parsed.checkIn,
+ checkOut: parsed.checkOut,
+ workingHours: parsed.workingHours,
+ status: parsed.status as AdminAttendanceRecord["status"],
+ checkInPunctuality: parsed.checkInPunctuality,
+ checkInVarianceMinutes: parsed.checkInVarianceMinutes,
+ checkOutPunctuality: parsed.checkOutPunctuality,
+ checkOutVarianceMinutes: parsed.checkOutVarianceMinutes,
+ };
+ },
+ () => mockAdminAttendanceApi.markFor(employeeId, payload),
+ ),
+
+ // HR/Admin bulk-marks a set of employees, a whole department, or every
+ // active employee for one day (POST /attendance/bulk-mark). The server
+ // skips anyone already marked that day and returns a per-employee report.
+ bulkMark: (payload: BulkMarkPayload) =>
+ withDemoFallback<BulkMarkResult>(
+ async () => {
+ const raw = await apiRequest<Record<string, unknown>>(ENDPOINTS.attendance.bulkMark, {
+ method: "POST",
+ body: {
+ attendance_date: payload.attendanceDate,
+ attendance_status: payload.status,
+ ...(payload.checkIn ? { check_in: `${payload.checkIn}:00` } : {}),
+ ...(payload.checkOut ? { check_out: `${payload.checkOut}:00` } : {}),
+ ...(payload.allActive ? { all_active: true } : {}),
+ ...(payload.departmentId ? { department_id: payload.departmentId } : {}),
+ ...(payload.employeeIds?.length ? { user_ids: payload.employeeIds } : {}),
+ },
+ });
+ const results = Array.isArray(raw.results) ? (raw.results as Array<Record<string, unknown>>) : [];
+ return {
+ marked: Number(raw.marked ?? 0),
+ skipped: Number(raw.skipped ?? 0),
+ total: Number(raw.total ?? results.length),
+ results: results.map((r) => ({
+ employeeId: String(r.user_id ?? r.employeeId ?? ""),
+ employeeCode: String(r.employee_code ?? r.employeeCode ?? "—"),
+ employeeName: String(r.employee_name ?? r.employeeName ?? "—"),
+ ok: r.ok === true,
+ reason: r.reason ? String(r.reason) : undefined,
+ })),
+ };
+ },
+ () => mockAdminAttendanceApi.bulkMark(payload),
  ),
 };
 

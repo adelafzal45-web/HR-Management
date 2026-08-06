@@ -91,6 +91,12 @@ export class AppraisalForms {
   })
   is_active!: boolean;
 
+  @Column({
+    type: 'int',
+    default: 1,
+  })
+  version!: number;
+
   // ==========================================
   // Performance Reviews
   // ==========================================
@@ -112,10 +118,7 @@ export class AppraisalForms {
   // Assignments (department / designation / employee)
   // ==========================================
 
-  @OneToMany(
-    () => AppraisalFormAssignment,
-    (assignment) => assignment.form,
-  )
+  @OneToMany(() => AppraisalFormAssignment, (assignment) => assignment.form)
   assignments!: AppraisalFormAssignment[];
 
   // ==========================================

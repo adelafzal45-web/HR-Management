@@ -365,17 +365,21 @@ export async function apiUpload<T = unknown>(
  */
 export async function apiDownload(
   path: string,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; method?: "GET" | "POST"; body?: string } = {},
 ): Promise<Blob> {
   const send = async (): Promise<Response> => {
     const headers: Record<string, string> = {};
     const token = getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
+    // Only set on POST: a GET with a Content-Type but no body confuses some
+    // proxies, and there is nothing to describe.
+    if (options.body) headers["Content-Type"] = "application/json";
 
     try {
       return await fetch(`${API_BASE_URL}${path}`, {
-        method: "GET",
+        method: options.method ?? "GET",
         headers,
+        body: options.body,
         signal: options.signal,
         credentials: "include",
       });
@@ -485,6 +489,9 @@ export const ENDPOINTS = {
     passwordResetLinks: "/users/password-reset-links",
     passwordResetLinkHistory: (id: string) => `/users/${id}/password-reset-links`,
     photo: (id: string) => `/users/${id}/photo`,
+    documents: (id: string) => `/users/${id}/documents`,
+    documentById: (id: string, docId: string) => `/users/${id}/documents/${docId}`,
+    documentsExport: "/users/documents/export",
     me: {
       profile: "/users/me/profile",
       leaveBalances: "/users/me/leave-balances",
@@ -539,10 +546,13 @@ export const ENDPOINTS = {
   // The appraisal workflow — one facade controller, three roles.
   appraisal: {
     forms: "/appraisal/forms",
+    formsExportExcel: "/appraisal/forms/export/excel",
     form: (id: string) => `/appraisal/forms/${id}`,
     formQuestions: (id: string) => `/appraisal/forms/${id}/questions`,
     publishForm: (id: string) => `/appraisal/forms/${id}/publish`,
+    formStatus: (id: string) => `/appraisal/forms/${id}/status`,
     duplicateForm: (id: string) => `/appraisal/forms/${id}/duplicate`,
+    formVersions: (id: string) => `/appraisal/forms/${id}/versions`,
     formAssignments: (id: string) => `/appraisal/forms/${id}/assignments`,
     assignment: (id: string) => `/appraisal/assignments/${id}`,
     myTeam: "/appraisal/my-team",
@@ -550,6 +560,10 @@ export const ENDPOINTS = {
     evaluate: (employeeId: string) => `/appraisal/evaluate/${employeeId}`,
     myEvaluations: "/appraisal/my-evaluations",
     allEvaluations: "/appraisal/evaluations",
+    // One employee's history/breakdown/trend. Same shape as `myEvaluations`,
+    // but HR-scoped, so the Statistics tab can be aimed at anyone the caller
+    // is allowed to see rather than only the JWT's own employee.
+    employeeEvaluations: (id: string) => `/appraisal/employees/${id}/evaluations`,
     analytics: "/appraisal/analytics",
 
     // The reusable question bank. Distinct from `formQuestions` above: those
@@ -569,6 +583,7 @@ export const ENDPOINTS = {
     rejectReview: (id: string) => `/appraisal/reviews/${id}/reject`,
     reopenReview: (id: string) => `/appraisal/reviews/${id}/reopen`,
     reviewApprovals: (id: string) => `/appraisal/reviews/${id}/approvals`,
+    reviewDetail: (id: string) => `/appraisal/reviews/${id}/detail`,
 
     // Filtered reporting. `stats`/`results`/`compare` all take the same filter
     // query, so an export always covers exactly what is on screen.

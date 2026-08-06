@@ -341,7 +341,10 @@ export class AppraisalSchedulerService {
         .leftJoinAndSelect('user.shift', 'shift')
         .where('user.status = true')
         .andWhere(
-          `EXISTS (SELECT 1 FROM "users" AS report WHERE report."team_lead_id" = user."user_id" AND report."status" = true)`,
+          // `user` is a reserved word in Postgres: unquoted, `user."user_id"`
+          // is parsed as the USER keyword and the whole statement dies with
+          // `syntax error at or near "."`. The alias has to stay quoted.
+          `EXISTS (SELECT 1 FROM "users" AS report WHERE report."team_lead_id" = "user"."user_id" AND report."status" = true)`,
         )
         .take(MAX_PER_TICK)
         .getMany();

@@ -26,8 +26,10 @@ export class SeedWorkingDaysPermissions1786700000000
   };
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    for (const [name, description] of SeedWorkingDaysPermissions1786700000000
-      .PERMISSIONS) {
+    for (const [
+      name,
+      description,
+    ] of SeedWorkingDaysPermissions1786700000000.PERMISSIONS) {
       await queryRunner.query(
         `INSERT INTO "permissions" ("permission_name", "description")
          VALUES ($1, $2)

@@ -7,10 +7,11 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
-
 const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
   'http://192.168.100.94:5173',
 ];
 

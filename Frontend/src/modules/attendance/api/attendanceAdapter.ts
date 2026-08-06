@@ -41,6 +41,8 @@ const trimTime = (v: unknown): string | null => {
  return s.length >= 5 ? s.slice(0, 5) : s;
 };
 
+export type Punctuality = "early" | "on-time" | "late" | null;
+
 export type ParsedAttendanceRow = {
  attendanceId: string;
  employeeId: string;
@@ -55,7 +57,14 @@ export type ParsedAttendanceRow = {
  overtimeHours: number | null;
  isOvertime: boolean;
  status: string;
+ checkInPunctuality: Punctuality;
+ checkInVarianceMinutes: number | null;
+ checkOutPunctuality: Punctuality;
+ checkOutVarianceMinutes: number | null;
 };
+
+const punctuality = (v: unknown): Punctuality =>
+ v === "early" || v === "on-time" || v === "late" ? v : null;
 
 export function parseAttendanceRow(row: Record<string, unknown>): ParsedAttendanceRow {
  const user = row.user as Record<string, unknown> | undefined;
@@ -81,6 +90,10 @@ export function parseAttendanceRow(row: Record<string, unknown>): ParsedAttendan
  overtimeHours: numOrNull(pick(row.overtimeHours, row.overtime_hours)),
  isOvertime: isOvertimeRaw === true || isOvertimeRaw === "true",
  status: str(pick(row.attendanceStatus, row.attendance_status, row.status), "Present"),
+ checkInPunctuality: punctuality(pick(row.checkInPunctuality, row.check_in_punctuality)),
+ checkInVarianceMinutes: numOrNull(pick(row.checkInVarianceMinutes, row.check_in_variance_minutes)),
+ checkOutPunctuality: punctuality(pick(row.checkOutPunctuality, row.check_out_punctuality)),
+ checkOutVarianceMinutes: numOrNull(pick(row.checkOutVarianceMinutes, row.check_out_variance_minutes)),
  };
 }
 

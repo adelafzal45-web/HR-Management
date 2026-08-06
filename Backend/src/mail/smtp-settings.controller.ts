@@ -92,7 +92,8 @@ export class SmtpSettingsController {
   @ApiResponse({ status: 403, description: 'Missing email-settings.update.' })
   @ApiResponse({
     status: 409,
-    description: 'SMTP is managed by environment variables and cannot be edited.',
+    description:
+      'SMTP is managed by environment variables and cannot be edited.',
   })
   async update(
     @Body() dto: UpdateSmtpSettingsDto,
@@ -139,7 +140,8 @@ export class SmtpSettingsController {
   @ApiResponse({ status: 403, description: 'Missing email-settings.test.' })
   @ApiResponse({
     status: 503,
-    description: 'SMTP is not configured or the mail server rejected the connection.',
+    description:
+      'SMTP is not configured or the mail server rejected the connection.',
   })
   async sendTest(
     @Body() dto: SendTestEmailDto,

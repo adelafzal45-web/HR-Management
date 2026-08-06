@@ -2,7 +2,10 @@ import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { SmtpSettings, type SmtpEncryption } from './entities/smtp-settings.entity';
+import {
+  SmtpSettings,
+  type SmtpEncryption,
+} from './entities/smtp-settings.entity';
 import { encrypt, decrypt, isEncrypted } from './smtp-crypto';
 
 /**
@@ -76,7 +79,7 @@ export class SmtpSettingsService {
       port: Number(process.env.SMTP_PORT) || 587,
       username: process.env.SMTP_USERNAME ?? '',
       password: process.env.SMTP_PASSWORD ?? '',
-      encryption: ((process.env.SMTP_ENCRYPTION ?? 'tls') as SmtpEncryption),
+      encryption: (process.env.SMTP_ENCRYPTION ?? 'tls') as SmtpEncryption,
       fromName: process.env.SMTP_FROM_NAME ?? process.env.SMTP_USERNAME ?? '',
       fromEmail: process.env.SMTP_FROM_EMAIL ?? '',
       replyTo: process.env.SMTP_REPLY_TO,
@@ -86,7 +89,10 @@ export class SmtpSettingsService {
 
   // ---- API projection ----
 
-  private toResponse(settings: SmtpSettings, envOverride: boolean): SmtpSettingsResponse {
+  private toResponse(
+    settings: SmtpSettings,
+    envOverride: boolean,
+  ): SmtpSettingsResponse {
     return {
       host: settings.host ?? null,
       port: settings.port,
@@ -149,19 +155,17 @@ export class SmtpSettingsService {
 
   // ---- Update ----
 
-  async update(
-    fields: {
-      host?: string;
-      port?: number;
-      username?: string;
-      password?: string;
-      encryption?: SmtpEncryption;
-      from_name?: string;
-      from_email?: string;
-      reply_to?: string;
-      enabled?: boolean;
-    },
-  ): Promise<SmtpSettingsResponse> {
+  async update(fields: {
+    host?: string;
+    port?: number;
+    username?: string;
+    password?: string;
+    encryption?: SmtpEncryption;
+    from_name?: string;
+    from_email?: string;
+    reply_to?: string;
+    enabled?: boolean;
+  }): Promise<SmtpSettingsResponse> {
     // A bare Error would surface as a 500 through AllExceptionsFilter; the
     // settings screen needs a 4xx it can show as a message, because this is a
     // deployment-configuration state and not a fault.
@@ -177,11 +181,15 @@ export class SmtpSettingsService {
     if (fields.port !== undefined) row.port = fields.port;
     if (fields.username !== undefined) row.username = fields.username || null;
     if (fields.password !== undefined) {
-      row.password_encrypted = fields.password ? encrypt(fields.password) : null;
+      row.password_encrypted = fields.password
+        ? encrypt(fields.password)
+        : null;
     }
     if (fields.encryption !== undefined) row.encryption = fields.encryption;
-    if (fields.from_name !== undefined) row.from_name = fields.from_name || null;
-    if (fields.from_email !== undefined) row.from_email = fields.from_email || null;
+    if (fields.from_name !== undefined)
+      row.from_name = fields.from_name || null;
+    if (fields.from_email !== undefined)
+      row.from_email = fields.from_email || null;
     if (fields.reply_to !== undefined) row.reply_to = fields.reply_to || null;
     if (fields.enabled !== undefined) row.enabled = fields.enabled;
 
@@ -222,7 +230,8 @@ export class SmtpSettingsService {
     if (!row.enabled) return 'SMTP is disabled — enable it to send.';
 
     const hasPassword =
-      typeof row.password_encrypted === 'string' && row.password_encrypted.length > 0;
+      typeof row.password_encrypted === 'string' &&
+      row.password_encrypted.length > 0;
     if (row.username && !hasPassword) {
       return 'Password is required when a username is set.';
     }

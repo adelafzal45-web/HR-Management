@@ -79,3 +79,22 @@ export function getEmployeeTabs(options: {
   }
   return tabs;
 }
+
+/**
+ * Tabs for the Appraisal section. Everyone with appraisal access gets
+ * "My Appraisal"; management roles additionally get Compare, Overview, and
+ * Manage Forms.
+ */
+export function getAppraisalTabs(role: Role | undefined): SectionTab[] {
+  const tabs: SectionTab[] = [
+    { key: "my-appraisal", label: "My Appraisal", icon: ClipboardCheck, path: "/appraisal" },
+  ];
+  if (role && MANAGEMENT.includes(role)) {
+    tabs.push(
+      { key: "compare", label: "Compare", icon: Users, path: "/appraisal/compare" },
+      { key: "overview", label: "Overview", icon: CalendarCheck, path: "/appraisal/overview" },
+      { key: "manage", label: "Manage Forms", icon: UserCog, path: "/appraisal/manage" },
+    );
+  }
+  return tabs;
+}

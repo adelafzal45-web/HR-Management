@@ -1,237 +1,302 @@
+// ============================================================================
+// Employee appraisal dashboard — read-only, and scoped to the signed-in person.
+//
+// Both endpoints behind this screen resolve the employee from the JWT and take
+// no target parameter, so there is nothing here to point at somebody else. An
+// Employee holds `appraisal.viewOwn` and nothing more.
+//
+// Two sources, each earning its place:
+//   · `/appraisal/dashboard/employee` — the server's own headline figures
+//     (latest, average, totals, approved count). Trusted over anything derived
+//     here so the number matches what HR sees for the same person.
+//   · `/appraisal/my-evaluations`     — the full review records, which is the
+//     only place the per-question scores, remarks and category breakdown live.
+// A failure in the dashboard call falls back to figures derived from the
+// evaluations rather than blanking the KPI row.
+//
+// Attendance is deliberately absent: working days and absences live on
+// `/appraisal/stats`, which requires `appraisal.stats` — a grant Employees do
+// not hold. Attendance stays on the Attendance screen, where it is readable.
+// ============================================================================
+
 import { useEffect, useMemo, useState } from "react";
 import {
-  ClipboardCheck, AlertCircle, TrendingUp, PieChart, X, Eye, Award, SlidersHorizontal,
+  Award,
+  CheckCircle2,
+  ClipboardCheck,
+  Layers,
+  TrendingUp,
 } from "lucide-react";
+
 import DashboardLayout from "@/app/layouts/DashboardLayout";
-import StatusBadge from "@/components/common/StatusBadge";
+import { useAuth } from "@/app/providers/AuthContext";
+import { useToast } from "@/app/providers/ToastContext";
+import SectionTabs from "@/components/common/SectionTabs";
+import { type SelectOption } from "@/components/common/SearchableSelect";
+import KpiCard from "@/components/common/KpiCard";
 import EmptyState from "@/components/common/EmptyState";
-import LoadingOverlay from "@/components/common/LoadingOverlay";
-import Modal from "@/components/dialogs/Modal";
+import { KpiSkeleton } from "@/components/common/Skeleton";
+import SidePanel from "@/components/dialogs/SidePanel";
 import DataTable, {
   type DataTableColumn,
   type SortDirection,
 } from "@/components/tables/DataTable";
-import { BarChart, LineChart } from "@/components/charts";
+import { LineChart } from "@/components/charts";
+import ExportMenu from "@/modules/appraisal/components/ExportMenu";
+import {
+  ReviewStatusBadge,
+  ScoreText,
+  scoreTone,
+} from "@/modules/appraisal/components/StatusPills";
+import { getAppraisalTabs } from "@/config/featureTabs";
 import { formatDisplayDate } from "@/utils/formatDate";
 import {
   myAppraisalApi,
-  type EvaluationScore,
   type MyEvaluations,
   type SubmittedEvaluation,
 } from "@/modules/appraisal/api/appraisalApi";
 
-// Every score on this screen is a weighted percentage (0–100), matching the
-// backend convention: score / ratingScale * 100, then a weight-weighted mean.
-function scoreTone(percentage: number) {
-  if (percentage >= 80) return "text-emerald-600";
-  if (percentage >= 60) return "text-amber-600";
-  return "text-rose-600";
-}
+/**
+ * The Daily / Weekly / Monthly grain the brief asks for. There is no
+ * `evaluationType` on a submitted review — the backend stores the form's type,
+ * not a copy on the result — so the grain is applied by bucketing `reviewDate`
+ * here rather than by inventing a filter the API does not accept.
+ */
+const GRAINS = [
+  { key: "daily", label: "Daily" },
+  { key: "weekly", label: "Weekly" },
+  { key: "monthly", label: "Monthly" },
+] as const;
 
-function barTone(percentage: number) {
-  if (percentage >= 80) return "bg-emerald-500";
-  if (percentage >= 60) return "bg-amber-500";
-  return "bg-rose-500";
-}
+type Grain = (typeof GRAINS)[number]["key"];
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 /**
- * What to show on the right of a criterion row.
- *
- * Only a rating answer came from a point on a scale, so only a rating answer
- * can be put back onto one — the backend returns `score: 0` for every other
- * type rather than inventing a number the reviewer never gave. Printing
- * "0 / 5" against a Yes/No question the reviewer answered "Yes" reads as a
- * zero, which is the opposite of what happened.
+ * ISO-8601 week number. Written out rather than pulled from a date library
+ * because the app has none, and `toLocaleDateString` cannot produce a week.
  */
-function answerLabel(score: EvaluationScore): string {
-  if (score.questionType === "rating") return `${score.score} / ${score.ratingScale}`;
-  if (score.selectedOptionText) return score.selectedOptionText;
-  if (score.questionType === "text_feedback") return "Written feedback";
-  return "—";
+function isoWeekKey(date: Date): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const weekday = d.getUTCDay() || 7; // Sunday is 0 in JS, 7 in ISO.
+  d.setUTCDate(d.getUTCDate() + 4 - weekday); // Move to the Thursday of this week.
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+  const week = Math.ceil((d.getTime() - yearStart) / 86_400_000 / 7 + 0.5);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-/** Written feedback carries no weight, so it has no percentage to chart. */
-function isScored(score: EvaluationScore) {
-  return score.questionType !== "text_feedback";
+/** Sortable key + human label for one review, at the selected grain. */
+function bucketOf(reviewDate: string, grain: Grain): { key: string; label: string } {
+  const date = new Date(reviewDate);
+  if (Number.isNaN(date.getTime())) return { key: reviewDate, label: reviewDate };
+
+  if (grain === "daily") {
+    return { key: date.toISOString().slice(0, 10), label: formatDisplayDate(reviewDate) };
+  }
+  if (grain === "weekly") {
+    const key = isoWeekKey(date);
+    return { key, label: `W${key.slice(-2)} ${key.slice(0, 4)}` };
+  }
+  const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  return { key, label: `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}` };
 }
 
-/*
- * `GET /appraisal/my-evaluations` returns this employee's complete history in
- * one response — it is bounded by their own review count, not by a page size —
- * so everything below narrows it in the browser. Refetching per filter change
- * would issue the same query and throw away rows client-side anyway.
- *
- * Two narrowing surfaces, deliberately not the same thing:
- *   - the Scope bar (date range, type, status) narrows the *whole page*, so the
- *     cards, the charts and the table all describe one selection;
- *   - the table's own search, sort and paging narrow only the table.
- *
- * The summary figures are recomputed from the scoped set rather than read off
- * `latestScore` / `averageScore`, which the server computes across everything:
- * showing an all-time average above a filtered list would be quietly wrong.
- */
-type Filters = {
-  from: string;
-  to: string;
-  evaluationType: string;
-  status: string;
-};
+const HISTORY_EXPORT_COLUMNS = [
+  { key: "reviewPeriod", label: "Period" },
+  { key: "formName", label: "Form" },
+  { key: "reviewerName", label: "Reviewed by" },
+  { key: "reviewDate", label: "Review date" },
+  { key: "totalScore", label: "Score" },
+  { key: "status", label: "Status" },
+  { key: "recommendation", label: "Recommendation" },
+];
 
-const EMPTY_FILTERS: Filters = { from: "", to: "", evaluationType: "", status: "" };
-
-function round2(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
-/*
- * Sorting is local because the whole history is already in memory. DataTable
- * deliberately renders `rows` verbatim and never slices, so this screen owns
- * both the ordering and the page window.
- */
-type SortField = "reviewDate" | "reviewPeriod" | "totalScore" | "evaluationType" | "status";
-
-function compare(a: SubmittedEvaluation, b: SubmittedEvaluation, field: SortField) {
-  if (field === "totalScore") return a.totalScore - b.totalScore;
-  return String(a[field] ?? "").localeCompare(String(b[field] ?? ""));
-}
-
-const inputClass =
-  "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60";
+type SortKey = "reviewDate" | "reviewPeriod" | "totalScore" | "status";
 
 export default function Appraisal() {
+  const { user } = useAuth();
+  const { showError } = useToast();
+
   const [data, setData] = useState<MyEvaluations | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<SubmittedEvaluation | null>(null);
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
+  const [grain, setGrain] = useState<Grain>("monthly");
+  const [period, setPeriod] = useState("");
+  const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [search, setSearch] = useState("");
-  const [sortField, setSortField] = useState<SortField>("reviewDate");
-  const [sortDir, setSortDir] = useState<SortDirection>("DESC");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [sortBy, setSortBy] = useState<SortKey>("reviewDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("DESC");
 
+  // The two calls settle independently — the history is the page, and losing the
+  // headline figures should cost the KPI row its precision, not the whole screen.
   useEffect(() => {
-    let active = true;
+    let cancelled = false;
+
     myAppraisalApi
       .getMyEvaluations()
-      .then((res) => active && setData(res))
-      .catch(
-        (err) =>
-          active &&
-          setError(err instanceof Error ? err.message : "Could not load your appraisal history."),
-      )
-      .finally(() => active && setLoading(false));
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          showError(
+            err instanceof Error ? err.message : "Could not load your appraisal history.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
     return () => {
-      active = false;
+      cancelled = true;
     };
-  }, []);
+  }, [showError]);
 
-  const allEvaluations = useMemo(() => data?.evaluations ?? [], [data]);
+  const evaluations = useMemo(() => data?.evaluations ?? [], [data]);
+  const breakdown = data?.categoryBreakdown ?? [];
+  const tabs = getAppraisalTabs(user?.role);
 
-  const typeOptions = useMemo(
-    () => [...new Set(allEvaluations.map((e) => e.evaluationType).filter(Boolean))].sort(),
-    [allEvaluations],
-  );
-  const statusOptions = useMemo(
-    () => [...new Set(allEvaluations.map((e) => e.status).filter(Boolean))].sort(),
-    [allEvaluations],
-  );
-
-  const evaluations = useMemo(
-    () =>
-      allEvaluations.filter((e) => {
-        // reviewDate is an ISO date string, so a lexical compare against the
-        // date-input values is correct and avoids a timezone round-trip.
-        if (filters.from && e.reviewDate.slice(0, 10) < filters.from) return false;
-        if (filters.to && e.reviewDate.slice(0, 10) > filters.to) return false;
-        if (filters.evaluationType && e.evaluationType !== filters.evaluationType) return false;
-        if (filters.status && e.status !== filters.status) return false;
-        return true;
-      }),
-    [allEvaluations, filters],
-  );
-
-  const activeFilterCount =
-    (filters.from ? 1 : 0) +
-    (filters.to ? 1 : 0) +
-    (filters.evaluationType ? 1 : 0) +
-    (filters.status ? 1 : 0);
-  const filtering = activeFilterCount > 0;
-
-  // The server returns newest first; "latest" must stay the newest review no
-  // matter how the table below is sorted, so it is taken before any reordering.
-  const latest = evaluations[0];
-
-  const latestScore = latest ? latest.totalScore : null;
-  const averageScore = evaluations.length
-    ? round2(evaluations.reduce((sum, e) => sum + e.totalScore, 0) / evaluations.length)
-    : null;
-  const bestScore = evaluations.length
-    ? Math.max(...evaluations.map((e) => e.totalScore))
-    : null;
-
-  // The server's `trend` is oldest→newest across everything; rebuilding it from
-  // the scoped list keeps the chart and the table telling the same story.
-  const trend = useMemo(
-    () => [...evaluations].reverse().map((e) => ({ period: e.reviewPeriod, score: e.totalScore })),
-    [evaluations],
-  );
-
-  // Category breakdown likewise: mean normalised score per criterion, over the
-  // rows actually on screen. Written-feedback questions are left out — they are
-  // stored at 0% by definition, so charting them would show a criterion the
-  // employee "failed" when nothing was ever scored.
-  const breakdown = useMemo(() => {
-    const byCriteria = new Map<string, { total: number; count: number; weightage: number }>();
-    for (const evaluation of evaluations) {
-      for (const score of evaluation.scores) {
-        if (!isScored(score)) continue;
-        const key = score.criteriaName || "Uncategorised";
-        const bucket = byCriteria.get(key) ?? { total: 0, count: 0, weightage: score.weightage };
-        bucket.total += score.scorePercentage;
-        bucket.count += 1;
-        bucket.weightage = score.weightage;
-        byCriteria.set(key, bucket);
-      }
-    }
-    return [...byCriteria.entries()].map(([criteriaName, b]) => ({
-      criteriaName,
-      averageScore: round2(b.total / b.count),
-      weightage: b.weightage,
-    }));
+  const periodOptions = useMemo<SelectOption[]>(() => {
+    const seen = new Set<string>();
+    for (const evaluation of evaluations) seen.add(evaluation.reviewPeriod);
+    return [...seen]
+      .sort()
+      .reverse()
+      .map((value) => ({ value, label: value }));
   }, [evaluations]);
 
-  // ---------------- Table: search, sort, page ----------------
-  const searched = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return evaluations;
-    return evaluations.filter((e) =>
-      [e.reviewPeriod, e.formName, e.reviewerName, e.evaluationType, e.status]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(term)),
-    );
-  }, [evaluations, search]);
+  const statusOptions = useMemo<SelectOption[]>(() => {
+    const seen = new Set<string>();
+    for (const evaluation of evaluations) seen.add(evaluation.status);
+    return [...seen].sort().map((value) => ({ value, label: value }));
+  }, [evaluations]);
 
-  const sorted = useMemo(() => {
-    const factor = sortDir === "ASC" ? 1 : -1;
-    return [...searched].sort((a, b) => compare(a, b, sortField) * factor);
-  }, [searched, sortField, sortDir]);
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const rows = evaluations.filter((evaluation) => {
+      if (period && evaluation.reviewPeriod !== period) return false;
+      if (status && evaluation.status !== status) return false;
 
-  // Clamping rather than resetting: narrowing the scope while on page 4 should
-  // land on the last page that still has rows, not silently show an empty table.
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const pageRows = useMemo(
-    () => sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [sorted, currentPage, pageSize],
+      // Date range filter
+      if (dateFrom || dateTo) {
+        const reviewDate = new Date(evaluation.reviewDate);
+        if (dateFrom && reviewDate < new Date(dateFrom)) return false;
+        if (dateTo && reviewDate > new Date(dateTo)) return false;
+      }
+
+      if (!needle) return true;
+      return (
+        evaluation.reviewPeriod.toLowerCase().includes(needle) ||
+        evaluation.formName.toLowerCase().includes(needle) ||
+        evaluation.reviewerName.toLowerCase().includes(needle)
+      );
+    });
+
+    const direction = sortDirection === "ASC" ? 1 : -1;
+    return rows.slice().sort((a, b) => {
+      switch (sortBy) {
+        case "reviewPeriod":
+          return a.reviewPeriod.localeCompare(b.reviewPeriod) * direction;
+        case "totalScore":
+          return (a.totalScore - b.totalScore) * direction;
+        case "status":
+          return a.status.localeCompare(b.status) * direction;
+        default:
+          return (Date.parse(a.reviewDate) - Date.parse(b.reviewDate)) * direction;
+      }
+    });
+  }, [evaluations, period, status, dateFrom, dateTo, search, sortBy, sortDirection]);
+
+  const paged = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize],
   );
 
+  // The trend follows the filters: a chart that ignored them would contradict the
+  // table sitting directly beneath it.
+  const trendRows = useMemo(() => {
+    const buckets = new Map<string, { label: string; total: number; reviews: number }>();
+    for (const evaluation of filtered) {
+      const { key, label } = bucketOf(evaluation.reviewDate, grain);
+      const bucket = buckets.get(key) ?? { label, total: 0, reviews: 0 };
+      bucket.total += evaluation.totalScore;
+      bucket.reviews += 1;
+      buckets.set(key, bucket);
+    }
+
+    return [...buckets.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, bucket]) => ({
+        label: bucket.label,
+        score: Math.round((bucket.total / bucket.reviews) * 10) / 10,
+        reviews: bucket.reviews,
+      }));
+  }, [filtered, grain]);
+
+  const historyExportRows = useMemo(
+    () =>
+      filtered.map((evaluation) => ({
+        reviewPeriod: evaluation.reviewPeriod,
+        formName: evaluation.formName,
+        reviewerName: evaluation.reviewerName,
+        reviewDate: formatDisplayDate(evaluation.reviewDate),
+        totalScore: `${evaluation.totalScore}%`,
+        status: evaluation.status,
+        recommendation: evaluation.recommendation || "—",
+      })),
+    [filtered],
+  );
+
+  // Newest first regardless of how the table happens to be sorted — "most recent"
+  // has to mean most recent.
+  const byDateDesc = useMemo(
+    () => evaluations.slice().sort((a, b) => Date.parse(b.reviewDate) - Date.parse(a.reviewDate)),
+    [evaluations],
+  );
+  const latest = byDateDesc[0] ?? null;
+  const previousScore = byDateDesc.length > 1 ? byDateDesc[1].totalScore : null;
+
+  const latestScore = data?.latestScore ?? null;
+  const averageScore = data?.averageScore ?? null;
+  const totalEvaluations = evaluations.length;
+  const approvedCount = evaluations.filter(
+    (evaluation) => evaluation.status === "Approved",
+  ).length;
+
+  const activeFilters =
+    (period ? 1 : 0) + (status ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+
+  // `sortable` on every column that has a `sortKey`: the filter popover offers
+  // the field but no longer the direction, so the header toggle is what flips
+  // ascending/descending.
   const columns: DataTableColumn<SubmittedEvaluation>[] = [
     {
       key: "reviewPeriod",
       label: "Period",
       sortable: true,
+      sortKey: "reviewPeriod",
+      filterable: true,
+      filterOptions: periodOptions,
+      filterPlaceholder: "All periods",
       render: (row) => (
         <div className="min-w-0">
           <p className="truncate font-medium text-gray-900">{row.reviewPeriod}</p>
@@ -240,390 +305,349 @@ export default function Appraisal() {
       ),
     },
     {
-      key: "evaluationType",
-      label: "Type",
-      sortable: true,
+      key: "reviewerName",
+      label: "Reviewed by",
       hideBelow: "lg",
-      render: (row) => (
-        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-          {row.evaluationType || "—"}
-        </span>
-      ),
+      render: (row) => <span className="text-gray-600">{row.reviewerName}</span>,
     },
     {
-      key: "reviewer",
-      label: "Reviewed by",
-      hideBelow: "md",
+      key: "reviewDate",
+      label: "Review date",
       sortable: true,
       sortKey: "reviewDate",
+      hideBelow: "md",
       render: (row) => (
-        <div className="min-w-0">
-          <p className="truncate text-gray-700">{row.reviewerName}</p>
-          <p className="text-xs text-gray-400">{formatDisplayDate(row.reviewDate)}</p>
-        </div>
+        <span className="text-gray-500">{formatDisplayDate(row.reviewDate)}</span>
       ),
     },
     {
       key: "totalScore",
       label: "Score",
       sortable: true,
-      render: (row) => (
-        <div className="min-w-[110px]">
-          <span className={`text-sm font-semibold ${scoreTone(row.totalScore)}`}>
-            {row.totalScore}%
-          </span>
-          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-            <div
-              className={`h-full rounded-full ${barTone(row.totalScore)}`}
-              style={{ width: `${Math.min(100, row.totalScore)}%` }}
-            />
-          </div>
-        </div>
-      ),
+      sortKey: "totalScore",
+      align: "center",
+      render: (row) => <ScoreText score={row.totalScore} />,
     },
     {
       key: "status",
       label: "Status",
       sortable: true,
-      render: (row) => <StatusBadge status={row.status} />,
+      sortKey: "status",
+      align: "center",
+      filterable: true,
+      filterOptions: statusOptions,
+      filterPlaceholder: "All statuses",
+      render: (row) => <ReviewStatusBadge status={row.status} />,
     },
   ];
 
   return (
     <DashboardLayout title="My Appraisal" activeKey="appraisal">
-      <LoadingOverlay show={loading} label="Loading your appraisal results…" />
+      <SectionTabs tabs={tabs} active="my-appraisal" />
 
-      {error && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
+      {/* ---------------- Report grain ---------------- */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-gray-900">Reporting period</h3>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Groups the score trend below {grain}
+          </p>
+        </div>
+        <div role="group" aria-label="Report grain" className="flex rounded-xl bg-gray-100 p-0.5">
+          {GRAINS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setGrain(key)}
+              aria-pressed={grain === key}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                grain === key
+                  ? "bg-white text-brand-dark shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && !data ? (
+        <KpiSkeleton count={4} />
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <KpiCard
+            label="Latest score"
+            value={latestScore === null ? "—" : `${latestScore}%`}
+            icon={Award}
+            tone="brand"
+            hint={latest ? latest.reviewPeriod : "No review yet"}
+            delta={
+              latestScore !== null && previousScore !== null
+                ? Math.round((latestScore - previousScore) * 10) / 10
+                : null
+            }
+            deltaGood="up"
+          />
+          <KpiCard
+            label="Average score"
+            value={averageScore === null ? "—" : `${averageScore}%`}
+            icon={TrendingUp}
+            tone="blue"
+            hint="Across every review period"
+          />
+          <KpiCard
+            label="Reviews received"
+            value={totalEvaluations}
+            icon={ClipboardCheck}
+            tone="slate"
+            hint={`${periodOptions.length} period${periodOptions.length === 1 ? "" : "s"}`}
+          />
+          <KpiCard
+            label="Approved"
+            value={approvedCount}
+            icon={CheckCircle2}
+            tone="green"
+            hint="Signed off by HR"
+          />
         </div>
       )}
 
-      {/* ---------------- Scope: narrows the entire page ---------------- */}
-      {allEvaluations.length > 0 && (
-        <div className="mb-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-              <SlidersHorizontal size={15} className="text-brand-dark" />
-              Scope
-            </p>
-            {filtering && (
-              <button
-                type="button"
-                onClick={() => setFilters(EMPTY_FILTERS)}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition hover:border-red-200 hover:text-red-600"
-              >
-                <X size={13} />
-                Clear ({activeFilterCount})
-              </button>
-            )}
+      {/* ---------------- Most recent review ---------------- */}
+      {latest && (
+        <div className="mt-5 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                Most recent review
+              </p>
+              <p className="mt-1 text-base font-semibold text-gray-900">{latest.reviewPeriod}</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                {latest.formName} · reviewed by {latest.reviewerName} on{" "}
+                {formatDisplayDate(latest.reviewDate)}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <ReviewStatusBadge status={latest.status} />
+              <p className={`text-3xl font-semibold ${scoreTone(latest.totalScore)}`}>
+                {latest.totalScore}
+                <span className="text-base font-normal text-gray-400">%</span>
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
-                From
-              </span>
-              <input
-                type="date"
-                value={filters.from}
-                max={filters.to || undefined}
-                onChange={(e) => setFilters((p) => ({ ...p, from: e.target.value }))}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
-                To
-              </span>
-              <input
-                type="date"
-                value={filters.to}
-                min={filters.from || undefined}
-                onChange={(e) => setFilters((p) => ({ ...p, to: e.target.value }))}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
-                Evaluation type
-              </span>
-              <select
-                value={filters.evaluationType}
-                onChange={(e) => setFilters((p) => ({ ...p, evaluationType: e.target.value }))}
-                className={inputClass}
-              >
-                <option value="">All types</option>
-                {typeOptions.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
-                Status
-              </span>
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
-                className={inputClass}
-              >
-                <option value="">All statuses</option>
-                {statusOptions.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {filtering && (
-            <p className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-400">
-              Showing {evaluations.length} of {allEvaluations.length} review
-              {allEvaluations.length === 1 ? "" : "s"}. Every figure below is for this selection.
+          {latest.recommendation && (
+            <p className="mt-4 rounded-xl bg-brand-light/50 px-4 py-3 text-sm font-medium text-brand-dark">
+              {latest.recommendation}
             </p>
           )}
+          {latest.comments && (
+            <p className="mt-3 text-sm leading-relaxed text-gray-600">{latest.comments}</p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setSelected(latest)}
+            className="mt-4 flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-brand/60 hover:bg-brand-light/40 hover:text-brand-dark"
+          >
+            <Layers size={13} />
+            See the question-by-question breakdown
+          </button>
         </div>
       )}
 
-      {!loading && allEvaluations.length === 0 && !error ? (
-        <EmptyState
-          icon={ClipboardCheck}
-          title="No results yet"
-          description="Your performance review hasn't been submitted by your team lead yet."
-        />
-      ) : !loading && !latest ? (
-        <EmptyState
-          icon={ClipboardCheck}
-          title="No matching reviews"
-          description="No review matches the current scope."
-          actionLabel="Clear filters"
-          onAction={() => setFilters(EMPTY_FILTERS)}
-        />
-      ) : (
-        latest && (
-          <>
-            {/* ---------------- Summary ---------------- */}
-            <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-                <p className="text-xs text-gray-500">Latest Score</p>
-                <p className={`mt-1 text-3xl font-semibold ${scoreTone(latestScore ?? 0)}`}>
-                  {latestScore ?? "—"}
-                  <span className="text-base font-normal text-gray-400">%</span>
-                </p>
-                <p className="mt-1 truncate text-xs text-gray-400">{latest.reviewPeriod}</p>
-              </div>
-              <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-                <p className="text-xs text-gray-500">
-                  Average ({filtering ? "selection" : "all periods"})
-                </p>
-                <p className="mt-1 text-3xl font-semibold text-gray-900">
-                  {averageScore ?? "—"}
-                  <span className="text-base font-normal text-gray-400">%</span>
-                </p>
-                <p className="mt-1 text-xs text-gray-400">
-                  across {evaluations.length} review{evaluations.length === 1 ? "" : "s"}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-                <p className="flex items-center gap-1.5 text-xs text-gray-500">
-                  <Award size={13} className="text-brand-dark" />
-                  Best Score
-                </p>
-                <p className={`mt-1 text-3xl font-semibold ${scoreTone(bestScore ?? 0)}`}>
-                  {bestScore ?? "—"}
-                  <span className="text-base font-normal text-gray-400">%</span>
-                </p>
-                <p className="mt-1 text-xs text-gray-400">highest in this selection</p>
-              </div>
-              <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-                <p className="text-xs text-gray-500">Reviews Completed</p>
-                <p className="mt-1 text-3xl font-semibold text-gray-900">{evaluations.length}</p>
-                <p className="mt-1 text-xs text-gray-400">
-                  {allEvaluations.length} on record
-                </p>
-              </div>
+      {/* ---------------- Trend + profile ---------------- */}
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 lg:col-span-2">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">Score over time</h3>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Your reviews grouped {grain}, following the filters above
+            </p>
+          </div>
+
+          <LineChart
+            labels={trendRows.map((row) => row.label)}
+            series={[{ label: "Average score", values: trendRows.map((row) => row.score) }]}
+            height={280}
+            valueSuffix="%"
+            ariaLabel={`Your average score across ${trendRows.length} ${grain} period${
+              trendRows.length === 1 ? "" : "s"
+            }.`}
+            emptyMessage="No reviews fall inside these filters"
+          />
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">Where you score</h3>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Your average per question, across every period
+            </p>
+          </div>
+
+          {loading && !data ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-10 animate-pulse rounded-lg bg-gray-100" />
+              ))}
             </div>
-
-            {/* ---------------- Latest review detail ---------------- */}
-            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Most recent review · {latest.reviewPeriod}
-                  </p>
-                  <p className="mt-0.5 text-xs text-gray-400">
-                    {latest.formName}
-                    {latest.evaluationType && ` · ${latest.evaluationType}`} · reviewed by{" "}
-                    {latest.reviewerName} on {formatDisplayDate(latest.reviewDate)}
-                  </p>
-                </div>
-                <StatusBadge status={latest.status} />
-              </div>
-
-              {latest.comments && (
-                <p className="mt-4 text-sm leading-relaxed text-gray-600">{latest.comments}</p>
-              )}
-              {latest.recommendation && (
-                <p className="mt-3 rounded-xl bg-brand-light/50 px-4 py-3 text-sm font-medium text-brand-dark">
-                  {latest.recommendation}
-                </p>
-              )}
-
-              <div className="mt-6 space-y-3">
-                {latest.scores.map((s) => (
-                  <div key={s.scoreId}>
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="font-medium text-gray-700">
-                        {s.criteriaName}{" "}
-                        <span className="text-gray-400">
-                          {isScored(s) ? `(${s.weightage}%)` : "(unscored)"}
-                        </span>
+          ) : breakdown.length === 0 ? (
+            <EmptyState
+              icon={Award}
+              title="No scored questions yet"
+              description="Your reviews have no per-question breakdown."
+            />
+          ) : (
+            <div className="space-y-3">
+              {breakdown.map((category) => (
+                <div key={category.criteriaName}>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate font-medium text-gray-700">
+                      {category.criteriaName}
+                      <span className="ml-1.5 text-xs text-gray-400">
+                        ({category.weightage}%)
                       </span>
-                      <span
-                        className={`shrink-0 text-right font-semibold ${
-                          isScored(s) ? scoreTone(s.scorePercentage) : "text-gray-500"
-                        }`}
-                      >
-                        {answerLabel(s)}
-                        {isScored(s) && (
-                          <span className="ml-1.5 text-xs font-normal text-gray-400">
-                            {s.scorePercentage}%
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    {isScored(s) && (
-                      <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-                        <div
-                          className={`h-full rounded-full ${barTone(s.scorePercentage)}`}
-                          style={{ width: `${Math.min(100, s.scorePercentage)}%` }}
-                        />
-                      </div>
-                    )}
-                    {s.remarks && <p className="mt-1 text-xs text-gray-500">{s.remarks}</p>}
+                    </span>
+                    <span className={`shrink-0 font-semibold ${scoreTone(category.averageScore)}`}>
+                      {category.averageScore}%
+                    </span>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ---------------- Charts ---------------- */}
-            <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-              {trend.length > 1 && (
-                <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-                  <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                    <TrendingUp size={16} className="text-brand-dark" /> Performance Trend
-                  </h2>
-                  <p className="mb-4 mt-1 text-xs text-gray-400">
-                    Oldest to newest across the selected periods.
-                  </p>
-                  <LineChart
-                    labels={trend.map((t) => t.period)}
-                    series={[{ label: "Score", values: trend.map((t) => t.score) }]}
-                    valueSuffix="%"
-                    showLegend={false}
-                    emptyMessage="Not enough reviews to draw a trend yet."
-                  />
-                </div>
-              )}
-
-              {breakdown.length > 0 && (
-                <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-                  <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                    <PieChart size={16} className="text-brand-dark" /> Category-wise Results
-                  </h2>
-                  <p className="mb-4 mt-1 text-xs text-gray-400">
-                    Your average per question across the selected reviews.
-                  </p>
-                  <BarChart
-                    labels={breakdown.map((c) => c.criteriaName)}
-                    series={[
-                      { label: "Average score", values: breakdown.map((c) => c.averageScore) },
-                    ]}
-                    valueSuffix="%"
-                    showLegend={false}
-                    showValues
-                    emptyMessage="No scored questions in this selection."
-                  />
-                  <div className="mt-5 space-y-3 border-t border-gray-100 pt-4">
-                    {breakdown.map((c) => (
-                      <div key={c.criteriaName}>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-700">
-                            {c.criteriaName} <span className="text-gray-400">({c.weightage}%)</span>
-                          </span>
-                          <span className={`font-semibold ${scoreTone(c.averageScore)}`}>
-                            {c.averageScore}%
-                          </span>
-                        </div>
-                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-                          <div
-                            className={`h-full rounded-full ${barTone(c.averageScore)}`}
-                            style={{ width: `${Math.min(100, c.averageScore)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className={`h-full rounded-full ${
+                        category.averageScore >= 80
+                          ? "bg-emerald-500"
+                          : category.averageScore >= 60
+                            ? "bg-amber-500"
+                            : "bg-rose-500"
+                      }`}
+                      style={{
+                        width: `${Math.min(100, Math.max(0, category.averageScore))}%`,
+                      }}
+                    />
                   </div>
                 </div>
-              )}
+              ))}
             </div>
+          )}
+        </section>
+      </div>
 
-            {/* ---------------- History ---------------- */}
-            <div className="mt-6">
-              <div className="mb-3 flex items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900">Review History</h2>
-                  <p className="mt-0.5 text-xs text-gray-400">
-                    Every review in the current scope. Open one to read its full breakdown.
-                  </p>
-                </div>
-              </div>
-              <DataTable<SubmittedEvaluation>
-                columns={columns}
-                rows={pageRows}
-                rowKey={(row) => row.appraisalId}
-                search={search}
-                onSearchChange={(value) => {
-                  setSearch(value);
-                  setPage(1);
-                }}
-                searchPlaceholder="Period, form or reviewer…"
-                emptyIcon={ClipboardCheck}
-                emptyTitle="No reviews to show"
-                emptyDescription="Nothing matches the current scope and search."
-                page={currentPage}
-                pageSize={pageSize}
-                total={sorted.length}
-                onPageChange={setPage}
-                onPageSizeChange={(size) => {
-                  setPageSize(size);
-                  setPage(1);
-                }}
-                sortKey={sortField}
-                sortDir={sortDir}
-                onSortChange={(key, dir) => {
-                  setSortField(key as SortField);
-                  setSortDir(dir);
-                  setPage(1);
-                }}
-                actions={(row) => (
-                  <button
-                    type="button"
-                    onClick={() => setSelected(row)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition hover:border-brand/60 hover:text-brand-dark"
-                  >
-                    <Eye size={14} />
-                    View
-                  </button>
-                )}
-              />
+      {/* ---------------- History ---------------- */}
+      <div className="mt-5">
+        <DataTable
+          columns={columns}
+          rows={paged}
+          rowKey={(row) => row.appraisalId}
+          loading={loading}
+          search={search}
+          onSearchChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          searchPlaceholder="Search your reviews by period, form or reviewer…"
+          emptyIcon={ClipboardCheck}
+          emptyTitle={activeFilters || search ? "No reviews match" : "No results yet"}
+          emptyDescription={
+            activeFilters || search
+              ? "Clear the filters to see your whole review history."
+              : "Your performance review hasn't been submitted by your team lead yet."
+          }
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+          sortKey={sortBy}
+          sortDir={sortDirection}
+          onSortChange={(key, direction) => {
+            setSortBy(key as SortKey);
+            setSortDirection(direction);
+          }}
+          unifiedFilter
+          hideSortDirection
+          sortOptions={[
+            { value: "reviewDate", label: "Review date" },
+            { value: "reviewPeriod", label: "Period" },
+            { value: "totalScore", label: "Score" },
+            { value: "status", label: "Status" },
+          ]}
+          filters={{ reviewPeriod: period, status }}
+          onFiltersChange={(next) => {
+            setPeriod(next.reviewPeriod ?? "");
+            setStatus(next.status ?? "");
+            setPage(1);
+          }}
+          extraFilterCount={(dateFrom ? 1 : 0) + (dateTo ? 1 : 0)}
+          onClearExtraFilters={() => {
+            setDateFrom("");
+            setDateTo("");
+            setPage(1);
+          }}
+          extraFilters={
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">
+                  Review date from
+                </span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(event) => {
+                    setDateFrom(event.target.value);
+                    setPage(1);
+                  }}
+                  className="min-h-9 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">
+                  Review date to
+                </span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(event) => {
+                    setDateTo(event.target.value);
+                    setPage(1);
+                  }}
+                  className="min-h-9 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                />
+              </label>
             </div>
-          </>
-        )
-      )}
+          }
+          toolbarRight={
+            <ExportMenu
+              title="My appraisal history"
+              columns={HISTORY_EXPORT_COLUMNS}
+              rows={historyExportRows}
+              disabled={filtered.length === 0}
+              onError={(message) => showError(message)}
+            />
+          }
+          actions={(row) => (
+            <button
+              type="button"
+              onClick={() => setSelected(row)}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-brand/60 hover:bg-brand-light/40 hover:text-brand-dark"
+            >
+              <Layers size={13} />
+              Details
+            </button>
+          )}
+        />
+      </div>
 
-      <Modal
+      {/* ---------------- Detail ---------------- */}
+      {/* A drawer rather than a centred modal: the history table stays visible
+          alongside, so stepping through several reviews keeps its context. */}
+      <SidePanel
         open={!!selected}
         title={selected ? `Review · ${selected.reviewPeriod}` : ""}
         description={
@@ -632,46 +656,78 @@ export default function Appraisal() {
             : ""
         }
         onClose={() => setSelected(null)}
+        maxWidth="max-w-lg"
       >
         {selected && (
           <div>
-            <p className={`text-3xl font-semibold ${scoreTone(selected.totalScore)}`}>
-              {selected.totalScore}
-              <span className="text-base font-normal text-gray-400">%</span>
-            </p>
-            {selected.comments && (
-              <p className="mt-3 text-sm leading-relaxed text-gray-600">{selected.comments}</p>
-            )}
+            <div className="flex items-center justify-between">
+              <p className={`text-3xl font-semibold ${scoreTone(selected.totalScore)}`}>
+                {selected.totalScore}
+                <span className="text-base font-normal text-gray-400">%</span>
+              </p>
+              <ReviewStatusBadge status={selected.status} />
+            </div>
+
             {selected.recommendation && (
               <p className="mt-3 rounded-xl bg-brand-light/50 px-4 py-3 text-sm font-medium text-brand-dark">
                 {selected.recommendation}
               </p>
             )}
-            <div className="mt-5 space-y-2.5">
-              {selected.scores.map((s) => (
-                <div key={s.scoreId}>
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-gray-600">
-                      {s.criteriaName}{" "}
-                      <span className="text-gray-400">
-                        {isScored(s) ? `(${s.weightage}%)` : "(unscored)"}
+            {selected.comments && (
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">{selected.comments}</p>
+            )}
+
+            {selected.scores.length === 0 ? (
+              <EmptyState
+                icon={ClipboardCheck}
+                title="No question scores"
+                description="This review was recorded without a per-question breakdown."
+              />
+            ) : (
+              <div className="mt-5 space-y-3">
+                {selected.scores.map((score) => (
+                  <div key={score.scoreId}>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 font-medium text-gray-700">
+                        {score.criteriaName}{" "}
+                        <span className="text-gray-400">({score.weightage}%)</span>
                       </span>
-                    </span>
-                    <span
-                      className={`shrink-0 text-right font-semibold ${
-                        isScored(s) ? scoreTone(s.scorePercentage) : "text-gray-500"
-                      }`}
-                    >
-                      {answerLabel(s)}
-                    </span>
+                      <span
+                        className={`shrink-0 font-semibold ${scoreTone(score.scorePercentage)}`}
+                      >
+                        {score.score} / {score.ratingScale}
+                        <span className="ml-1.5 text-xs font-normal text-gray-400">
+                          {score.scorePercentage}%
+                        </span>
+                      </span>
+                    </div>
+                    {/* A bar as well as the number: the weight says how much the
+                        question counted, the bar how well it went, and reading
+                        both off one row is the point of this modal. */}
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className={`h-full rounded-full ${
+                          score.scorePercentage >= 80
+                            ? "bg-emerald-500"
+                            : score.scorePercentage >= 60
+                              ? "bg-amber-500"
+                              : "bg-rose-500"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, Math.max(0, score.scorePercentage))}%`,
+                        }}
+                      />
+                    </div>
+                    {score.remarks && (
+                      <p className="mt-1 text-xs text-gray-500">{score.remarks}</p>
+                    )}
                   </div>
-                  {s.remarks && <p className="mt-0.5 text-xs text-gray-500">{s.remarks}</p>}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
-      </Modal>
+      </SidePanel>
     </DashboardLayout>
   );
 }

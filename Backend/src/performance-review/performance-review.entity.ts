@@ -42,6 +42,23 @@ export class PerformanceReview {
   })
   appraisalForm!: AppraisalForms;
 
+  /**
+   * Which version of the form this review was submitted against.
+   *
+   * Set from `AppraisalForms.version` at creation and never changed afterwards.
+   * A published form can be edited, which bumps its version and writes a fresh
+   * set of question links; this column is what keeps this review resolving the
+   * questions it was actually answered against rather than the newest ones.
+   *
+   * Nullable because reviews predating versioning have no recorded version —
+   * they are read as version 1, which is what the migration backfilled.
+   */
+  @Column({
+    type: 'int',
+    nullable: true,
+  })
+  form_version?: number | null;
+
   // ==========================================
   // Reviewer (Team Lead / Manager)
   // ==========================================

@@ -57,7 +57,6 @@ export type NavNode = NavLeaf | NavGroup;
 const leaf = (n: Omit<NavLeaf, "type">): NavLeaf => ({ type: "leaf", ...n });
 
 const HR_ADMIN: Role[] = [ROLES.HR_MANAGER, ROLES.ADMINISTRATOR];
-const MANAGEMENT: Role[] = [ROLES.HR_MANAGER, ROLES.ADMINISTRATOR, ROLES.TEAM_LEAD];
 
 export const NAV_TREE: NavNode[] = [
   leaf({
@@ -133,8 +132,8 @@ export const NAV_TREE: NavNode[] = [
     key: "employees",
     label: "Employees",
     icon: UsersRound,
-    path: (role) => (role === ROLES.TEAM_LEAD ? "/team" : "/employees"),
-    roles: MANAGEMENT,
+    path: "/employees",
+    roles: HR_ADMIN,
     implemented: true,
   }),
   leaf({
