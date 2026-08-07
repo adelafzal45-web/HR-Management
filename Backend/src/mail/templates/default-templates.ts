@@ -306,6 +306,55 @@ ${detailRows([
 ${button('View appraisal', '{{dashboard_url}}')}
 <p style="margin:0;color:#8a8a8a;font-size:13px;">A reopened appraisal is editable again and needs resubmitting.</p>`,
   },
+  {
+    key: 'leave_entitlement_granted',
+    name: 'Leave Entitlement Updated',
+    description:
+      'Sent to an employee when HR grants, increases, or adjusts a yearly leave entitlement.',
+    subject: 'Your {{leave_type}} entitlement for {{year}} was {{action}}',
+    bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your leave entitlement was updated</h1>
+<p style="margin:0 0 14px;">Hello {{employee_name}}, your <strong>{{leave_type}}</strong> entitlement for {{year}} was {{action}}.</p>
+${detailRows([
+  ['Leave type', '{{leave_type}}'],
+  ['Year', '{{year}}'],
+  ['New total entitlement', '{{total_days}} day(s)'],
+])}
+<p style="margin:0;color:#8a8a8a;font-size:13px;">You can see your full balance and history from the Leave section of the portal.</p>`,
+  },
+  {
+    key: 'leave_request_approved',
+    name: 'Leave Request Approved',
+    description: 'Confirms an approved leave request and the days deducted.',
+    subject: 'Your {{leave_type}} request was approved',
+    bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your leave request was approved</h1>
+<p style="margin:0 0 14px;">Hello {{employee_name}}, your {{leave_type}} request has been approved.</p>
+${detailRows([
+  ['Leave type', '{{leave_type}}'],
+  ['Start date', '{{start_date}}'],
+  ['End date', '{{end_date}}'],
+  ['Days deducted', '{{days_count}}'],
+])}
+<p style="margin:0;color:#8a8a8a;font-size:13px;">Your balance has been updated accordingly.</p>`,
+  },
+  {
+    key: 'leave_request_rejected',
+    name: 'Leave Request Rejected',
+    description: 'Informs an employee that their leave request was rejected.',
+    subject: 'Your {{leave_type}} request was rejected',
+    bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your leave request was rejected</h1>
+<p style="margin:0 0 14px;">Hello {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} was not approved.</p>
+<p style="margin:0;color:#8a8a8a;font-size:13px;">No days were deducted from your balance. Speak with your manager for details.</p>`,
+  },
+  {
+    key: 'leave_request_cancelled',
+    name: 'Leave Request Cancelled',
+    description:
+      'Confirms a leave request was cancelled and, if applicable, that the balance was restored.',
+    subject: 'Your {{leave_type}} request was cancelled',
+    bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your leave request was cancelled</h1>
+<p style="margin:0 0 14px;">Hello {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} was cancelled.</p>
+<p style="margin:0;color:#8a8a8a;font-size:13px;">If days had already been deducted, they have been returned to your balance.</p>`,
+  },
 ];
 
 /** Fast lookup by key, and the set of keys code may enqueue. */

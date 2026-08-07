@@ -37,6 +37,15 @@ export default function DashboardCalendar() {
 
   return (
     <div className="space-y-4">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-amber-500 p-5 text-white shadow-sm">
+        <p className="text-sm font-medium text-white/90">{greetingFor(today.getHours())}</p>
+        <p className="text-2xl font-extrabold">{user?.firstName ?? "there"}!</p>
+        <p className="mt-1 text-xs text-white/80">
+          {today.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+        </p>
+        <img src={robot} alt="" aria-hidden className="pointer-events-none absolute -bottom-4 -right-2 h-28 w-28 object-contain opacity-90" />
+      </div>
+
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-base font-bold text-gray-900">Calendar</h3>
@@ -97,15 +106,6 @@ export default function DashboardCalendar() {
             <span className="h-2.5 w-2.5 rounded-full bg-amber-200" /> Weekend
           </span>
         </div>
-      </div>
-
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-amber-500 p-5 text-white shadow-sm">
-        <p className="text-sm font-medium text-white/90">{greetingFor(today.getHours())}</p>
-        <p className="text-2xl font-extrabold">{user?.firstName ?? "there"}!</p>
-        <p className="mt-1 text-xs text-white/80">
-          {today.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-        </p>
-        <img src={robot} alt="" aria-hidden className="pointer-events-none absolute -bottom-4 -right-2 h-28 w-28 object-contain opacity-90" />
       </div>
     </div>
   );

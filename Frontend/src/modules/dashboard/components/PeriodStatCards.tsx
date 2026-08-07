@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { TrendingUp, UserCheck, UserX, ClipboardCheck, Clock3, XCircle } from "lucide-react";
+import { TrendingUp, UserCheck, UserX, ClipboardCheck, Clock3, XCircle, Users } from "lucide-react";
 import { useDevAuth } from "@/app/providers/DevAuthContext";
 import { adminAttendanceApi, adminLeaveApi } from "@/modules/settings/api/adminOpsApi";
+import { attendanceApi, leaveApi } from "@/api/hrApi";
+import { employeeService } from "@/modules/employees/api/employeeService";
 import { PERIOD_OPTIONS, getPeriodRange, monthsInRange, isWithinRange, type SummaryPeriod } from "@/modules/dashboard/hooks/usePeriodRange";
 
 type Tone = "green" | "blue" | "red" | "amber";
@@ -54,7 +56,40 @@ function StatTile({
 type AttendanceCounts = { present: number; absent: number; total: number };
 type LeaveCounts = { approved: number; pending: number; rejected: number };
 
-function useAttendanceSummary(period: SummaryPeriod, enabled: boolean) {
+function useTotalEmployees(enabled: boolean) {
+  const [state, setState] = useState<{ loading: boolean; error: string | null; count: number | null }>({
+    loading: enabled,
+    error: null,
+    count: null,
+  });
+
+  useEffect(() => {
+    if (!enabled) {
+      setState({ loading: false, error: null, count: null });
+      return;
+    }
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: null }));
+
+    employeeService
+      .list({ status: true, limit: 1 })
+      .then((res) => {
+        if (cancelled) return;
+        setState({ loading: false, error: null, count: res.total });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ loading: false, error: "Couldn't load employee count", count: null });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  return state;
+}
+
+function useAttendanceSummary(period: SummaryPeriod, enabled: boolean, selfMode: boolean) {
   const [state, setState] = useState<{ loading: boolean; error: string | null; counts: AttendanceCounts | null }>({
     loading: enabled,
     error: null,
@@ -72,27 +107,43 @@ function useAttendanceSummary(period: SummaryPeriod, enabled: boolean) {
     const { from, to } = getPeriodRange(period);
     const spans = monthsInRange(from, to);
 
-    Promise.all(spans.map(({ month, year }) => adminAttendanceApi.list({ month, year })))
-      .then((results) => {
-        if (cancelled) return;
-        const rows = results.flatMap((r) => r.data).filter((r) => isWithinRange(r.attendanceDate, from, to));
-        const present = rows.filter((r) => r.status === "Present" || r.status === "Late" || r.status === "Half-Day").length;
-        const absent = rows.filter((r) => r.status === "Absent").length;
-        setState({ loading: false, error: null, counts: { present, absent, total: rows.length } });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ loading: false, error: "Couldn't load attendance", counts: null });
-      });
+    if (selfMode) {
+      // Self-service: permission-free routes for the signed-in user's own data.
+      Promise.all(spans.map(({ month, year }) => attendanceApi.getHistory({ month, year })))
+        .then((results) => {
+          if (cancelled) return;
+          const rows = results.flat().filter((r) => isWithinRange(r.attendanceDate, from, to));
+          const present = rows.filter((r) => r.status === "Present" || r.status === "Late" || r.status === "Half-Day").length;
+          const absent = rows.filter((r) => r.status === "Absent").length;
+          setState({ loading: false, error: null, counts: { present, absent, total: rows.length } });
+        })
+        .catch(() => {
+          if (!cancelled) setState({ loading: false, error: "Couldn't load attendance", counts: null });
+        });
+    } else {
+      // Admin: org-wide fetch (requires attendance.view).
+      Promise.all(spans.map(({ month, year }) => adminAttendanceApi.list({ month, year })))
+        .then((results) => {
+          if (cancelled) return;
+          const rows = results.flatMap((r) => r.data).filter((r) => isWithinRange(r.attendanceDate, from, to));
+          const present = rows.filter((r) => r.status === "Present" || r.status === "Late" || r.status === "Half-Day").length;
+          const absent = rows.filter((r) => r.status === "Absent").length;
+          setState({ loading: false, error: null, counts: { present, absent, total: rows.length } });
+        })
+        .catch(() => {
+          if (!cancelled) setState({ loading: false, error: "Couldn't load attendance", counts: null });
+        });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [period, enabled]);
+  }, [period, enabled, selfMode]);
 
   return state;
 }
 
-function useLeaveSummary(period: SummaryPeriod, enabled: boolean) {
+function useLeaveSummary(period: SummaryPeriod, enabled: boolean, selfMode: boolean) {
   const [state, setState] = useState<{ loading: boolean; error: string | null; counts: LeaveCounts | null }>({
     loading: enabled,
     error: null,
@@ -109,37 +160,62 @@ function useLeaveSummary(period: SummaryPeriod, enabled: boolean) {
 
     const { from, to } = getPeriodRange(period);
 
-    adminLeaveApi
-      .list({})
-      .then((res) => {
-        if (cancelled) return;
-        const rows = res.data.filter((r) => isWithinRange(r.appliedOn?.slice(0, 10) ?? "", from, to));
-        const approved = rows.filter((r) => r.status === "Approved").length;
-        const pending = rows.filter((r) => r.status === "Pending").length;
-        const rejected = rows.filter((r) => r.status === "Rejected").length;
-        setState({ loading: false, error: null, counts: { approved, pending, rejected } });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ loading: false, error: "Couldn't load leave requests", counts: null });
-      });
+    if (selfMode) {
+      // Self-service: permission-free route for the signed-in user's own leave requests.
+      leaveApi
+        .getMyLeaves()
+        .then((rows) => {
+          if (cancelled) return;
+          const filtered = rows.filter((r) => isWithinRange(r.appliedOn?.slice(0, 10) ?? "", from, to));
+          const approved = filtered.filter((r) => r.status === "Approved").length;
+          const pending = filtered.filter((r) => r.status === "Pending").length;
+          const rejected = filtered.filter((r) => r.status === "Rejected").length;
+          setState({ loading: false, error: null, counts: { approved, pending, rejected } });
+        })
+        .catch(() => {
+          if (!cancelled) setState({ loading: false, error: "Couldn't load leave requests", counts: null });
+        });
+    } else {
+      // Admin: org-wide fetch (requires leave-request.view).
+      adminLeaveApi
+        .list({})
+        .then((res) => {
+          if (cancelled) return;
+          const rows = res.data.filter((r) => isWithinRange(r.appliedOn?.slice(0, 10) ?? "", from, to));
+          const approved = rows.filter((r) => r.status === "Approved").length;
+          const pending = rows.filter((r) => r.status === "Pending").length;
+          const rejected = rows.filter((r) => r.status === "Rejected").length;
+          setState({ loading: false, error: null, counts: { approved, pending, rejected } });
+        })
+        .catch(() => {
+          if (!cancelled) setState({ loading: false, error: "Couldn't load leave requests", counts: null });
+        });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [period, enabled]);
+  }, [period, enabled, selfMode]);
 
   return state;
 }
 
-export default function PeriodStatCards() {
+export default function PeriodStatCards({ employeeId }: { employeeId?: string } = {}) {
   const { hasPermission } = useDevAuth();
   const [period, setPeriod] = useState<SummaryPeriod>("daily");
 
-  const canAttendance = hasPermission("attendance.view");
-  const canLeave = hasPermission("leave-request.view");
+  // When employeeId is set, this is "own stats" mode: use self-service routes with
+  // no permission gate. When undefined, this is admin org-wide mode: use admin routes
+  // gated on the respective view permissions.
+  const selfMode = employeeId !== undefined;
 
-  const attendance = useAttendanceSummary(period, canAttendance);
-  const leave = useLeaveSummary(period, canLeave);
+  const canAttendance = selfMode || hasPermission("attendance.view");
+  const canLeave = selfMode || hasPermission("leave-request.view");
+  const canViewEmployees = !selfMode && hasPermission("employees.view");
+
+  const attendance = useAttendanceSummary(period, canAttendance, selfMode);
+  const leave = useLeaveSummary(period, canLeave, selfMode);
+  const totalEmployees = useTotalEmployees(canViewEmployees);
 
   const attendanceRate =
     attendance.counts && attendance.counts.total > 0
@@ -151,7 +227,10 @@ export default function PeriodStatCards() {
 
   const periodNoun = period === "daily" ? "Today" : period === "weekly" ? "This Week" : "This Month";
 
-  if (!canAttendance && !canLeave) {
+  // In self mode we never show the no-permission message (self-service routes don't
+  // require permissions). In admin mode we show it only when none of the summary
+  // permissions (attendance, leave, employees) are present.
+  if (!selfMode && !hasPermission("attendance.view") && !hasPermission("leave-request.view") && !canViewEmployees) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
         Your role doesn't have permission to view attendance or leave summaries yet.
@@ -181,6 +260,19 @@ export default function PeriodStatCards() {
       </div>
 
       <div className="space-y-4">
+        {canViewEmployees && (
+          <div className="grid grid-cols-1">
+            <StatTile
+              icon={Users}
+              tone="blue"
+              value={String(totalEmployees.count ?? 0)}
+              label="Total Employees"
+              loading={totalEmployees.loading}
+              error={totalEmployees.error}
+            />
+          </div>
+        )}
+
         {canAttendance && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             <StatTile

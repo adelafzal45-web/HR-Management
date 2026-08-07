@@ -1,25 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Users } from "lucide-react";
-import Can from "@/components/permission/Can";
+import { Search, Users, Briefcase } from "lucide-react";
 import { useDevAuth } from "@/app/providers/DevAuthContext";
-import { employeesApi, type Employee } from "@/modules/employees/api/employeeApi";
+import { myProfileService } from "@/modules/employees/api/employeeService";
+import type { Employee } from "@/modules/employees/types/employee.types";
 import { adminAttendanceApi } from "@/modules/settings/api/adminOpsApi";
 import EmployeeAvatar from "@/modules/employees/components/EmployeeAvatar";
 
 type Row = { id: string; firstName: string; lastName: string; code: string; position: string; photo?: string | null; thumb?: string | null };
 
-type Tab = "onboarded" | "out-of-office";
+type Tab = "onboarded" | "out-of-office" | "working";
 
 export default function TeamAnalyticsCard() {
   const { hasPermission } = useDevAuth();
   const canAttendance = hasPermission("attendance.view");
 
-  const [tab, setTab] = useState<Tab>("onboarded");
+  const [tab, setTab] = useState<Tab>(canAttendance ? "working" : "onboarded");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [outIds, setOutIds] = useState<Set<string>>(new Set());
+  const [workingIds, setWorkingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -29,7 +30,7 @@ export default function TeamAnalyticsCard() {
     const today = new Date().toISOString().slice(0, 10);
 
     Promise.all([
-      employeesApi.list({ pageSize: 500, status: "active" }),
+      myProfileService.team({ limit: 500, status: true }),
       canAttendance ? adminAttendanceApi.list({ date: today }) : Promise.resolve({ data: [], total: 0 }),
     ])
       .then(([empRes, attRes]) => {
@@ -38,7 +39,11 @@ export default function TeamAnalyticsCard() {
         const out = new Set(
           attRes.data.filter((r) => r.status === "Absent" || r.status === "On Leave" || r.status === "Leave").map((r) => r.employeeId),
         );
+        const working = new Set(
+          attRes.data.filter((r) => r.status === "Present" || r.status === "Late" || r.status === "Half-Day").map((r) => r.employeeId),
+        );
         setOutIds(out);
+        setWorkingIds(working);
       })
       .catch(() => !cancelled && setError("Couldn't load team analytics."))
       .finally(() => !cancelled && setLoading(false));
@@ -51,38 +56,42 @@ export default function TeamAnalyticsCard() {
 
   const rows: Row[] = useMemo(() => {
     const toRow = (e: Employee): Row => ({
-      id: e.employeeId,
-      firstName: e.firstName,
-      lastName: e.lastName,
-      code: e.employeeCode,
-      position: e.designationName || "—",
-      photo: e.profileImageUrl,
-      thumb: e.profileImageThumbUrl,
+      id: e.user_id,
+      firstName: e.first_name,
+      lastName: e.last_name,
+      code: e.employee_code,
+      position: e.designation?.title || "—",
+      photo: e.profile_image,
+      thumb: e.profile_image_thumb,
     });
 
-    let list =
-      tab === "onboarded"
-        ? [...employees].sort((a, b) => (a.joiningDate < b.joiningDate ? 1 : -1))
-        : employees.filter((e) => outIds.has(e.employeeId));
+    let list: Employee[];
+    if (tab === "working") {
+      list = employees.filter((e) => workingIds.has(e.user_id));
+    } else if (tab === "onboarded") {
+      list = [...employees].sort((a, b) => (a.joining_date < b.joining_date ? 1 : -1));
+    } else {
+      list = employees.filter((e) => outIds.has(e.user_id));
+    }
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
         (e) =>
-          `${e.firstName} ${e.lastName}`.toLowerCase().includes(q) ||
-          e.employeeCode.toLowerCase().includes(q) ||
-          e.designationName.toLowerCase().includes(q),
+          `${e.first_name} ${e.last_name}`.toLowerCase().includes(q) ||
+          e.employee_code.toLowerCase().includes(q) ||
+          (e.designation?.title || "").toLowerCase().includes(q),
       );
     }
 
     return list.slice(0, 8).map(toRow);
-  }, [employees, outIds, tab, search]);
+  }, [employees, outIds, workingIds, tab, search]);
 
   return (
-    <Can permission="employees.view">
+    <>
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-base font-bold text-gray-900 sm:text-lg">Team Analytic</h3>
+          <h3 className="text-base font-bold text-gray-900 sm:text-lg">Team Analytics</h3>
           <div className="relative w-full max-w-[220px] sm:w-auto">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -95,6 +104,16 @@ export default function TeamAnalyticsCard() {
         </div>
 
         <div className="mb-4 inline-flex rounded-full bg-gray-100 p-1">
+          <button
+            type="button"
+            onClick={() => setTab("working")}
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition sm:text-sm ${
+              tab === "working" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            <Briefcase size={14} />
+            Working
+          </button>
           <button
             type="button"
             onClick={() => setTab("onboarded")}
@@ -115,9 +134,9 @@ export default function TeamAnalyticsCard() {
           </button>
         </div>
 
-        {tab === "out-of-office" && !canAttendance ? (
+        {(tab === "out-of-office" || tab === "working") && !canAttendance ? (
           <p className="rounded-lg bg-amber-50 px-3 py-3 text-xs text-amber-700">
-            Your role can view employees but not attendance, so "Out of Office" can't be determined.
+            Your role can view employees but not attendance, so "{tab === "working" ? "Working" : "Out of Office"}" can't be determined.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -152,7 +171,13 @@ export default function TeamAnalyticsCard() {
                     <td colSpan={3} className="py-8">
                       <div className="flex flex-col items-center gap-2 text-gray-400">
                         <Users size={22} />
-                        <p className="text-xs">{tab === "onboarded" ? "No employees found." : "Nobody is out of office today."}</p>
+                        <p className="text-xs">
+                          {tab === "working"
+                            ? "No team members are working today."
+                            : tab === "onboarded"
+                              ? "No employees found."
+                              : "Nobody is out of office today."}
+                        </p>
                       </div>
                     </td>
                   </tr>
@@ -179,6 +204,6 @@ export default function TeamAnalyticsCard() {
           </div>
         )}
       </div>
-    </Can>
+    </>
   );
 }

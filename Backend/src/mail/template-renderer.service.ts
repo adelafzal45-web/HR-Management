@@ -54,6 +54,13 @@ export const ALLOWED_PLACEHOLDERS = [
   'pending_employees',
   'shift_end_time',
   'evaluation_date',
+  // Leave
+  'leave_type',
+  'start_date',
+  'end_date',
+  'days_count',
+  'action',
+  'total_days',
 ] as const;
 
 export type PlaceholderKey = (typeof ALLOWED_PLACEHOLDERS)[number];

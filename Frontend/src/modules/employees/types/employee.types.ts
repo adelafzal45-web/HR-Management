@@ -272,8 +272,20 @@ export type CreateEmployeePayload = {
  * audited. `employee_code` IS editable here, unlike on create.
  */
 export type UpdateEmployeePayload = Partial<
-  Omit<CreateEmployeePayload, 'password'>
-> & { employee_code?: string };
+  Omit<CreateEmployeePayload, 'password' | 'team_lead_id'>
+> & {
+  employee_code?: string;
+  /**
+   * `null` explicitly clears the team lead; `undefined` leaves it untouched.
+   * The backend's mapScalars distinguishes the two, so the form sends `null`
+   * when the user picks "no team lead" rather than omitting the field.
+   *
+   * `team_lead_id` is omitted from the base `CreateEmployeePayload` above so
+   * this `string | null` type applies as-is: intersecting it with the base's
+   * `string` would collapse back to `string` and drop the `null`.
+   */
+  team_lead_id?: string | null;
+};
 
 /** PATCH /users/:id/account-settings */
 export type AccountSettingsPayload = {
@@ -359,4 +371,20 @@ export function photoUrl(
   if (/^(https?:|data:|blob:)/i.test(path)) return path;
   const origin = apiBaseUrl.replace(/\/api\/?$/, '');
   return `${origin}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
+/**
+ * Resolves a stored document's on-disk name to a loadable URL.
+ *
+ * The bytes live under `uploads/employee-documents/<stored_name>` and are served
+ * statically at `/uploads/...` (mounted before the `/api` prefix), the same way
+ * profile photos are — so the file is reachable by a plain link without a bearer
+ * token. `stored_name` is a generated UUID, never the uploader's filename.
+ */
+export function documentUrl(
+  storedName: string | null | undefined,
+  apiBaseUrl: string,
+): string | undefined {
+  if (!storedName) return undefined;
+  return photoUrl(`/uploads/employee-documents/${storedName}`, apiBaseUrl);
 }

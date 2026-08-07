@@ -29,6 +29,7 @@ const Attendance = lazy(() => import("@/modules/attendance/pages/Attendance"));
 const AttendanceRecordsPage = lazy(() => import("@/modules/attendance/pages/AttendanceRecords"));
 const Leave = lazy(() => import("@/modules/leave/pages/Leave"));
 const LeaveRequestsPage = lazy(() => import("@/modules/leave/pages/LeaveRequests"));
+const LeaveManagementPage = lazy(() => import("@/modules/leave/pages/LeaveManagement"));
 const Payroll = lazy(() => import("@/modules/payroll/pages/Payroll"));
 const ProcessPayrollPage = lazy(() => import("@/modules/payroll/pages/ProcessPayroll"));
 const Appraisal = lazy(() => import("@/modules/appraisal/pages/Appraisal"));
@@ -309,6 +310,14 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
  <LeaveRequestsPage />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/leave-management"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <LeaveManagementPage />
  </ProtectedRoute>,
  )}
  />

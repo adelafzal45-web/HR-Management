@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsNotEmpty,
   IsOptional,
@@ -40,6 +41,23 @@ export class CreateLeaveRequestDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Leave type catalog UUID. Required for balance deduction — a request without it cannot be matched to an entitlement/balance.',
+  })
+  @IsOptional()
+  @IsUUID()
+  leave_type_id?: string;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Single-day request charged as half a day (deducts 0.5 instead of 1).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  is_half_day?: boolean;
 
   @ApiPropertyOptional({
     example: 'Pending',

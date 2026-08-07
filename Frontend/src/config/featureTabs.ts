@@ -6,6 +6,7 @@ import {
   Users,
   UserCog,
   IdCard,
+  CalendarClock,
 } from "lucide-react";
 import type { SectionTab } from "@/components/common/SectionTabs";
 import { ROLES, type Role } from "@/constants/roles";
@@ -30,6 +31,16 @@ export function getLeaveTabs(role: Role | undefined): SectionTab[] {
       icon: ClipboardCheck,
       path: role === ROLES.TEAM_LEAD ? "/team/leaves" : "/leave-requests",
     });
+    // HR/Admin only — org-wide entitlement/used/remaining report. Team
+    // Leads get the request queue above but not the full balances table.
+    if (role !== ROLES.TEAM_LEAD) {
+      tabs.push({
+        key: "leave-management",
+        label: "Employee Leave Management",
+        icon: CalendarClock,
+        path: "/leave-management",
+      });
+    }
   }
   return tabs;
 }

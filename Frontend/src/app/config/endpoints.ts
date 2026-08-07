@@ -96,6 +96,12 @@ export const ENDPOINTS = {
  byId: (id: string) => `/leave-requests/${id}`,
  },
 
+ // Admin/HR "Employee Leave Management" report: one row per (employee,
+ // leave type) with entitlement/used/remaining/pending.
+ leaveEntitlements: {
+ balances: "/leave-entitlements/balances",
+ },
+
  // Confirmed live REST CRUD (per the Swagger doc): POST/GET /payroll,
  // GET/PATCH/DELETE /payroll/:id. Rows are flat (basic_salary, allowance,
  // bonus, deduction, tax, net_salary, payroll_month, payment_date) with the

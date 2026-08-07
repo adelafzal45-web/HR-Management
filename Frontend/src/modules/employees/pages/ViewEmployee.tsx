@@ -27,13 +27,14 @@ import EmployeeAvatar from "@/modules/employees/components/EmployeeAvatar";
 import EmployeeAttendanceTab from "@/modules/employees/components/EmployeeAttendanceTab";
 import EmployeeLeaveTab from "@/modules/employees/components/EmployeeLeaveTab";
 import EmployeePayrollTab from "@/modules/employees/components/EmployeePayrollTab";
+import EmployeeDocumentsTab from "@/modules/employees/components/EmployeeDocumentsTab";
 import { useAuth } from "@/app/providers/AuthContext";
 import { useToast } from "@/app/providers/ToastContext";
 import { employeesApi, type Employee } from "@/modules/employees/api/employeeApi";
 import { adminPasswordResetApi, type PasswordResetLinkHistoryEntry } from "@/modules/auth/api";
 import SendResetLinksDialog, { type ResetLinkTarget } from "@/modules/employees/components/SendResetLinksDialog";
 
-type TabKey = "profile" | "attendance" | "leave" | "payroll" | "reset-links";
+type TabKey = "profile" | "attendance" | "leave" | "payroll" | "documents" | "reset-links";
 
 const RESET_LINK_STATUS_STYLES: Record<PasswordResetLinkHistoryEntry["status"], string> = {
  used: "bg-emerald-50 text-emerald-700",
@@ -112,6 +113,7 @@ export default function ViewEmployeePage() {
  const { hasPermission } = useAuth();
 
  const canSendReset = hasPermission("employees.password.reset");
+ const canViewDocuments = hasPermission("employees.documents.view");
 
  // Per-employee reset history is a separate fetch from the profile record:
  // the page renders fast without it, and it is only requested when the tab
@@ -237,6 +239,17 @@ export default function ViewEmployeePage() {
  >
  Payroll
  </button>
+ {canViewDocuments && (
+ <button
+ type="button"
+ onClick={() => setTab("documents")}
+ className={`min-h-9 flex-1 rounded-full px-5 text-sm font-semibold transition sm:flex-none ${
+ tab === "documents" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+ }`}
+ >
+ Documents
+ </button>
+ )}
  {canSendReset && (
  <button
  type="button"
@@ -256,6 +269,8 @@ export default function ViewEmployeePage() {
  <EmployeeLeaveTab employeeId={employee.employeeId} />
  ) : tab === "payroll" ? (
  <EmployeePayrollTab employee={employee} />
+ ) : tab === "documents" && canViewDocuments ? (
+ <EmployeeDocumentsTab employeeId={employee.employeeId} employeeCode={employee.employeeCode} />
  ) : tab === "reset-links" && canSendReset ? (
  <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

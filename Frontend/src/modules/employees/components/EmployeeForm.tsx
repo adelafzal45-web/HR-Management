@@ -306,6 +306,7 @@ export default function EmployeeForm({
   const canViewSalary = hasPermission("employees.salary.view") || canEditSalary;
   const canAssignRole = hasPermission("employees.role.assign");
   const canAssignTeamLead = hasPermission("employees.teamlead.assign");
+  const canResetPassword = hasPermission("employees.password.reset");
   const canAssignLeave = hasPermission("employees.leave.assign");
   const canEditEmergency =
     hasPermission("employees.emergency.edit") || !isEdit;
@@ -612,7 +613,14 @@ export default function EmployeeForm({
 
       email: validateEmail(form.email),
       phone: validatePhone(form.phone),
-      password: isEdit ? undefined : validatePassword(form.password),
+      // On edit the password is optional — blank means "keep the existing one".
+      // When something is typed it must still satisfy the policy, so validate it
+      // only when non-empty. On create it is always required.
+      password: isEdit
+        ? form.password
+          ? validatePassword(form.password)
+          : undefined
+        : validatePassword(form.password),
 
       street_address: form.street_address.trim()
         ? undefined
@@ -810,7 +818,36 @@ export default function EmployeeForm({
         // audit log either way.
         if (!canEditSalary) delete updatePayload.salary;
 
+        // Team lead: an empty selection must CLEAR the lead, so send an explicit
+        // `null` rather than omitting the field (which the backend reads as "not
+        // touched"). Only send it when this user may assign leads, so a
+        // read-only field never silently unassigns the existing one.
+        if (canAssignTeamLead) {
+          updatePayload.team_lead_id = form.team_lead_id.trim() || null;
+        } else {
+          delete updatePayload.team_lead_id;
+        }
+
         saved = await employeeService.update(employee.user_id, updatePayload);
+
+        // A new password, when typed, is applied through the dedicated reset
+        // endpoint. Blank means "keep the existing password". This runs after
+        // the record is saved and, like the photo/leave/document steps below,
+        // failing it warns rather than discarding a save that already committed.
+        if (canResetPassword && form.password.trim()) {
+          try {
+            await employeeService.resetPassword(saved.user_id, {
+              new_password: form.password,
+            });
+          } catch (error) {
+            toast.showError(
+              "Employee saved, but the password didn't change.",
+              error instanceof ApiError
+                ? error.message
+                : "Password changes may be disabled for this account.",
+            );
+          }
+        }
 
         if (photoFile) {
           const withPhoto = await uploadDeferredPhoto(saved.user_id);
@@ -1096,25 +1133,27 @@ export default function EmployeeForm({
                 error={errors.phone}
                 autoComplete="tel"
               />
-              {isEdit ? (
-                <div className="sm:col-span-2">
-                  <ReadOnlyField
-                    label="Password"
-                    value="Set by the employee"
-                    hint="Use the Reset Password action on the employee's record to issue a new one."
-                  />
-                </div>
+              {isEdit && !canResetPassword ? (
+                <ReadOnlyField
+                  label="Password"
+                  value="••••••••"
+                  hint="You don't have permission to change this employee's password."
+                />
               ) : (
                 <Field
                   label="Password"
                   name="password"
-                  type="password"
-                  requiredMark
+                  type="text"
+                  requiredMark={!isEdit}
                   value={form.password}
                   onChange={(e) => update("password", e.target.value)}
                   error={errors.password}
-                  autoComplete="new-password"
-                  hint="At least 8 characters, with upper and lower case, a number and a symbol."
+                  autoComplete={isEdit ? "off" : "new-password"}
+                  hint={
+                    isEdit
+                      ? "Enter a new password to change it. Leave blank to keep the existing password. At least 8 characters, with upper and lower case, a number and a symbol."
+                      : "At least 8 characters, with upper and lower case, a number and a symbol."
+                  }
                 />
               )}
             </div>
