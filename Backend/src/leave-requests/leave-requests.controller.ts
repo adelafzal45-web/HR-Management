@@ -23,7 +23,7 @@ import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
-
+// import { Public } from 'src/auth/decorators/public.decorator';
 @ApiBearerAuth()
 @ApiTags('Leave Requests')
 @Controller('leave-requests')
@@ -37,6 +37,7 @@ export class LeaveRequestsController {
   @Post()
   @UseGuards(PermissionGuard)
   @RequirePermission('leave-request.create')
+  // @Public()
   @ApiOperation({
     summary: 'Create a leave request',
     description: 'Allows an employee to submit a leave request.',
@@ -71,6 +72,7 @@ export class LeaveRequestsController {
   @Get()
   @UseGuards(PermissionGuard)
   @RequirePermission('leave-request.view')
+  // @Public()
   @ApiOperation({
     summary: 'Get all leave requests',
     description: 'Returns all leave requests.',

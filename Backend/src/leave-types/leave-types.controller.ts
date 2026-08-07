@@ -22,7 +22,7 @@ import { CreateLeaveTypeDto } from './dto/create-leave-type.dto';
 import { UpdateLeaveTypeDto } from './dto/update-leave-type.dto';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
-
+// import { Public } from 'src/auth/decorators/public.decorator';
 @ApiTags('Leave Types')
 @Controller('leave-types')
 export class LeaveTypesController {
@@ -35,6 +35,7 @@ export class LeaveTypesController {
   @Post()
   @UseGuards(PermissionGuard)
   @RequirePermission('leave-types.create')
+  // @Public()
   @ApiOperation({ summary: 'Create a leave type' })
   @ApiBody({ type: CreateLeaveTypeDto })
   @ApiResponse({ status: 201, description: 'Leave type created successfully.' })
@@ -58,6 +59,7 @@ export class LeaveTypesController {
   @Get()
   @UseGuards(PermissionGuard)
   @RequirePermission('leave-types.view')
+  // @Public()
   @ApiOperation({
     summary: 'List all leave types',
     description:

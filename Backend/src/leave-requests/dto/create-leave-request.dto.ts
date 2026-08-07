@@ -27,14 +27,14 @@ export class CreateLeaveRequestDto {
   @MaxLength(30)
   leave_type!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     enum: LeaveDurationType,
     example: LeaveDurationType.FULL_DAY,
-    description:
-      'Leave duration type (FIRST_HALF, SECOND_HALF, FULL_DAY, MULTIPLE_DAYS)',
+    description: 'Leave duration type. Defaults to FULL_DAY if not provided.',
   })
+  @IsOptional()
   @IsEnum(LeaveDurationType)
-  duration_type!: LeaveDurationType;
+  duration_type?: LeaveDurationType;
 
   @ApiProperty({
     example: '2026-08-15',
@@ -61,7 +61,7 @@ export class CreateLeaveRequestDto {
 
   @ApiPropertyOptional({
     example: 'Pending',
-    description: 'Current status of the leave request.',
+    description: 'Leave status. Defaults to Pending.',
   })
   @IsOptional()
   @IsString()
@@ -74,12 +74,4 @@ export class CreateLeaveRequestDto {
   })
   @IsUUID()
   user_id!: string;
-
-  @ApiPropertyOptional({
-    example: '0ab49780-8dc6-4c3b-9eb0-a7c3f8365c12',
-    description: 'UUID of the manager approving the request.',
-  })
-  @IsOptional()
-  @IsUUID()
-  approved_by_id?: string;
 }

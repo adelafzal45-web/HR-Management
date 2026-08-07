@@ -32,7 +32,7 @@ export class LeaveRequest {
     length: 20,
     default: LeaveDurationType.FULL_DAY,
   })
-  duration_type!: LeaveDurationType;
+  duration_type?: LeaveDurationType;
 
   @Column({
     type: 'date',

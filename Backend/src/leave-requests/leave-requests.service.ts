@@ -181,8 +181,11 @@ export class LeaveRequestsService {
 
       await this.validateLeaveType(createLeaveRequestDto.leave_type);
 
+      const duration =
+        createLeaveRequestDto.duration_type ?? LeaveDurationType.FULL_DAY;
+
       const days = this.calculateLeaveDays(
-        createLeaveRequestDto.duration_type,
+        duration,
         createLeaveRequestDto.start_date,
         createLeaveRequestDto.end_date,
       );
@@ -200,9 +203,13 @@ export class LeaveRequestsService {
 
         reason: createLeaveRequestDto.reason,
 
-        status: createLeaveRequestDto.status ?? 'Pending',
+        // Every newly created leave starts as Pending
+        status: 'Pending',
 
         user,
+
+        // Do NOT set approved_by here
+        // Do NOT set approved_date here
       });
 
       return manager.getRepository(LeaveRequest).save(leaveRequest);
@@ -280,8 +287,10 @@ export class LeaveRequestsService {
         updateLeaveRequestDto.start_date ||
         updateLeaveRequestDto.end_date
       ) {
-        const duration: LeaveDurationType =
-          updateLeaveRequestDto.duration_type ?? leaveRequest.duration_type;
+        const duration =
+          updateLeaveRequestDto.duration_type ??
+          leaveRequest.duration_type ??
+          LeaveDurationType.FULL_DAY;
 
         const start =
           updateLeaveRequestDto.start_date ?? leaveRequest.start_date;
@@ -317,6 +326,15 @@ export class LeaveRequestsService {
         await this.deductBalance(manager, leaveRequest);
 
         leaveRequest.approved_date = new Date();
+
+        // Temporary until authentication is implemented.
+        // Later replace this with:
+        // leaveRequest.approved_by = loggedInUser;
+        if (updateLeaveRequestDto.approved_by_id) {
+          leaveRequest.approved_by = await this.validateUser(
+            updateLeaveRequestDto.approved_by_id,
+          );
+        }
       }
 
       // Approved -> Cancelled/Rejected
