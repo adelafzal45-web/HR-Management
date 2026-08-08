@@ -33,6 +33,7 @@ const LeaveManagementPage = lazy(() => import("@/modules/leave/pages/LeaveManage
 const PublicHolidaysPage = lazy(() => import("@/modules/leave/pages/PublicHolidays"));
 const LeaveEntitlementsPage = lazy(() => import("@/modules/leave/pages/LeaveEntitlements"));
 const LeavePlannerPage = lazy(() => import("@/modules/leave/pages/LeavePlanner"));
+const MeetingsPage = lazy(() => import("@/modules/meetings/pages/Meetings"));
 const Payroll = lazy(() => import("@/modules/payroll/pages/Payroll"));
 const ProcessPayrollPage = lazy(() => import("@/modules/payroll/pages/ProcessPayroll"));
 const Appraisal = lazy(() => import("@/modules/appraisal/pages/Appraisal"));
@@ -190,6 +191,17 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute>
  <Notifications />
+ </ProtectedRoute>,
+ )}
+ />
+ {/* No role gate: employees need to see the meetings they were invited to.
+ The page itself picks the org-wide list vs. the token-scoped /meetings/me
+ from the role, and the backend re-checks meeting.view/.create/.manage. */}
+ <Route
+ path="/meetings"
+ element={withSuspense(
+ <ProtectedRoute>
+ <MeetingsPage />
  </ProtectedRoute>,
  )}
  />

@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   ClipboardCheck,
   CalendarX2,
+  CalendarClock,
   Wallet,
   Bell,
   User,
@@ -119,6 +120,15 @@ export const NAV_TREE: NavNode[] = [
     label: "Payroll",
     icon: Wallet,
     path: "/payroll",
+    implemented: true,
+  }),
+  leaf({
+    key: "meetings",
+    label: "Meetings",
+    icon: CalendarClock,
+    path: "/meetings",
+    // No `roles`: an employee has no meeting.* grant but still needs to see the
+    // meetings they were invited to, which they read via /meetings/me.
     implemented: true,
   }),
   leaf({

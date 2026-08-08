@@ -100,6 +100,20 @@ export const ENDPOINTS = {
  me: "/leave-requests/me",
  },
 
+ // Meeting scheduling and invitations. POST resolves the invitee list from the
+ // chosen audience (specific people / a department / everyone); email and
+ // in-app delivery each follow the meeting's own notify_email / notify_in_app
+ // flag, so an unchecked box means nothing is queued on that channel.
+ meetings: {
+ base: "/meetings",
+ byId: (id: string) => `/meetings/${id}`,
+ cancel: (id: string) => `/meetings/${id}/cancel`,
+ // Token-scoped self-service. `base` is org-wide and gated on meeting.view,
+ // which the Employee role does not hold — this one needs only a valid JWT
+ // and returns the meetings the caller organizes or was invited to.
+ me: "/meetings/me",
+ },
+
  // Admin/HR "Employee Leave Management" report: one row per (employee,
  // leave type) with entitlement/used/remaining/pending.
  leaveEntitlements: {

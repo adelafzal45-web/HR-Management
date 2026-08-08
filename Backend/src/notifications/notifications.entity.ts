@@ -19,6 +19,9 @@ export enum NotificationCategory {
   LEAVE_REJECTED = 'Leave Rejected',
   LEAVE_CANCELLED = 'Leave Cancelled',
   LEAVE_BALANCE_UPDATED = 'Leave Balance Updated',
+  MEETING_INVITED = 'Meeting Invitation',
+  MEETING_UPDATED = 'Meeting Updated',
+  MEETING_CANCELLED = 'Meeting Cancelled',
 }
 
 @Entity('notifications')

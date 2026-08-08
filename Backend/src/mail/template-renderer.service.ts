@@ -63,6 +63,14 @@ export const ALLOWED_PLACEHOLDERS = [
   'total_days',
   'remaining_balance',
   'decision_reason',
+  // Meetings
+  'meeting_title',
+  'meeting_datetime',
+  'meeting_location',
+  'meeting_agenda',
+  'organizer_name',
+  'cancellation_reason',
+  'meeting_url',
 ] as const;
 
 export type PlaceholderKey = (typeof ALLOWED_PLACEHOLDERS)[number];
@@ -87,6 +95,7 @@ const URL_PLACEHOLDERS = new Set<PlaceholderKey>([
   'profile_url',
   'logo_url',
   'company_website',
+  'meeting_url',
 ]);
 
 /** The base URL the frontend is served from, used to build links in emails. */
@@ -401,6 +410,13 @@ export class TemplateRendererService {
       event_time: new Date().toLocaleString('en-GB'),
       actor_name: 'HR Administrator',
       changed_fields: 'Phone number, Emergency contact',
+      meeting_title: 'Q3 Engineering Planning',
+      meeting_datetime: '02 Sep 2026, 14:30',
+      meeting_location: 'Meeting Room 2',
+      meeting_agenda: 'Roadmap review, hiring plan, open floor.',
+      organizer_name: 'HR Administrator',
+      cancellation_reason: 'Rescheduling — key attendees are travelling.',
+      meeting_url: `${APP_BASE_URL}/meetings`,
     };
   }
 }

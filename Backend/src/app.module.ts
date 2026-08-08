@@ -37,6 +37,7 @@ import { AppraisalNotificationsModule } from './appraisal-notifications/appraisa
 import { EmployeeDocumentsModule } from './employee-documents/employee-documents.module';
 import { HolidaysModule } from './holidays/holidays.module';
 import { LeaveEntitlementsModule } from './leave-entitlements/leave-entitlements.module';
+import { MeetingsModule } from './meetings/meetings.module';
 
 @Module({
   imports: [
@@ -146,6 +147,11 @@ import { LeaveEntitlementsModule } from './leave-entitlements/leave-entitlements
     // ledger, and the working-day-aware day counter LeaveRequestsModule uses
     // to deduct/restore balance on approval.
     LeaveEntitlementsModule,
+
+    // Meeting scheduling and invitations. Participants are resolved from a
+    // chosen audience (specific people, a department, or everyone) and notified
+    // by email and/or in-app notification per the organizer's choice.
+    MeetingsModule,
   ],
 
   controllers: [AppController],

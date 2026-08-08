@@ -374,6 +374,53 @@ ${detailRows([
 <p style="margin:0 0 14px;padding:14px 16px;background-color:#fff8e6;border-left:3px solid {{primary_color}};color:#5a5a5a;font-size:14px;line-height:1.6;"><strong>Cancellation note:</strong> {{decision_reason}}</p>
 <p style="margin:0;color:#8a8a8a;font-size:13px;">If days had already been deducted, they have been returned to your balance.</p>`,
   },
+  {
+    key: 'meeting_invitation',
+    name: 'Meeting Invitation',
+    description:
+      'Invites a participant to a newly scheduled meeting, with the time, location and agenda.',
+    subject: 'Meeting invitation: {{meeting_title}}',
+    bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">You are invited to a meeting</h1>
+<p style="margin:0 0 14px;">Hello {{employee_name}}, {{organizer_name}} has scheduled <strong>{{meeting_title}}</strong> and would like you to attend.</p>
+${detailRows([
+  ['Meeting', '{{meeting_title}}'],
+  ['When', '{{meeting_datetime}}'],
+  ['Location', '{{meeting_location}}'],
+  ['Organizer', '{{organizer_name}}'],
+])}
+<p style="margin:0 0 14px;padding:14px 16px;background-color:#f0f9ff;border-left:3px solid {{primary_color}};color:#5a5a5a;font-size:14px;line-height:1.6;"><strong>Agenda:</strong> {{meeting_agenda}}</p>
+${button('View in the portal', '{{meeting_url}}')}
+<p style="margin:0;color:#8a8a8a;font-size:13px;">Can't make it? Let {{organizer_name}} know as early as you can.</p>`,
+  },
+  {
+    key: 'meeting_updated',
+    name: 'Meeting Updated',
+    description:
+      'Notifies participants that the time, location or agenda of a scheduled meeting has changed.',
+    subject: 'Updated: {{meeting_title}}',
+    bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">A meeting has been updated</h1>
+<p style="margin:0 0 14px;">Hello {{employee_name}}, {{organizer_name}} has changed the details of <strong>{{meeting_title}}</strong>. The current details are below.</p>
+${detailRows([
+  ['Meeting', '{{meeting_title}}'],
+  ['When', '{{meeting_datetime}}'],
+  ['Location', '{{meeting_location}}'],
+  ['Organizer', '{{organizer_name}}'],
+])}
+<p style="margin:0 0 14px;padding:14px 16px;background-color:#f0f9ff;border-left:3px solid {{primary_color}};color:#5a5a5a;font-size:14px;line-height:1.6;"><strong>Agenda:</strong> {{meeting_agenda}}</p>
+${button('View in the portal', '{{meeting_url}}')}
+<p style="margin:0;color:#8a8a8a;font-size:13px;">Please update your calendar to match the time above.</p>`,
+  },
+  {
+    key: 'meeting_cancelled',
+    name: 'Meeting Cancelled',
+    description:
+      'Tells participants a scheduled meeting was cancelled, and why.',
+    subject: 'Cancelled: {{meeting_title}}',
+    bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">A meeting has been cancelled</h1>
+<p style="margin:0 0 14px;">Hello {{employee_name}}, <strong>{{meeting_title}}</strong>, scheduled for {{meeting_datetime}}, has been cancelled by {{organizer_name}}.</p>
+<p style="margin:0 0 14px;padding:14px 16px;background-color:#fff8e6;border-left:3px solid {{primary_color}};color:#5a5a5a;font-size:14px;line-height:1.6;"><strong>Reason:</strong> {{cancellation_reason}}</p>
+<p style="margin:0;color:#8a8a8a;font-size:13px;">You can remove this from your calendar. No further action is needed.</p>`,
+  },
 ];
 
 /** Fast lookup by key, and the set of keys code may enqueue. */
