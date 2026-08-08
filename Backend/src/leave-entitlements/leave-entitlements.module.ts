@@ -17,6 +17,7 @@ import { AuditModule } from '../audit/audit.module';
 import { MailModule } from '../mail/mail.module';
 import { WorkingDaySchedulesModule } from '../working-day-schedules/working-day-schedules.module';
 import { HolidaysModule } from '../holidays/holidays.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
  * Leave Balance & Entitlement system: yearly grants, the leave-history
@@ -41,6 +42,7 @@ import { HolidaysModule } from '../holidays/holidays.module';
     MailModule,
     WorkingDaySchedulesModule,
     HolidaysModule,
+    NotificationsModule,
   ],
   controllers: [LeaveEntitlementsController],
   providers: [LeaveEntitlementsService, LeaveCalculationService],

@@ -13,9 +13,12 @@ import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
-import { UseGuards } from '@nestjs/common';
+import { Query, UseGuards } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { JwtUser } from '../auth/auth.constants';
 
 @ApiTags('Notifications')
 @Controller('notifications')
@@ -53,6 +56,52 @@ export class NotificationsController {
   })
   findAll() {
     return this.notificationsService.findAll();
+  }
+
+  /**
+   * The bell: notices addressed to the JWT user, plus company-wide
+   * announcements. Query `?unread=true` for the unread count alone.
+   */
+  @Get('me')
+  @ApiOperation({ summary: 'Get my notifications' })
+  @ApiQuery({
+    name: 'unread',
+    required: false,
+    type: Boolean,
+    description: 'Return only unread notices',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Max 100',
+  })
+  @ApiResponse({ status: 200, description: 'User notifications and unread count' })
+  findMine(
+    @CurrentUser() user: JwtUser,
+    @Query('unread') unreadOnly?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.notificationsService.findForUser(user.user_id, {
+      unreadOnly: unreadOnly === 'true',
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Patch('me/:id/read')
+  @ApiOperation({ summary: 'Mark one notification read' })
+  @ApiParam({ name: 'id', description: 'Notification UUID' })
+  @ApiResponse({ status: 200, description: 'Marked read' })
+  @ApiResponse({ status: 404, description: 'Not found or not yours' })
+  markRead(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.notificationsService.markRead(id, user.user_id);
+  }
+
+  @Post('me/read-all')
+  @ApiOperation({ summary: 'Mark all my notifications read' })
+  @ApiResponse({ status: 200, description: 'Batch marked read' })
+  markAllRead(@CurrentUser() user: JwtUser) {
+    return this.notificationsService.markAllRead(user.user_id);
   }
 
   @Get(':id')

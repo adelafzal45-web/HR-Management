@@ -113,4 +113,45 @@ export class LeaveEntitlementsController {
   findHistory(@Query() query: LeaveHistoryQueryDto) {
     return this.service.findHistory(query);
   }
+
+  // ==========================================
+  // SELF-SERVICE — the employee's own "My Leave" screen
+  // ==========================================
+  //
+  // These two carry no @RequirePermission, deliberately, following the same
+  // pattern as /leave-requests/me and /attendance/me. The global JwtAuthGuard
+  // still applies, and both are hard-scoped to `user.user_id` off the verified
+  // token, so there is nothing here an employee could reach that is not their
+  // own.
+  //
+  // Gating them behind leave-entitlement.view / leave-history.view would not
+  // work: those are org-wide (the reports above return every employee's
+  // balances and ledger), so granting them to the Employee role would expose
+  // the whole company's leave data.
+
+  @Get('me/balances')
+  @ApiOperation({
+    summary: 'Own leave balances',
+    description:
+      "The signed-in employee's own balance per leave type — entitlement, " +
+      'used, remaining, and how many of their requests are still pending.',
+  })
+  findMyBalances(@CurrentUser() user: JwtUser) {
+    return this.service.findBalancesForUser(user.user_id);
+  }
+
+  @Get('me/history')
+  @ApiOperation({
+    summary: 'Own leave history ledger',
+    description:
+      "The signed-in employee's own ledger entries (Entitlement, Adjustment, " +
+      'Leave Taken, Carry Forward, Expiry). `user_id` is taken from the token, ' +
+      'so a query param cannot widen it to another employee.',
+  })
+  findMyHistory(
+    @Query() query: LeaveHistoryQueryDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.findHistoryForUser(user.user_id, query);
+  }
 }

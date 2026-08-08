@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
@@ -14,10 +18,23 @@ export class HolidaysService {
     private readonly holidayRepository: Repository<Holiday>,
   ) {}
 
-  create(dto: CreateHolidayDto): Promise<Holiday> {
+  async create(dto: CreateHolidayDto): Promise<Holiday> {
+    const holidayDate = new Date(dto.holiday_date);
+    if (
+      await this.hasDuplicate(
+        holidayDate,
+        dto.department_id ?? null,
+        dto.is_recurring ?? false,
+      )
+    ) {
+      throw new ConflictException(
+        'A holiday already exists for this date and department scope',
+      );
+    }
+
     const holiday = this.holidayRepository.create({
       name: dto.name,
-      holiday_date: new Date(dto.holiday_date),
+      holiday_date: holidayDate,
       description: dto.description,
       department_id: dto.department_id ?? null,
       is_recurring: dto.is_recurring ?? false,
@@ -65,17 +82,34 @@ export class HolidaysService {
   async update(id: string, dto: UpdateHolidayDto): Promise<Holiday> {
     const holiday = await this.findOne(id);
 
+    const nextDate = dto.holiday_date
+      ? new Date(dto.holiday_date)
+      : new Date(holiday.holiday_date);
+    const nextDepartmentId =
+      dto.department_id !== undefined
+        ? dto.department_id
+        : holiday.department_id ?? null;
+    const nextIsRecurring = dto.is_recurring ?? holiday.is_recurring;
+
+    if (
+      await this.hasDuplicate(
+        nextDate,
+        nextDepartmentId ?? null,
+        nextIsRecurring,
+        holiday.holiday_id,
+      )
+    ) {
+      throw new ConflictException(
+        'A holiday already exists for this date and department scope',
+      );
+    }
+
     Object.assign(holiday, {
       name: dto.name ?? holiday.name,
-      holiday_date: dto.holiday_date
-        ? new Date(dto.holiday_date)
-        : holiday.holiday_date,
+      holiday_date: nextDate,
       description: dto.description ?? holiday.description,
-      department_id:
-        dto.department_id !== undefined
-          ? dto.department_id
-          : holiday.department_id,
-      is_recurring: dto.is_recurring ?? holiday.is_recurring,
+      department_id: nextDepartmentId,
+      is_recurring: nextIsRecurring,
     });
 
     return this.holidayRepository.save(holiday);
@@ -135,6 +169,42 @@ export class HolidaysService {
     }
 
     return dates;
+  }
+
+  /**
+   * True when a holiday already occupies this calendar slot for the same
+   * department scope. A recurring holiday (on either side) collides on
+   * month+day across every year, matching how `getHolidayDateSet` expands
+   * them; two fixed holidays collide only on the exact same date. Scope is
+   * matched exactly — a company-wide holiday and a department-specific one on
+   * the same day are allowed to coexist, since the department entry may carry
+   * a locally-relevant name.
+   */
+  private async hasDuplicate(
+    holidayDate: Date,
+    departmentId: string | null,
+    isRecurring: boolean,
+    excludeId?: string,
+  ): Promise<boolean> {
+    const candidates = await this.holidayRepository.find({
+      where: { department_id: departmentId ?? IsNull() },
+    });
+
+    const month = holidayDate.getUTCMonth();
+    const day = holidayDate.getUTCDate();
+    const year = holidayDate.getUTCFullYear();
+
+    return candidates.some((existing) => {
+      if (excludeId && existing.holiday_id === excludeId) return false;
+
+      const eDate = new Date(existing.holiday_date);
+      const sameMonthDay =
+        eDate.getUTCMonth() === month && eDate.getUTCDate() === day;
+
+      return isRecurring || existing.is_recurring
+        ? sameMonthDay
+        : sameMonthDay && eDate.getUTCFullYear() === year;
+    });
   }
 
   private stripTime(date: Date): Date {

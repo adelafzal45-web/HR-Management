@@ -243,6 +243,7 @@ async function adaptAdminLeaveRows(raw: unknown): Promise<AdminLeaveRequest[]> {
  startDate: r.startDate,
  endDate: r.endDate,
  totalDays: r.totalDays,
+ durationType: r.durationType,
  reason: r.reason,
  status: r.status as AdminLeaveRequest["status"],
  appliedOn: r.appliedOn,
@@ -501,12 +502,17 @@ export const adminLeaveApi = {
  () => mockAdminLeaveApi.list(params),
  ),
 
- approve: (id: string) =>
+ // The decision note is mandatory, not optional polish: the backend's
+ // `assertDecisionReason` rejects a status change to Approved/Rejected/
+ // Cancelled with a 400 when the matching *_reason field is missing or blank,
+ // because that note is what the employee reads in the notification. Sending
+ // only `{ status }` — as this did — made every approval fail.
+ approve: (id: string, reason: string) =>
  withDemoFallback<AdminLeaveRequest>(
  async () => {
  const updated = await apiRequest<Record<string, unknown>>(ENDPOINTS.leaveRequests.byId(id), {
  method: "PATCH",
- body: { status: "Approved" },
+ body: { status: "Approved", approval_reason: reason },
  });
  const rows = await adaptAdminLeaveRows([updated]);
  return rows[0];
@@ -514,12 +520,12 @@ export const adminLeaveApi = {
  () => mockAdminLeaveApi.setStatus(id, "Approved"),
  ),
 
- reject: (id: string) =>
+ reject: (id: string, reason: string) =>
  withDemoFallback<AdminLeaveRequest>(
  async () => {
  const updated = await apiRequest<Record<string, unknown>>(ENDPOINTS.leaveRequests.byId(id), {
  method: "PATCH",
- body: { status: "Rejected" },
+ body: { status: "Rejected", rejection_reason: reason },
  });
  const rows = await adaptAdminLeaveRows([updated]);
  return rows[0];

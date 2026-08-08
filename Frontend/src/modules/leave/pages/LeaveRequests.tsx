@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { CalendarX2, Check, X } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
-import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
+import Modal from "@/components/dialogs/Modal";
+import { PrimaryButton } from "@/components/forms/FormField";
 import StatusBadge from "@/components/common/StatusBadge";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import SectionTabs from "@/components/common/SectionTabs";
@@ -36,6 +37,8 @@ export default function LeaveRequestsPage() {
  const [employees, setEmployees] = useState<Employee[]>([]);
  const [decision, setDecision] = useState<Decision | null>(null);
  const [deciding, setDeciding] = useState(false);
+ const [decisionReason, setDecisionReason] = useState("");
+ const [decisionError, setDecisionError] = useState<string | null>(null);
 
  const tabs: Array<AdminLeaveStatus | ""> = ["", "Pending", "Approved", "Rejected"];
 
@@ -63,21 +66,43 @@ export default function LeaveRequestsPage() {
  employeesApi.list({ pageSize: 200 }).then((res) => setEmployees(res.data)).catch(() => undefined);
  }, []);
 
- const handleDecide = async () => {
+ const openDecision = (request: AdminLeaveRequest, action: Decision["action"]) => {
+ setDecision({ request, action });
+ setDecisionReason("");
+ setDecisionError(null);
+ };
+
+ // The note is required by the backend (it's what the employee reads in the
+ // approval/rejection notification), so it's validated here too rather than
+ // letting the request come back as a 400.
+ const handleDecide = async (e: FormEvent) => {
+ e.preventDefault();
  if (!decision) return;
+
+ const reason = decisionReason.trim();
+ if (!reason) {
+ setDecisionError(
+ decision.action === "approve"
+ ? "Please give a reason for approving this request."
+ : "Please give a reason for rejecting this request.",
+ );
+ return;
+ }
+
  setDeciding(true);
+ setDecisionError(null);
  try {
  if (decision.action === "approve") {
- await adminLeaveApi.approve(decision.request.leaveId);
+ await adminLeaveApi.approve(decision.request.leaveId, reason);
  toast.showSuccess("Leave request approved.");
  } else {
- await adminLeaveApi.reject(decision.request.leaveId);
+ await adminLeaveApi.reject(decision.request.leaveId, reason);
  toast.showSuccess("Leave request rejected.");
  }
  setDecision(null);
  load();
  } catch (err) {
- toast.showError(err instanceof Error ? err.message : "Couldn't update the request.");
+ setDecisionError(err instanceof Error ? err.message : "Couldn't update the request.");
  } finally {
  setDeciding(false);
  }
@@ -182,7 +207,7 @@ export default function LeaveRequestsPage() {
  <div className="flex items-center justify-end gap-1.5">
  <button
  type="button"
- onClick={() => setDecision({ request: r, action: "approve" })}
+ onClick={() => openDecision(r, "approve")}
  aria-label={`Approve ${r.employeeName}'s leave`}
  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-emerald-500 transition hover:bg-emerald-50 hover:text-emerald-600"
  >
@@ -190,7 +215,7 @@ export default function LeaveRequestsPage() {
  </button>
  <button
  type="button"
- onClick={() => setDecision({ request: r, action: "reject" })}
+ onClick={() => openDecision(r, "reject")}
  aria-label={`Reject ${r.employeeName}'s leave`}
  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-rose-400 transition hover:bg-rose-50 hover:text-rose-600"
  >
@@ -203,20 +228,74 @@ export default function LeaveRequestsPage() {
  }
  />
 
- <ConfirmDialog
+ <Modal
  open={!!decision}
- title={decision?.action === "approve" ? `Approve ${decision.request.employeeName}'s leave?` : `Reject ${decision?.request.employeeName}'s leave?`}
+ title={
+ decision?.action === "approve"
+ ? `Approve ${decision.request.employeeName}'s leave`
+ : `Reject ${decision?.request.employeeName}'s leave`
+ }
  description={
  decision
  ? `${decision.request.leaveTypeName} · ${decision.request.totalDays} day(s) · ${new Date(decision.request.startDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${new Date(decision.request.endDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
  : undefined
  }
- confirmLabel={decision?.action === "approve" ? "Approve" : "Reject"}
- tone={decision?.action === "approve" ? "brand" : "danger"}
- loading={deciding}
- onConfirm={handleDecide}
- onCancel={() => setDecision(null)}
+ onClose={() => setDecision(null)}
+ maxWidth="max-w-md"
+ >
+ <form onSubmit={handleDecide}>
+ {decision?.request.reason && (
+ <div className="mb-4 rounded-lg bg-gray-50 px-4 py-3">
+ <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+ Employee's reason
+ </p>
+ <p className="mt-1 text-sm text-gray-700">{decision.request.reason}</p>
+ </div>
+ )}
+
+ <label className="mb-4 block">
+ <span className="mb-2 block text-sm font-medium text-gray-900">
+ {decision?.action === "approve" ? "Approval note" : "Rejection note"}{" "}
+ <span className="text-rose-600">*</span>
+ </span>
+ <textarea
+ value={decisionReason}
+ onChange={(e) => setDecisionReason(e.target.value)}
+ rows={3}
+ required
+ autoFocus
+ placeholder={
+ decision?.action === "approve"
+ ? "e.g. Cover arranged with the rest of the team."
+ : "e.g. Two people are already off that week."
+ }
+ className="w-full resize-none rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
  />
+ <span className="mt-1.5 block text-xs text-gray-500">
+ {decision?.action === "approve"
+ ? "Approving deducts the working days in this range from the employee's balance."
+ : "The employee sees this note in their notification. No days are deducted."}
+ </span>
+ </label>
+
+ {decisionError && <p className="mb-4 text-sm text-rose-600">{decisionError}</p>}
+
+ <div className="flex gap-3">
+ <button
+ type="button"
+ onClick={() => setDecision(null)}
+ className="min-h-11 flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+ >
+ Cancel
+ </button>
+ <div className="flex-1">
+ <PrimaryButton type="submit" loading={deciding}>
+ {decision?.action === "approve" ? "Approve" : "Reject"}
+ </PrimaryButton>
+ </div>
+ </div>
+ </form>
+ </Modal>
  </DashboardLayout>
  );
 }

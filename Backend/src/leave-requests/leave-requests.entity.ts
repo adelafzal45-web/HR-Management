@@ -9,6 +9,27 @@ import {
 import { User } from '../users/user.entity';
 import { LeaveType } from '../leave-types/leave-types.entity';
 
+/**
+ * How much of the day (or days) a request covers.
+ *
+ * `FIRST_HALF`/`SECOND_HALF` are both single-day and both charge 0.5; they are
+ * kept distinct because the planner and the attendance view need to know which
+ * half of the day the employee is away, which a plain `is_half_day` boolean
+ * cannot express. `is_half_day` is still maintained on save so the existing
+ * day-counting path and any older client keep working unchanged.
+ */
+export enum LeaveDurationType {
+  FULL_DAY = 'Full Day',
+  FIRST_HALF = 'First Half',
+  SECOND_HALF = 'Second Half',
+  MULTIPLE_DAYS = 'Multiple Days',
+}
+
+export const HALF_DAY_DURATIONS: ReadonlySet<LeaveDurationType> = new Set([
+  LeaveDurationType.FIRST_HALF,
+  LeaveDurationType.SECOND_HALF,
+]);
+
 @Entity('leave_requests')
 export class LeaveRequest {
   @PrimaryGeneratedColumn('uuid')
@@ -48,6 +69,17 @@ export class LeaveRequest {
   is_half_day!: boolean;
 
   /**
+   * Which portion of the day the request covers. Derived from `is_half_day`
+   * for rows created before this column existed, so it is never null.
+   */
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: LeaveDurationType.FULL_DAY,
+  })
+  duration_type!: LeaveDurationType;
+
+  /**
    * Chargeable days computed at approval time (working days in range, minus
    * weekends/holidays, half-day applied). Null until approved, so it never
    * drifts from what was actually deducted from the balance.
@@ -70,6 +102,33 @@ export class LeaveRequest {
     nullable: true,
   })
   reason?: string;
+
+  /**
+   * Optional supporting document (medical certificate, travel booking, …).
+   * Stores the server-side relative path produced by the upload handler, not
+   * the client's original filename.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  attachment_path?: string | null;
+
+  /** Original filename, kept only so downloads get a sensible name back. */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  attachment_name?: string | null;
+
+  /**
+   * The approver's note. Required of HR/Admin at decision time (enforced in
+   * the DTO/service, not the column, so historical rows stay valid) and echoed
+   * into the notification the employee receives.
+   */
+  @Column({ type: 'text', nullable: true })
+  approval_reason?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  rejection_reason?: string | null;
+
+  /** Who cancelled, and why — set when an approved request is withdrawn. */
+  @Column({ type: 'text', nullable: true })
+  cancellation_reason?: string | null;
 
   @Column({
     length: 20,

@@ -14,5 +14,6 @@ import { AuthorizationModule } from '../authorization/authorization.module';
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService],
+  exports: [NotificationsService],
 })
 export class NotificationsModule {}

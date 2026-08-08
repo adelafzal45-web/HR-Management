@@ -155,7 +155,10 @@ export const NAV_TREE: NavNode[] = [
 
 // Not part of the sidebar tree, but real guarded destinations we still want
 // breadcrumbs/labels for.
-export const EXTRA_ROUTE_LABELS: Record<string, string> = {};
+export const EXTRA_ROUTE_LABELS: Record<string, string> = {
+  "/leave/public-holidays": "Public Holidays",
+  "/leave/entitlements": "Leave Entitlements",
+};
 
 // ----------------------------------------------------------------------------
 // Helpers

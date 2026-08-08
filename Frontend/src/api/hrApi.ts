@@ -31,6 +31,7 @@ import { parseAttendanceRow } from "@/modules/attendance/api/attendanceAdapter";
 import { parseLeaveRow } from "@/modules/leave/api/leaveAdapter";
 import { parsePayrollRow, type ParsedPayrollRow } from "@/modules/payroll/api/payrollAdapter";
 import { ENDPOINTS } from "@/app/config/endpoints";
+import { leaveTypesApi } from "@/modules/settings/api/settingsApi";
 import { getSession } from "@/utils/auth";
 import {
  mockAttendanceApi,
@@ -189,22 +190,26 @@ export const attendanceApi = {
  ),
 };
 
-// Adapts one row from `GET /leave-requests` (confirmed shape: leave_id,
-// leave_type, start_date, end_date, reason, status, applied_date,
-// approved_date, user: {...}, approved_by: {...} | null — see
-// leaveAdapter.ts) to the frontend's LeaveRequest shape. There's no
-// LeaveType table (leave_type is a free-text column), so leaveTypeId is
-// derived from the name rather than coming from the backend.
+// Adapts one row from `GET /leave-requests/me` to the frontend's LeaveRequest
+// shape. `leaveTypeId` now comes from the real `leave_type_id` FK when the
+// backend supplies it (it's what balance deduction keys off); the name-based
+// lookup against the demo list is only a fallback for rows created before that
+// column existed.
 function adaptLeaveRow(row: any): LeaveRequest {
  const parsed = parseLeaveRow(row);
+ const realTypeId = row?.leave_type_id ?? row?.leaveTypeId ?? row?.leaveTypeRef?.leave_type_id;
  return {
  leaveId: parsed.leaveId,
  employeeId: parsed.employeeId,
- leaveTypeId: leaveTypes.find((t) => t.leaveTypeName === parsed.leaveTypeName)?.leaveTypeId ?? "LT-OTHER",
+ leaveTypeId:
+ realTypeId ??
+ leaveTypes.find((t) => t.leaveTypeName === parsed.leaveTypeName)?.leaveTypeId ??
+ "LT-OTHER",
  leaveTypeName: parsed.leaveTypeName,
  startDate: parsed.startDate,
  endDate: parsed.endDate,
  totalDays: parsed.totalDays,
+ durationType: parsed.durationType,
  reason: parsed.reason,
  status: parsed.status as LeaveStatus,
  appliedOn: parsed.appliedOn,
@@ -215,51 +220,174 @@ function adaptLeaveRow(row: any): LeaveRequest {
  };
 }
 
-// ---- Leave — full CRUD at /leave-requests -----------------------------------
+/** The four duration options the backend's `duration_type` column accepts. */
+export type LeaveDurationType = "Full Day" | "First Half" | "Second Half" | "Multiple Days";
+
+export type ApplyLeavePayload = {
+ /** Real `leave_type_id` UUID from `GET /leave-types`. */
+ leaveTypeId: string;
+ /** Shown to the user and stored in the free-text `leave_type` column. */
+ leaveTypeName: string;
+ startDate: string;
+ /** Equals `startDate` for every duration except "Multiple Days". */
+ endDate: string;
+ durationType: LeaveDurationType;
+ reason: string;
+ attachmentPath?: string;
+ attachmentName?: string;
+};
+
+/** One row of the signed-in employee's own balance from /leave-entitlements/me/balances. */
+export type MyLeaveBalance = {
+ leaveTypeId: string;
+ leaveTypeName: string;
+ allocated: number;
+ used: number;
+ pending: number;
+ remaining: number;
+};
+
+/** One entry of the signed-in employee's own leave-history ledger. */
+export type MyLeaveHistoryEntry = {
+ historyId: string;
+ leaveTypeName: string;
+ year: number;
+ /** "Entitlement" | "Adjustment" | "Leave Taken" | "Carry Forward" | "Expiry". */
+ type: string;
+ /** Signed days this entry moved the balance (+ credit / − debit). */
+ amount: number;
+ /** Remaining balance for this leave type after the entry. */
+ balanceAfter: number;
+ note: string | null;
+ performedByName: string | null;
+ createdAt: string;
+};
+
+/** Wire shape of a balance row from `GET /leave-entitlements/me/balances`
+ * (same row shape as the HR report, minus the person columns). */
+type MyBalanceRow = {
+ leave_type_id?: string;
+ leave_type_name?: string;
+ total_entitlement?: number | string;
+ used_days?: number | string;
+ remaining_days?: number | string;
+ pending_requests?: number | string;
+};
+
+// numeric columns come back from pg as strings ("12.00"), so coerce both.
+const toNum = (v: unknown): number => {
+ const n = typeof v === "number" ? v : Number(v ?? 0);
+ return Number.isFinite(n) ? n : 0;
+};
+
+function adaptBalanceRow(row: MyBalanceRow): MyLeaveBalance {
+ return {
+ leaveTypeId: String(row.leave_type_id ?? ""),
+ leaveTypeName: String(row.leave_type_name ?? "Leave"),
+ allocated: toNum(row.total_entitlement),
+ used: toNum(row.used_days),
+ pending: toNum(row.pending_requests),
+ remaining: toNum(row.remaining_days),
+ };
+}
+
+function adaptHistoryEntry(row: any): MyLeaveHistoryEntry {
+ const performedBy = row?.performedBy ?? row?.performed_by ?? null;
+ const performedByName = performedBy
+ ? `${String(performedBy.first_name ?? "")} ${String(performedBy.last_name ?? "")}`.trim() || null
+ : null;
+ return {
+ historyId: String(row?.leave_history_id ?? ""),
+ leaveTypeName: String(row?.leaveType?.name ?? row?.leave_type_name ?? "Leave"),
+ year: toNum(row?.year) || new Date().getFullYear(),
+ type: String(row?.type ?? "Adjustment"),
+ amount: toNum(row?.amount),
+ balanceAfter: toNum(row?.balance_after),
+ note: row?.note ?? null,
+ performedByName,
+ createdAt: String(row?.created_at ?? row?.createdAt ?? new Date().toISOString()),
+ };
+}
+
+// ---- Leave — self-service at /leave-requests/me -----------------------------
 export const leaveApi = {
- // No `LeaveType` table exists in the schema (leave_type is a free-text
- // column on LeaveRequests) — this list is the fixed set of values the
- // UI offers, kept purely client-side.
- getLeaveTypes: () => Promise.resolve<LeaveType[]>(leaveTypes),
+ // Real catalog from `GET /leave-types` (active types only). This matters
+ // beyond cosmetics: the UUIDs it returns are what `leave_type_id` must carry
+ // for the backend to deduct balance on approval — a request built from the
+ // old hardcoded "LT-1" ids could never be approved.
+ //
+ // The Employee role holds `leave-types.view` as of migration
+ // 1788500000000; the demo list is only used when the backend is unreachable.
+ getLeaveTypes: () =>
+ withDemoFallback<LeaveType[]>(
+ () => leaveTypesApi.listAll(),
+ () => Promise.resolve(leaveTypes),
+ ),
 
- // Leave balance (allocated/used/remaining) isn't modeled anywhere in the
- // schema either — there's no table to compute it from server-side, so
- // this stays on demo data until the backend adds that concept.
- getBalance: () => mockLeaveApi.getBalance(),
+ // Real balances from the token-scoped /leave-entitlements/me/balances route
+ // (added alongside /leave-requests/me: same pattern — no permission beyond a
+ // valid JWT, identity comes from the token, so the Employee role can finally
+ // read authoritative numbers instead of illustrative demo cards). The demo
+ // fallback only kicks in when the backend is unreachable.
+ getBalance: () =>
+ withDemoFallback<MyLeaveBalance[]>(
+ async () => {
+ const rows = toArray<MyBalanceRow>(await apiRequest<any>(ENDPOINTS.leaveEntitlements.me.balances));
+ return rows.map(adaptBalanceRow);
+ },
+ () => mockLeaveApi.getBalance(),
+ ),
 
- // The live `GET /leave-requests` route takes no query params (findAll()
- // ignores them, same as `/attendance` and `/users`), so filtering to the
- // current employee happens client-side after fetching the full list.
+ // The real entitlement ledger (Entitlement / Adjustment / Leave Taken /
+ // Carry Forward / Expiry), token-scoped to the signed-in employee — this is
+ // the "Leave History" the balance numbers actually come from, as opposed to
+ // the request list above. There is no mock ledger: the demo fallback is an
+ // empty list, which the section's empty state renders as-is.
+ getMyHistory: (params?: { year?: number; type?: string }) =>
+ withDemoFallback<MyLeaveHistoryEntry[]>(
+ async () => {
+ const qs = new URLSearchParams();
+ if (params?.year) qs.set("year", String(params.year));
+ if (params?.type) qs.set("type", params.type);
+ const suffix = qs.toString() ? `?${qs.toString()}` : "";
+ const rows = toArray(
+ await apiRequest<any>(`${ENDPOINTS.leaveEntitlements.me.history}${suffix}`),
+ );
+ return rows.map(adaptHistoryEntry);
+ },
+ () => Promise.resolve([]),
+ ),
+
+ // Scoped server-side to the token's employee, so this no longer pulls the
+ // whole organisation's leave down to filter it in the browser (which also
+ // required a permission the Employee role does not hold).
  getMyLeaves: () =>
  withDemoFallback<LeaveRequest[]>(
  async () => {
- const employeeId = currentEmployeeId();
- const rows = toArray(await apiRequest<any>(ENDPOINTS.leaveRequests.base));
- return rows
- .map(adaptLeaveRow)
- .filter((r) => r.employeeId === employeeId)
- .sort((a, b) => (a.appliedOn < b.appliedOn ? 1 : -1));
+ const rows = toArray(await apiRequest<any>(ENDPOINTS.leaveRequests.me));
+ return rows.map(adaptLeaveRow).sort((a, b) => (a.appliedOn < b.appliedOn ? 1 : -1));
  },
  () => mockLeaveApi.getMyLeaves(),
  ),
 
- // Confirmed POST body (per the live Swagger doc): leave_type, start_date,
- // end_date, reason, status, user_id, approved_by_id — snake_case, and the
- // employee reference is `user_id`, not `employeeId`.
- applyLeave: (payload: { leaveTypeId: string; startDate: string; endDate: string; reason: string }) =>
+ // POSTs to the token-scoped route: `user_id` is taken from the JWT and the
+ // status is forced to Pending server-side, so neither is sent here.
+ // `is_half_day` and `days_count` are derived by the backend from
+ // `duration_type` — sending them would only risk disagreeing with it.
+ applyLeave: (payload: ApplyLeavePayload) =>
  withDemoFallback<LeaveRequest>(
  async () => {
- const employeeId = currentEmployeeId();
- const leaveTypeName = leaveTypes.find((t) => t.leaveTypeId === payload.leaveTypeId)?.leaveTypeName ?? "Leave";
- const created = await apiRequest<any>(ENDPOINTS.leaveRequests.base, {
+ const created = await apiRequest<any>(ENDPOINTS.leaveRequests.me, {
  method: "POST",
  body: {
- user_id: employeeId,
- leave_type: leaveTypeName,
+ leave_type: payload.leaveTypeName,
+ leave_type_id: payload.leaveTypeId,
  start_date: payload.startDate,
  end_date: payload.endDate,
+ duration_type: payload.durationType,
  reason: payload.reason,
- status: "Pending",
+ ...(payload.attachmentPath ? { attachment_path: payload.attachmentPath } : {}),
+ ...(payload.attachmentName ? { attachment_name: payload.attachmentName } : {}),
  },
  });
  return adaptLeaveRow(created);

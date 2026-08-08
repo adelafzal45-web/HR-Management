@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -9,6 +10,8 @@ import {
 } from 'class-validator';
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+import { LeaveDurationType } from '../leave-requests.entity';
 
 export class CreateLeaveRequestDto {
   @ApiProperty({
@@ -43,6 +46,19 @@ export class CreateLeaveRequestDto {
   reason?: string;
 
   @ApiPropertyOptional({
+    default: LeaveDurationType.FULL_DAY,
+    enum: LeaveDurationType,
+    description:
+      'How much of the day(s) the request covers. Full Day / First Half / ' +
+      'Second Half are single-day (half-days charge 0.5); Multiple Days spans ' +
+      'start_date to end_date and only working days count. ' +
+      'is_half_day is derived from this.',
+  })
+  @IsOptional()
+  @IsEnum(LeaveDurationType)
+  duration_type?: LeaveDurationType;
+
+  @ApiPropertyOptional({
     description:
       'Leave type catalog UUID. Required for balance deduction — a request without it cannot be matched to an entitlement/balance.',
   })
@@ -53,11 +69,30 @@ export class CreateLeaveRequestDto {
   @ApiPropertyOptional({
     default: false,
     description:
-      'Single-day request charged as half a day (deducts 0.5 instead of 1).',
+      'Single-day request charged as half a day (deducts 0.5 instead of 1). ' +
+      'Kept for backward compatibility — new clients should send duration_type.',
   })
   @IsOptional()
   @IsBoolean()
   is_half_day?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Server-side path of an uploaded supporting document, as returned by ' +
+      'the leave attachment upload endpoint.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  attachment_path?: string;
+
+  @ApiPropertyOptional({
+    description: 'Original filename of the attachment, for downloads.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  attachment_name?: string;
 
   @ApiPropertyOptional({
     example: 'Pending',

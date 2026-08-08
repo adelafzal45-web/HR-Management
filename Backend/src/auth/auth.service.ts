@@ -130,13 +130,18 @@ export class AuthService {
     password: string,
     channel: LoginChannel = 'web',
   ): Promise<User> {
-    const user = await this.userRepository.findOne({
-      where: { email },
-      relations: {
-        role: true,
-        designation: true,
-      },
-    });
+    // `password` is `select: false` on the entity so it never rides along on an
+    // ordinary find; this is one of the few paths that genuinely needs it, so
+    // it is requested explicitly. `select` here is additive to the relations
+    // above rather than a replacement for the column list, so the account-state
+    // flags `assertAccountMayLogIn` reads are still loaded.
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.role', 'role')
+      .leftJoinAndSelect('user.designation', 'designation')
+      .addSelect('user.password')
+      .where('user.email = :email', { email })
+      .getOne();
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');

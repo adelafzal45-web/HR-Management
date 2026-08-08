@@ -100,6 +100,8 @@ export type AdminLeaveRequest = {
  startDate: string;
  endDate: string;
  totalDays: number;
+ /** "Full Day" | "First Half" | "Second Half" | "Multiple Days". */
+ durationType: string;
  reason: string;
  status: AdminLeaveStatus;
  appliedOn: string;
@@ -323,6 +325,7 @@ function buildLeaveForEmployee(emp: Employee, index: number): AdminLeaveRequest[
  startDate: toIso(start),
  endDate: toIso(end),
  totalDays,
+ durationType: totalDays > 1 ? "Multiple Days" : "Full Day",
  reason: LEAVE_REASONS[(index + j * 3) % LEAVE_REASONS.length],
  status,
  appliedOn: toIso(addDays(start, -3)),
@@ -600,6 +603,7 @@ export const mockAdminLeaveApi = {
  startDate: payload.startDate,
  endDate: payload.endDate,
  totalDays,
+ durationType: totalDays > 1 ? "Multiple Days" : "Full Day",
  reason: payload.reason,
  status: "Pending",
  appliedOn: toIso(new Date()),

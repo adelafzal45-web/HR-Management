@@ -7,6 +7,9 @@ import {
   UserCog,
   IdCard,
   CalendarClock,
+  CalendarDays,
+  CalendarRange,
+  PlusCircle,
 } from "lucide-react";
 import type { SectionTab } from "@/components/common/SectionTabs";
 import { ROLES, type Role } from "@/constants/roles";
@@ -23,7 +26,13 @@ const MANAGEMENT: Role[] = [ROLES.HR_MANAGER, ROLES.ADMINISTRATOR, ROLES.TEAM_LE
  * queue for HR/Admin.
  */
 export function getLeaveTabs(role: Role | undefined): SectionTab[] {
-  const tabs: SectionTab[] = [{ key: "my-leave", label: "My Leave", icon: CalendarX2, path: "/leave" }];
+  const tabs: SectionTab[] = [
+    { key: "my-leave", label: "My Leave", icon: CalendarX2, path: "/leave" },
+    // Available to every role, but scoped by it: an employee sees their own
+    // leave plus the holiday calendar, management sees the whole organisation.
+    // The planner decides that from the role itself, not from a query param.
+    { key: "planner", label: "Planner", icon: CalendarRange, path: "/leave/planner" },
+  ];
   if (role && MANAGEMENT.includes(role)) {
     tabs.push({
       key: "leave-requests",
@@ -31,14 +40,27 @@ export function getLeaveTabs(role: Role | undefined): SectionTab[] {
       icon: ClipboardCheck,
       path: role === ROLES.TEAM_LEAD ? "/team/leaves" : "/leave-requests",
     });
-    // HR/Admin only — org-wide entitlement/used/remaining report. Team
-    // Leads get the request queue above but not the full balances table.
+    // HR/Admin only — org-wide entitlement/used/remaining report and the
+    // public holiday calendar. Team Leads get the request queue above but not
+    // the full balances table or holiday administration.
     if (role !== ROLES.TEAM_LEAD) {
       tabs.push({
         key: "leave-management",
-        label: "Employee Leave Management",
+        label: "Employee Leaves",
         icon: CalendarClock,
         path: "/leave-management",
+      });
+      tabs.push({
+        key: "entitlements",
+        label: "Leave Entitlements",
+        icon: PlusCircle,
+        path: "/leave/entitlements",
+      });
+      tabs.push({
+        key: "public-holidays",
+        label: "Public Holidays",
+        icon: CalendarDays,
+        path: "/leave/public-holidays",
       });
     }
   }

@@ -254,6 +254,8 @@ export type LeaveRequest = {
  startDate: string;
  endDate: string;
  totalDays: number;
+ /** "Full Day" | "First Half" | "Second Half" | "Multiple Days". */
+ durationType: string;
  reason: string;
  status: LeaveStatus;
  appliedOn: string;
@@ -271,6 +273,7 @@ const leaveRequests: LeaveRequest[] = [
  startDate: "2026-06-10",
  endDate: "2026-06-12",
  totalDays: 3,
+ durationType: "Multiple Days",
  reason: "Family trip",
  status: "Approved",
  appliedOn: "2026-06-01T09:12:00Z",
@@ -286,6 +289,7 @@ const leaveRequests: LeaveRequest[] = [
  startDate: "2026-07-03",
  endDate: "2026-07-03",
  totalDays: 1,
+ durationType: "Full Day",
  reason: "Fever",
  status: "Approved",
  appliedOn: "2026-07-03T08:05:00Z",
@@ -301,6 +305,7 @@ const leaveRequests: LeaveRequest[] = [
  startDate: "2026-07-28",
  endDate: "2026-07-29",
  totalDays: 2,
+ durationType: "Multiple Days",
  reason: "Personal errand",
  status: "Pending",
  appliedOn: "2026-07-20T11:30:00Z",
@@ -351,35 +356,52 @@ export const mockLeaveApi = {
 
  async applyLeave(payload: {
  leaveTypeId: string;
+ leaveTypeName?: string;
  startDate: string;
  endDate: string;
+ durationType?: string;
  reason: string;
  }): Promise<LeaveRequest> {
  await delay(500);
  const leaveType = leaveTypes.find((lt) => lt.leaveTypeId === payload.leaveTypeId);
- if (!leaveType) throw new Error("Invalid leave type selected.");
+ // Demo mode may be running against real leave-type UUIDs fetched before the
+ // backend went away, so fall back to the name the caller supplied rather
+ // than rejecting an id this hardcoded list happens not to contain.
+ const leaveTypeName = leaveType?.leaveTypeName ?? payload.leaveTypeName;
+ if (!leaveTypeName) throw new Error("Invalid leave type selected.");
  if (new Date(payload.endDate) < new Date(payload.startDate)) {
  throw new Error("End date can't be before the start date.");
  }
- const totalDays = daysBetweenInclusive(payload.startDate, payload.endDate);
 
+ const durationType = payload.durationType ?? "Full Day";
+ // Mirrors the backend: First/Second Half charge 0.5 and are single-day;
+ // everything else is the inclusive span. The real figure counts working
+ // days only, which this demo store has no calendar to do.
+ const totalDays =
+ durationType === "First Half" || durationType === "Second Half"
+ ? 0.5
+ : daysBetweenInclusive(payload.startDate, payload.endDate);
+
+ if (leaveType?.isPaid) {
  const used = leaveRequests
  .filter((l) => l.leaveTypeId === payload.leaveTypeId && l.status !== "Rejected")
  .reduce((sum, l) => sum + l.totalDays, 0);
- if (leaveType.isPaid && used + totalDays > leaveType.allocatedDays) {
+ if (used + totalDays > leaveType.allocatedDays) {
  throw new Error(
- `Insufficient ${leaveType.leaveTypeName} balance. You have ${Math.max(0, leaveType.allocatedDays - used)} day(s) left.`,
+ `Insufficient ${leaveTypeName} balance. You have ${Math.max(0, leaveType.allocatedDays - used)} day(s) left.`,
  );
+ }
  }
 
  const record: LeaveRequest = {
  leaveId: `LV-${1000 + leaveRequests.length + 1}`,
  employeeId: "EMP-1042",
- leaveTypeId: leaveType.leaveTypeId,
- leaveTypeName: leaveType.leaveTypeName,
+ leaveTypeId: payload.leaveTypeId,
+ leaveTypeName,
  startDate: payload.startDate,
  endDate: payload.endDate,
  totalDays,
+ durationType,
  reason: payload.reason,
  status: "Pending",
  appliedOn: new Date().toISOString(),

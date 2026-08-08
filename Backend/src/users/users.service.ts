@@ -735,6 +735,29 @@ export class UserService {
   }
 
   /**
+   * `findEntityOrFail` plus the `select: false` password hash.
+   *
+   * Kept separate rather than folded into `findEntityOrFail` because that
+   * loader feeds methods whose result is serialized back to the caller; only
+   * the two password paths below need the hash, and they read it deliberately.
+   */
+  private async findEntityWithPasswordOrFail(id: string): Promise<User> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.role', 'role')
+      .leftJoinAndSelect('user.department', 'department')
+      .addSelect('user.password')
+      .where('user.user_id = :id', { id })
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  /**
    * Team Leads of one department, for the create/edit form's dropdown.
    *
    * Scoped to active leads in the requested department only — the spec is
@@ -1118,7 +1141,7 @@ export class UserService {
     dto: ResetPasswordDto,
     actor?: AuditActor,
   ): Promise<{ message: string }> {
-    const user = await this.findEntityOrFail(id);
+    const user = await this.findEntityWithPasswordOrFail(id);
 
     if (!user.password_reset_allowed) {
       throw new ForbiddenException(
@@ -1176,7 +1199,7 @@ export class UserService {
     dto: ChangeOwnPasswordDto,
     actor?: AuditActor,
   ): Promise<{ message: string }> {
-    const user = await this.findEntityOrFail(userId);
+    const user = await this.findEntityWithPasswordOrFail(userId);
 
     if (!user.password_reset_allowed) {
       throw new ForbiddenException(

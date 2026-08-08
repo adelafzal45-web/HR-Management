@@ -94,12 +94,37 @@ export const ENDPOINTS = {
  leaveRequests: {
  base: "/leave-requests",
  byId: (id: string) => `/leave-requests/${id}`,
+ // Token-scoped self-service. `base` is org-wide and gated on
+ // leave-request.view/.create, which the Employee role does not hold — these
+ // two need only a valid JWT and resolve the employee from the token.
+ me: "/leave-requests/me",
  },
 
  // Admin/HR "Employee Leave Management" report: one row per (employee,
  // leave type) with entitlement/used/remaining/pending.
  leaveEntitlements: {
+ base: "/leave-entitlements",
  balances: "/leave-entitlements/balances",
+ preview: "/leave-entitlements/preview",
+ adjust: (id: string) => `/leave-entitlements/${id}/adjust`,
+ history: "/leave-entitlements/history",
+ // Token-scoped self-service. `balances` and `history` above are the org-wide
+ // reports and need leave-entitlement.view / leave-history.view, which the
+ // Employee role does not hold — these two need only a valid JWT and resolve
+ // the employee from the token.
+ me: {
+ balances: "/leave-entitlements/me/balances",
+ history: "/leave-entitlements/me/history",
+ },
+ },
+
+ // Public Holidays calendar — company-wide or department-scoped, optionally
+ // recurring yearly. Live CRUD at /holidays (GET returns a plain array with
+ // the department relation joined; POST/PATCH enforce duplicate prevention
+ // via a 409 ConflictException).
+ holidays: {
+ base: "/holidays",
+ byId: (id: string) => `/holidays/${id}`,
  },
 
  // Confirmed live REST CRUD (per the Swagger doc): POST/GET /payroll,

@@ -34,6 +34,8 @@ export type ParsedLeaveRow = {
  startDate: string;
  endDate: string;
  totalDays: number;
+ /** "Full Day" | "First Half" | "Second Half" | "Multiple Days" — free text on the wire. */
+ durationType: string;
  reason: string;
  status: string;
  appliedOn: string;
@@ -50,6 +52,9 @@ export function daysBetweenInclusive(start: string, end: string): number {
  return Number.isFinite(days) && days > 0 ? days : 0;
 }
 
+/** duration_type values the backend charges as half a day. */
+const HALF_DAY_DURATION_NAMES = new Set(["First Half", "Second Half"]);
+
 export function parseLeaveRow(row: Record<string, unknown>): ParsedLeaveRow {
  const user = row.user as Record<string, unknown> | undefined;
  const approver = (pick(row.approvedBy, row.approved_by) ?? undefined) as Record<string, unknown> | undefined;
@@ -64,6 +69,23 @@ export function parseLeaveRow(row: Record<string, unknown>): ParsedLeaveRow {
  const startDate = str(pick(row.startDate, row.start_date));
  const endDate = str(pick(row.endDate, row.end_date));
 
+ const durationType = str(pick(row.durationType, row.duration_type), "Full Day");
+ const isHalfDay = row.is_half_day === true || row.isHalfDay === true || HALF_DAY_DURATION_NAMES.has(durationType);
+
+ // Prefer the server's computed `days_count` (set once the request is
+ // approved). Before approval it's null, so fall back to the duration: a
+ // half-day is 0.5, everything else is the inclusive calendar span. The
+ // backend recomputes the authoritative figure (working days only) at
+ // approval — this is just what the employee sees while it's pending.
+ const rawDaysCount = pick(row.daysCount, row.days_count);
+ const daysCount = rawDaysCount != null ? Number(rawDaysCount) : NaN;
+ const totalDays =
+ Number.isFinite(daysCount) && daysCount > 0
+ ? daysCount
+ : isHalfDay
+ ? 0.5
+ : daysBetweenInclusive(startDate, endDate);
+
  return {
  leaveId: str(pick(row.leaveId, row.leave_id, row.id)),
  employeeId: str(
@@ -74,7 +96,8 @@ export function parseLeaveRow(row: Record<string, unknown>): ParsedLeaveRow {
  leaveTypeName: str(pick(row.leaveTypeName, row.leaveType, row.leave_type), "Leave"),
  startDate,
  endDate,
- totalDays: daysBetweenInclusive(startDate, endDate),
+ totalDays,
+ durationType,
  reason: str(pick(row.reason)),
  status: str(pick(row.status), "Pending"),
  appliedOn: str(pick(row.appliedOn, row.applied_date, row.appliedDate)),

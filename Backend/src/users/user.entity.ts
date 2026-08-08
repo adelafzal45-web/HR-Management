@@ -48,7 +48,20 @@ export class User {
   })
   email!: string;
 
-  @Column()
+  /**
+   * `select: false` so the hash is never loaded — and so never serialized — by
+   * an ordinary find. Six entities eager-load `User` (leave requests, leave
+   * entitlements, leave history, attendance, notifications, payroll), and
+   * without this every one of their read endpoints shipped the bcrypt hash of
+   * the employee on each row to any caller permitted to list them.
+   *
+   * The three places that legitimately need the hash re-request it with an
+   * explicit `addSelect`/`select`: credential verification and legacy re-hash
+   * in auth.service, and the reuse check plus rotation in
+   * password-reset.service. A find that omits it leaves `password` undefined,
+   * so those call sites must load it deliberately rather than by accident.
+   */
+  @Column({ select: false })
   password!: string;
 
   @Column({
@@ -387,6 +400,10 @@ export class User {
 
   @OneToMany(() => Notification, (notification) => notification.createdBy)
   notifications!: Notification[];
+
+  /** Notifications addressed to this user (their in-app bell). */
+  @OneToMany(() => Notification, (notification) => notification.recipient)
+  receivedNotifications!: Notification[];
 
   @OneToMany(
     () => PerformanceReview,

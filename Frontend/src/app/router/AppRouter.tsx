@@ -30,6 +30,9 @@ const AttendanceRecordsPage = lazy(() => import("@/modules/attendance/pages/Atte
 const Leave = lazy(() => import("@/modules/leave/pages/Leave"));
 const LeaveRequestsPage = lazy(() => import("@/modules/leave/pages/LeaveRequests"));
 const LeaveManagementPage = lazy(() => import("@/modules/leave/pages/LeaveManagement"));
+const PublicHolidaysPage = lazy(() => import("@/modules/leave/pages/PublicHolidays"));
+const LeaveEntitlementsPage = lazy(() => import("@/modules/leave/pages/LeaveEntitlements"));
+const LeavePlannerPage = lazy(() => import("@/modules/leave/pages/LeavePlanner"));
 const Payroll = lazy(() => import("@/modules/payroll/pages/Payroll"));
 const ProcessPayrollPage = lazy(() => import("@/modules/payroll/pages/ProcessPayroll"));
 const Appraisal = lazy(() => import("@/modules/appraisal/pages/Appraisal"));
@@ -139,6 +142,19 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute>
  <Leave />
+ </ProtectedRoute>,
+ )}
+ />
+ {/* Sits with the shared employee routes rather than the HR workspace
+ further down: the planner scopes itself by role (own leave for an
+ employee, org-wide for management), so every signed-in user gets a
+ useful view and none of them sees more than their permissions
+ already allow. */}
+ <Route
+ path="/leave/planner"
+ element={withSuspense(
+ <ProtectedRoute>
+ <LeavePlannerPage />
  </ProtectedRoute>,
  )}
  />
@@ -343,15 +359,15 @@ export function AppRouter() {
  path="/leave/entitlements"
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
- <ComingSoon />
+ <LeaveEntitlementsPage />
  </ProtectedRoute>,
  )}
  />
  <Route
  path="/leave/public-holidays"
  element={withSuspense(
- <ProtectedRoute>
- <ComingSoon />
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PublicHolidaysPage />
  </ProtectedRoute>,
  )}
  />

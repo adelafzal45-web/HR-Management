@@ -22,6 +22,7 @@ import type { Request } from 'express';
 
 import { LeaveRequestsService } from './leave-requests.service';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
+import { CreateSelfLeaveRequestDto } from './dto/create-self-leave-request.dto';
 import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from 'src/authorization/guards/permission.guard';
@@ -85,6 +86,67 @@ export class LeaveRequestsController {
   })
   findAll() {
     return this.leaveRequestsService.findAll();
+  }
+
+  // ==========================================
+  // SELF-SERVICE — the employee's own Apply Leave / My Leave screen
+  // ==========================================
+  //
+  // These two carry no @RequirePermission, deliberately, following the same
+  // pattern as /attendance/me. The global JwtAuthGuard still applies, and both
+  // are hard-scoped to `user.user_id` off the verified token, so there is
+  // nothing here an employee could reach that is not already their own.
+  //
+  // Gating them behind leave-request.view / .create would not work: those
+  // permissions are org-wide (findAll returns every employee's requests, and
+  // the create body carries an arbitrary user_id), so granting them to the
+  // Employee role would leak the whole company's leave data and let anyone
+  // file leave against anyone else's balance.
+
+  @Get('me')
+  @ApiOperation({
+    summary: 'Own leave requests',
+    description:
+      "The signed-in employee's own requests only. Replaces fetching the " +
+      'whole leave-requests table and filtering it in the browser.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Returns the signed-in employee's leave requests.",
+  })
+  findMine(@CurrentUser() user: JwtUser) {
+    return this.leaveRequestsService.findAllForUser(user.user_id);
+  }
+
+  @Post('me')
+  @ApiOperation({
+    summary: 'Submit own leave request',
+    description:
+      'Files a leave request for the signed-in employee. user_id is taken ' +
+      'from the token (not the body), status is forced to Pending, and a ' +
+      'reason is mandatory.',
+  })
+  @ApiBody({
+    type: CreateSelfLeaveRequestDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Leave request submitted successfully.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request body, or no reason supplied.',
+  })
+  createMine(
+    @Body() createLeaveRequestDto: CreateSelfLeaveRequestDto,
+    @CurrentUser() user: JwtUser,
+    @Req() request: Request,
+  ) {
+    return this.leaveRequestsService.createForUser(
+      user.user_id,
+      createLeaveRequestDto,
+      this.actorFrom(user, request),
+    );
   }
 
   @Get(':id')

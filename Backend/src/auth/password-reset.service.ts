@@ -297,10 +297,16 @@ export class PasswordResetService {
   ): Promise<{ message: string }> {
     const tokenHash = this.hash(rawToken);
 
-    const record = await this.tokenRepository.findOne({
-      where: { token_hash: tokenHash },
-      relations: { user: true },
-    });
+    // `user.password` is `select: false` on the entity, so the relation join
+    // has to ask for it explicitly — the reuse check and `previousHash` below
+    // both read the current hash, and a silently-undefined value would let a
+    // user reset to the password they already have.
+    const record = await this.tokenRepository
+      .createQueryBuilder('token')
+      .leftJoinAndSelect('token.user', 'user')
+      .addSelect('user.password')
+      .where('token.token_hash = :tokenHash', { tokenHash })
+      .getOne();
 
     // One generic message for unknown, used, superseded, and expired. A caller
     // probing tokens learns only "no", never how close they got.

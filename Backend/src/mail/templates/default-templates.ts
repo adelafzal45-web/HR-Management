@@ -322,6 +322,21 @@ ${detailRows([
 <p style="margin:0;color:#8a8a8a;font-size:13px;">You can see your full balance and history from the Leave section of the portal.</p>`,
   },
   {
+    key: 'leave_request_submitted',
+    name: 'Leave Request Submitted',
+    description:
+      'Confirms submission of a new leave request to the employee, their manager, and HR.',
+    subject: 'Leave request submitted: {{leave_type}}',
+    bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Leave request submitted</h1>
+<p style="margin:0 0 14px;">Hello {{employee_name}}, your {{leave_type}} request has been submitted and is awaiting approval.</p>
+${detailRows([
+  ['Leave type', '{{leave_type}}'],
+  ['Start date', '{{start_date}}'],
+  ['End date', '{{end_date}}'],
+])}
+<p style="margin:0;color:#8a8a8a;font-size:13px;">You will be notified once your request is reviewed.</p>`,
+  },
+  {
     key: 'leave_request_approved',
     name: 'Leave Request Approved',
     description: 'Confirms an approved leave request and the days deducted.',
@@ -333,7 +348,9 @@ ${detailRows([
   ['Start date', '{{start_date}}'],
   ['End date', '{{end_date}}'],
   ['Days deducted', '{{days_count}}'],
+  ['Remaining balance', '{{remaining_balance}} day(s)'],
 ])}
+<p style="margin:0 0 14px;padding:14px 16px;background-color:#f0f9ff;border-left:3px solid {{primary_color}};color:#5a5a5a;font-size:14px;line-height:1.6;"><strong>Approval note:</strong> {{decision_reason}}</p>
 <p style="margin:0;color:#8a8a8a;font-size:13px;">Your balance has been updated accordingly.</p>`,
   },
   {
@@ -343,7 +360,8 @@ ${detailRows([
     subject: 'Your {{leave_type}} request was rejected',
     bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your leave request was rejected</h1>
 <p style="margin:0 0 14px;">Hello {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} was not approved.</p>
-<p style="margin:0;color:#8a8a8a;font-size:13px;">No days were deducted from your balance. Speak with your manager for details.</p>`,
+<p style="margin:0 0 14px;padding:14px 16px;background-color:#fff8e6;border-left:3px solid {{primary_color}};color:#5a5a5a;font-size:14px;line-height:1.6;"><strong>Reason:</strong> {{decision_reason}}</p>
+<p style="margin:0;color:#8a8a8a;font-size:13px;">No days were deducted from your balance.</p>`,
   },
   {
     key: 'leave_request_cancelled',
@@ -353,6 +371,7 @@ ${detailRows([
     subject: 'Your {{leave_type}} request was cancelled',
     bodyHtml: `<h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1a1a1a;">Your leave request was cancelled</h1>
 <p style="margin:0 0 14px;">Hello {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} was cancelled.</p>
+<p style="margin:0 0 14px;padding:14px 16px;background-color:#fff8e6;border-left:3px solid {{primary_color}};color:#5a5a5a;font-size:14px;line-height:1.6;"><strong>Cancellation note:</strong> {{decision_reason}}</p>
 <p style="margin:0;color:#8a8a8a;font-size:13px;">If days had already been deducted, they have been returned to your balance.</p>`,
   },
 ];

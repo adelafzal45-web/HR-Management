@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -26,6 +27,8 @@ import { LeaveRequest } from '../leave-requests/leave-requests.entity';
 
 import { AuditService, type AuditActor } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationCategory } from '../notifications/notifications.entity';
 import { paginatedResult, type PaginatedResult } from '../common/dto/pagination-query.dto';
 
 /** One row of the Employee Leave Management report: an employee's balance
@@ -59,6 +62,8 @@ export interface EmployeeBalancePreview {
 
 @Injectable()
 export class LeaveEntitlementsService {
+  private readonly logger = new Logger(LeaveEntitlementsService.name);
+
   constructor(
     @InjectRepository(LeaveEntitlement)
     private readonly entitlementRepository: Repository<LeaveEntitlement>,
@@ -75,6 +80,7 @@ export class LeaveEntitlementsService {
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
     private readonly mailService: MailService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ==========================================
@@ -213,8 +219,8 @@ export class LeaveEntitlementsService {
 
     const users = await this.resolveTargetUsers(dto.target);
 
-    return this.dataSource.transaction(async (manager) => {
-      const results: Array<{
+    const results = await this.dataSource.transaction(async (manager) => {
+      const inner: Array<{
         user_id: string;
         leave_entitlement_id: string;
         total_days: number;
@@ -233,7 +239,7 @@ export class LeaveEntitlementsService {
           actor,
         );
 
-        results.push({
+        inner.push({
           user_id: user.user_id,
           leave_entitlement_id: entitlement.leave_entitlement_id,
           total_days: entitlement.total_days,
@@ -255,36 +261,34 @@ export class LeaveEntitlementsService {
         manager,
       });
 
-      // Best-effort notification; never blocks the transaction outcome.
-      const actionLabel =
-        dto.mode === EntitlementMode.SET
-          ? 'granted'
-          : dto.mode === EntitlementMode.INCREASE
-            ? 'increased'
-            : 'deducted';
-      const totalsByUser = new Map(
-        results.map((r) => [r.user_id, r.total_days]),
-      );
-
-      for (const user of users) {
-        if (!user.email) continue;
-        await this.mailService.enqueue({
-          templateKey: 'leave_entitlement_granted',
-          to: user.email,
-          toName: `${user.first_name} ${user.last_name}`.trim(),
-          relatedUserId: user.user_id,
-          context: {
-            employee_name: `${user.first_name} ${user.last_name}`.trim(),
-            leave_type: leaveType.name,
-            year: String(dto.year),
-            action: actionLabel,
-            total_days: String(totalsByUser.get(user.user_id) ?? ''),
-          },
-        });
-      }
-
-      return { processed: users.length, results };
+      return inner;
     });
+
+    // Notify only after the balance changes are durably committed: a failed
+    // notification must never roll back a persisted entitlement, and we must
+    // never announce a balance that a rollback erased.
+    const actionLabel =
+      dto.mode === EntitlementMode.SET
+        ? 'granted'
+        : dto.mode === EntitlementMode.INCREASE
+          ? 'increased'
+          : 'deducted';
+    const totalsByUser = new Map(results.map((r) => [r.user_id, r.total_days]));
+    const usersById = new Map(users.map((u) => [u.user_id, u]));
+
+    for (const result of results) {
+      const user = usersById.get(result.user_id);
+      if (!user) continue;
+      await this.notifyBalanceUpdated(
+        user,
+        leaveType.name,
+        dto.year,
+        actionLabel,
+        totalsByUser.get(result.user_id) ?? 0,
+      );
+    }
+
+    return { processed: users.length, results };
   }
 
   /** Increase or deduct balance on a single existing entitlement by id. */
@@ -293,32 +297,101 @@ export class LeaveEntitlementsService {
     dto: AdjustBalanceDto,
     actor: AuditActor,
   ): Promise<LeaveEntitlement> {
-    return this.dataSource.transaction(async (manager) => {
-      const repo = manager.getRepository(LeaveEntitlement);
-      const entitlement = await repo.findOne({
-        where: { leave_entitlement_id: id },
-        relations: { user: true, leaveType: true },
+    const { entitlement, user, leaveTypeName, year } =
+      await this.dataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(LeaveEntitlement);
+        const existing = await repo.findOne({
+          where: { leave_entitlement_id: id },
+          relations: { user: true, leaveType: true },
+        });
+        if (!existing) {
+          throw new NotFoundException('Leave entitlement not found');
+        }
+
+        const mode =
+          dto.direction === AdjustDirection.INCREASE
+            ? EntitlementMode.INCREASE
+            : EntitlementMode.DEDUCT;
+
+        const saved = await this.applyEntitlementChange(
+          manager,
+          existing.user,
+          existing.leave_type_id,
+          existing.year,
+          mode,
+          dto.days,
+          dto.allow_negative ?? false,
+          dto.note,
+          actor,
+        );
+
+        return {
+          entitlement: saved,
+          user: existing.user,
+          leaveTypeName: existing.leaveType?.name ?? '',
+          year: existing.year,
+        };
       });
-      if (!entitlement) {
-        throw new NotFoundException('Leave entitlement not found');
-      }
 
-      const mode =
-        dto.direction === AdjustDirection.INCREASE
-          ? EntitlementMode.INCREASE
-          : EntitlementMode.DEDUCT;
+    // Post-commit notification (see bulkAssign for the same ordering rule).
+    const actionLabel =
+      dto.direction === AdjustDirection.INCREASE ? 'increased' : 'deducted';
+    await this.notifyBalanceUpdated(
+      user,
+      leaveTypeName,
+      year,
+      actionLabel,
+      entitlement.total_days,
+    );
 
-      return this.applyEntitlementChange(
-        manager,
-        entitlement.user,
-        entitlement.leave_type_id,
-        entitlement.year,
-        mode,
-        dto.days,
-        dto.allow_negative ?? false,
-        dto.note,
-        actor,
+    return entitlement;
+  }
+
+  /**
+   * "Leave balance updated" — dual-channel (in-app + email) notice to the
+   * affected employee only. Deliberately best-effort: any failure here is
+   * logged and swallowed so it can never surface as a failed entitlement
+   * request after the balance has already been committed. HR isn't copied —
+   * the audit log, not their inbox, is the record of who changed what.
+   */
+  private async notifyBalanceUpdated(
+    user: User,
+    leaveTypeName: string,
+    year: number,
+    action: string,
+    totalDays: number,
+  ): Promise<void> {
+    const employeeName = `${user.first_name} ${user.last_name}`.trim();
+    try {
+      await this.notificationsService.push({
+        recipientId: user.user_id,
+        title: 'Leave balance updated',
+        message: `Your ${leaveTypeName} balance for ${year} was ${action}. You now have ${totalDays} day(s) entitled.`,
+        category: NotificationCategory.LEAVE_BALANCE_UPDATED,
+        link: '/leave',
+        referenceType: 'LeaveEntitlement',
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Could not push balance-updated notification for ${user.user_id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
+    }
+
+    if (!user.email) return;
+    await this.mailService.enqueue({
+      templateKey: 'leave_entitlement_granted',
+      to: user.email,
+      toName: employeeName,
+      relatedUserId: user.user_id,
+      context: {
+        employee_name: employeeName,
+        leave_type: leaveTypeName,
+        year: String(year),
+        action,
+        total_days: String(totalDays),
+      },
     });
   }
 
@@ -455,6 +528,26 @@ export class LeaveEntitlementsService {
   // ==========================================
   // BALANCE DEDUCTION / RESTORATION (called from LeaveRequestsService)
   // ==========================================
+
+  /**
+   * Read-only remaining balance (`allocated - used`, clamped at 0) for one
+   * (employee, leave type). Complements `deductForApprovedLeave`/`restoreBalance`
+   * so an approval can pre-check coverage inside the same transaction before
+   * mutating anything. Returns 0 when no balance row exists rather than
+   * throwing, matching the deduct/restore "missing row = zero" behaviour.
+   */
+  async getRemainingBalance(
+    manager: EntityManager,
+    userId: string,
+    leaveTypeId: string,
+  ): Promise<number> {
+    const balanceRepo = manager.getRepository(UserLeaveBalance);
+    const balance = await balanceRepo.findOne({
+      where: { user_id: userId, leave_type_id: leaveTypeId },
+    });
+    if (!balance) return 0;
+    return Math.max(0, balance.allocated_days - balance.used_days);
+  }
 
   /**
    * Deducts `days` from the employee's live balance for an approved leave
@@ -735,5 +828,95 @@ export class LeaveEntitlementsService {
       .getManyAndCount();
 
     return paginatedResult(data, total, query);
+  }
+
+  // ==========================================
+  // SELF-SERVICE — the signed-in employee's own balance & ledger
+  // ==========================================
+  //
+  // Token-scoped counterparts of `findBalanceReport`/`findHistory`, reached
+  // via /leave-entitlements/me/* with no @RequirePermission — the identity
+  // comes from the JWT, and both are hard-scoped to it. The org-wide report
+  // routes stay gated on leave-entitlement.view / leave-history.view, which
+  // the Employee role does not hold.
+
+  /**
+   * The signed-in employee's own balances: one row per leave type they have
+   * a `UserLeaveBalance` row for. Same shape as `findBalanceReport` rows so
+   * the frontend can reuse one adapter — the only difference is that the
+   * user is resolved from the token instead of a `user_id` query param.
+   */
+  async findBalancesForUser(userId: string): Promise<LeaveBalanceReportRow[]> {
+    const balances = await this.balanceRepository.find({
+      where: { user_id: userId },
+      relations: {
+        user: { department: true, designation: true },
+        leaveType: true,
+      },
+    });
+
+    // Pending count per leave type for this employee only — the org-wide
+    // report aggregates across everyone, which would be a needless cross-
+    // user scan here.
+    const pendingCounts = await this.leaveRequestRepository
+      .createQueryBuilder('lr')
+      .select('lr.leave_type_id', 'leave_type_id')
+      .addSelect('COUNT(*)', 'count')
+      .where('lr.user_id = :userId', { userId })
+      .andWhere('lr.status = :status', { status: 'Pending' })
+      .andWhere('lr.leave_type_id IS NOT NULL')
+      .groupBy('lr.leave_type_id')
+      .getRawMany<{ leave_type_id: string; count: string }>();
+    const pendingByType = new Map(
+      pendingCounts.map((p) => [p.leave_type_id, Number(p.count)]),
+    );
+
+    return balances
+      .map((balance) => ({
+        user_id: userId,
+        employee_code: balance.user.employee_code,
+        employee_name: `${balance.user.first_name} ${balance.user.last_name}`.trim(),
+        department: balance.user.department?.department_name ?? null,
+        designation: balance.user.designation?.title ?? null,
+        leave_type_id: balance.leave_type_id,
+        leave_type_name: balance.leaveType.name,
+        total_entitlement: balance.allocated_days,
+        used_days: balance.used_days,
+        remaining_days: balance.remaining_days,
+        pending_requests: pendingByType.get(balance.leave_type_id) ?? 0,
+        status: (balance.user.status ? 'active' : 'inactive') as
+          | 'active'
+          | 'inactive',
+      }))
+      .sort((a, b) => a.leave_type_name.localeCompare(b.leave_type_name));
+  }
+
+  /**
+   * The signed-in employee's own ledger, newest first, as a bare array (the
+   * same contract as /leave-requests/me — a personal ledger is small, so
+   * pagination only complicates the client). `user_id` from the query DTO is
+   * deliberately ignored: the identity always comes from the token.
+   */
+  async findHistoryForUser(
+    userId: string,
+    query: LeaveHistoryQueryDto,
+  ): Promise<LeaveHistory[]> {
+    const qb = this.historyRepository
+      .createQueryBuilder('history')
+      .where('history.user_id = :userId', { userId });
+
+    if (query.year) {
+      qb.andWhere('history.year = :year', { year: query.year });
+    }
+    if (query.leave_type_id) {
+      qb.andWhere('history.leave_type_id = :leaveTypeId', {
+        leaveTypeId: query.leave_type_id,
+      });
+    }
+    if (query.type) {
+      qb.andWhere('history.type = :type', { type: query.type });
+    }
+
+    return qb.orderBy('history.created_at', 'DESC').getMany();
   }
 }

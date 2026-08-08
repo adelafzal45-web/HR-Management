@@ -25,5 +25,18 @@
  "erasableSyntaxOnly": true,
  "noFallthroughCasesInSwitch": true
  },
- "include": ["src"]
+ "include": ["src"],
+ "exclude": [
+  "src/app.controller.ts",
+  "src/app.controller.spec.ts",
+  "src/app.module.ts",
+  "src/app.service.ts",
+  "src/data-source.ts",
+  "src/main.ts",
+  "src/apprisal-question-options",
+  "src/attendance",
+  "src/auth",
+  "src/permissions",
+  "src/users"
+ ]
 }

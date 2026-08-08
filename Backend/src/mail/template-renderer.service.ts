@@ -61,6 +61,8 @@ export const ALLOWED_PLACEHOLDERS = [
   'days_count',
   'action',
   'total_days',
+  'remaining_balance',
+  'decision_reason',
 ] as const;
 
 export type PlaceholderKey = (typeof ALLOWED_PLACEHOLDERS)[number];
