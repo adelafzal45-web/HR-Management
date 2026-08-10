@@ -1,5 +1,7 @@
 import { DataSource } from 'typeorm';
 
+import { databaseConfig } from './config/database.config';
+
 import { User } from './users/user.entity';
 import { Role } from './roles/roles.entity';
 import { Department } from './department/department.entity';
@@ -41,20 +43,16 @@ import { Holiday } from './holidays/holiday.entity';
 import { LeaveEntitlement } from './leave-entitlements/leave-entitlement.entity';
 import { LeaveHistory } from './leave-entitlements/leave-history.entity';
 
+/**
+ * The DataSource the TypeORM CLI uses to generate, run and revert migrations
+ * (see the `typeorm` script in package.json).
+ *
+ * Connection settings come from `databaseConfig`, the same object `app.module.ts`
+ * builds its connection from, so the CLI cannot end up migrating a different
+ * database than the one the application serves.
+ */
 export const AppDataSource = new DataSource({
-  type: 'postgres',
-
-  host: 'localhost',
-
-  port: 5432,
-
-  username: 'postgres',
-
-  password: 'admin',
-
-  database: 'HR',
-
-  synchronize: false,
+  ...databaseConfig,
 
   entities: [
     User,

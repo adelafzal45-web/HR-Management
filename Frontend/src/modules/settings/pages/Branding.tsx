@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Image as ImageIcon } from "lucide-react";
 import SettingsLayout from "@/modules/settings/pages/SettingsLayout";
 import { FormField, PrimaryButton } from "@/components/forms/FormField";
+import ImageUploadField from "@/modules/settings/components/ImageUploadField";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useToast } from "@/app/providers/ToastContext";
@@ -39,6 +40,18 @@ export default function BrandingPage() {
 
  const handleChange = (field: keyof BrandingSettings) => (e: React.ChangeEvent<HTMLInputElement>) =>
  setForm((f) => ({ ...f, [field]: e.target.value }));
+
+ /**
+  * Set an image field from the upload control.
+  *
+  * The upload itself already stored the file and pointed the settings row at
+  * it, so this only keeps the form and its preview in step. Clearing a field
+  * here is not applied until Save — that is what makes "remove" undoable by
+  * navigating away.
+  */
+ const setImage = (field: keyof BrandingSettings) => (url: string) => {
+ setForm((f) => ({ ...f, [field]: url }));
+ };
 
  const handleSubmit = async (e: FormEvent) => {
  e.preventDefault();
@@ -79,39 +92,37 @@ export default function BrandingPage() {
  ) : (
  <form onSubmit={handleSubmit}>
  <FormField label="Company Name" value={form.companyName} onChange={handleChange("companyName")} required />
- <FormField
- label="Company Logo URL"
- type="url"
- placeholder="https://…/logo.png"
+ <ImageUploadField
+ label="Company Logo"
+ kind="logo"
  value={form.logoUrl}
- onChange={(e) => {
+ onChange={(url) => {
  setLogoError(false);
- handleChange("logoUrl")(e);
+ setImage("logoUrl")(url);
  }}
+ hint="Shown in the sidebar, on payslips and on certificates"
  />
- <FormField
- label="Collapsed Sidebar Logo URL"
- type="url"
- placeholder="https://…/logo-mark.png"
+ <ImageUploadField
+ label="Collapsed Sidebar Logo"
+ kind="logo-collapsed"
  value={form.logoCollapsedUrl}
- onChange={(e) => {
+ onChange={(url) => {
  setLogoCollapsedError(false);
- handleChange("logoCollapsedUrl")(e);
+ setImage("logoCollapsedUrl")(url);
  }}
+ hint="Square mark for the collapsed sidebar; falls back to the main logo"
+ previewHeight={64}
  />
- <p className="-mt-3 mb-5 text-xs text-gray-500">
- Square mark shown when the sidebar is collapsed, where a full wordmark won't fit. Falls back to the main
- logo if left blank.
- </p>
- <FormField
- label="Company Favicon URL"
- type="url"
- placeholder="https://…/favicon.svg"
+ <ImageUploadField
+ label="Company Favicon"
+ kind="favicon"
  value={form.faviconUrl}
- onChange={(e) => {
+ onChange={(url) => {
  setFaviconError(false);
- handleChange("faviconUrl")(e);
+ setImage("faviconUrl")(url);
  }}
+ hint="Browser tab icon"
+ previewHeight={64}
  />
  <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
  <FormField label="Company Email" type="email" value={form.email} onChange={handleChange("email")} />

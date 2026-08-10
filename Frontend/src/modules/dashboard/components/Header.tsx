@@ -4,6 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/app/providers/AuthContext";
 import { useNotifications } from "@/app/providers/NotificationsContext";
 import EmployeeAvatar from "@/modules/employees/components/EmployeeAvatar";
+import NotificationDetailPanel from "@/modules/notifications/components/NotificationDetailPanel";
+import { truncateMessage } from "@/modules/notifications/utils/notificationDisplay";
+import type { NotificationRecord } from "@/api/hrApi";
 
 type HeaderProps = {
  title: string;
@@ -41,6 +44,14 @@ const SEARCHABLE_PAGES: { label: string; route: string; keywords?: string }[] = 
  { label: "Email Templates", route: "/settings/email-templates", keywords: "email template placeholders branding subject body" },
 ];
 
+// Characters of the message shown in the bell dropdown before it is cut off.
+// The dropdown is a fixed w-80 (20rem) — a long, unbroken message previously
+// relied on `line-clamp-2` alone, which still let a run of long words push
+// past the panel's edge and made rows of very different lengths sit next to
+// each other awkwardly. Capping the source string keeps every row a
+// predictable height; the full text is one click away in the side panel.
+const BELL_MESSAGE_PREVIEW_LIMIT = 90;
+
 function timeAgo(iso: string) {
  const diffMs = Date.now() - new Date(iso).getTime();
  const mins = Math.round(diffMs / 60000);
@@ -56,6 +67,11 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  const { user } = useAuth();
  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
  const [bellOpen, setBellOpen] = useState(false);
+ // The row shows a capped preview; this holds the notification whose full
+ // text is open in the side panel. Kept separate from `bellOpen` so the
+ // panel survives the dropdown closing (the panel's own backdrop click
+ // closes it independently of the dropdown's outside-click handler).
+ const [viewingNotification, setViewingNotification] = useState<NotificationRecord | null>(null);
  const [profileOpen, setProfileOpen] = useState(false);
  const [searchQuery, setSearchQuery] = useState("");
  const [searchOpen, setSearchOpen] = useState(false);
@@ -93,7 +109,17 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
 
  const recent = notifications.slice(0, 5);
 
+ // Opening a notification is what marks it read, same as it always was —
+ // the difference is that "opening" now shows the full message in the side
+ // panel instead of just clearing the unread dot, so a long message has
+ // somewhere to be read in full.
+ const openNotification = (n: NotificationRecord) => {
+ setViewingNotification(n);
+ if (!n.isRead) markAsRead(n.notificationId);
+ };
+
  return (
+ <>
  <header className="flex flex-wrap items-center gap-3 border-b border-gray-100 bg-white px-3 py-3 xs:gap-4 xs:px-4 xs:py-4 sm:px-6 lg:px-8">
  <button
  type="button"
@@ -191,7 +217,7 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  <button
  key={n.notificationId}
  type="button"
- onClick={() => markAsRead(n.notificationId)}
+ onClick={() => openNotification(n)}
  className={`flex w-full flex-col items-start gap-0.5 border-b border-gray-50 px-4 py-3 text-left last:border-0 hover:bg-gray-50 ${
  n.isRead ? "" : "bg-brand-light/30"
  }`}
@@ -200,7 +226,7 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  {!n.isRead && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-dark" />}
  <span className="truncate text-sm font-medium text-gray-900">{n.title}</span>
  </span>
- <span className="line-clamp-2 text-xs text-gray-500">{n.message}</span>
+ <span className="break-words text-xs text-gray-500">{truncateMessage(n.message, BELL_MESSAGE_PREVIEW_LIMIT)}</span>
  <span className="text-[11px] text-gray-400">{timeAgo(n.createdAt)}</span>
  </button>
  ))
@@ -303,5 +329,11 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  </div>
  </div>
  </header>
+
+ <NotificationDetailPanel
+ notification={viewingNotification}
+ onClose={() => setViewingNotification(null)}
+ />
+ </>
  );
 }

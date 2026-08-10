@@ -7,6 +7,7 @@ import {
  ShieldCheck,
  KeyRound,
  Palette,
+ PenLine,
  Tags,
  Clock,
  CalendarRange,
@@ -42,6 +43,11 @@ const GROUPS: SettingsGroup[] = [
  items: [
  { to: "/settings/company", label: "Company Details", icon: Building2 },
  { to: "/settings/branding", label: "Branding", icon: Palette },
+ {
+ to: "/settings/certificate-signatures",
+ label: "Certificate Signatures",
+ icon: PenLine,
+ },
  ],
  },
  {

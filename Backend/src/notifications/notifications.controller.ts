@@ -6,13 +6,28 @@ import {
   Patch,
   Param,
   Delete,
+  UploadedFile as UploadedFileParam,
+  UseInterceptors,
 } from '@nestjs/common';
 
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBody,
+  ApiConsumes,
+} from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
+import {
+  ALLOWED_ATTACHMENT_MIME_TYPES,
+  MAX_ATTACHMENT_BYTES,
+  type UploadedFile,
+} from '../common/upload/image-upload';
 import { Query, UseGuards } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';
 import { RequirePermission } from 'src/authorization/decorators/require-permission.decorator';
@@ -29,30 +44,75 @@ export class NotificationsController {
   @UseGuards(PermissionGuard)
   @RequirePermission('notifications.create')
   @ApiOperation({
-    summary: 'Create a new notification',
-    description: 'Allows an Admin or HR to create a new notification.',
+    summary: 'Send a notification to a chosen audience',
+    description:
+      'Composes a notification and delivers it to every active employee in the ' +
+      'chosen audience — specific people, one department, or everyone. One row ' +
+      'is written per recipient, so each has their own read state. The author ' +
+      'is taken from the JWT, not the body.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Notification created successfully.',
+    description:
+      'Delivered. Returns the batch summary, including the recipient count.',
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid request body.',
+    description:
+      'Invalid body, or an audience that resolves to no active employees.',
   })
-  create(@Body() dto: CreateNotificationDto) {
-    return this.notificationsService.create(dto);
+  create(@CurrentUser() user: JwtUser, @Body() dto: CreateNotificationDto) {
+    return this.notificationsService.create(dto, user.user_id);
+  }
+
+  /**
+   * Step one of composing with a file: upload it, get its metadata back, then
+   * echo that metadata into `POST /notifications`.
+   *
+   * Split in two so `create` stays plain JSON, and so a bad file is refused
+   * before any audience is resolved or any row written. Guarded on
+   * `notifications.create` rather than a permission of its own — the ability to
+   * stage an attachment is the ability to send one.
+   */
+  @Post('attachment')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('notifications.create')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_ATTACHMENT_BYTES } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload a notification attachment',
+    description: `Accepts ${ALLOWED_ATTACHMENT_MIME_TYPES.join(', ')} up to ${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MB. Contents are checked against the declared type, so a renamed executable is rejected. Returns the metadata to send with the notification.`,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Stored. Returns { url, name, mime, size }.',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid or oversized file.' })
+  uploadAttachment(@UploadedFileParam() file: UploadedFile | undefined) {
+    return this.notificationsService.saveAttachment(file);
   }
 
   @Get()
   @UseGuards(PermissionGuard)
   @RequirePermission('notifications.view')
   @ApiOperation({
-    summary: 'Get all notifications',
+    summary: 'Sent notifications',
+    description:
+      'One entry per notification sent, not per delivered row: the rows of a ' +
+      'single send are grouped, with the audience, recipient count and read ' +
+      'count.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Returns all notifications.',
+    description: 'Returns every sent notification, newest first.',
   })
   findAll() {
     return this.notificationsService.findAll();
@@ -131,7 +191,10 @@ export class NotificationsController {
   @UseGuards(PermissionGuard)
   @RequirePermission('notifications.update')
   @ApiOperation({
-    summary: 'Update a notification',
+    summary: 'Edit a sent notification',
+    description:
+      "Applies to every recipient's copy, so a corrected typo reaches everyone " +
+      'who received it. The audience cannot be changed after sending.',
   })
   @ApiParam({
     name: 'id',
@@ -154,7 +217,9 @@ export class NotificationsController {
   @UseGuards(PermissionGuard)
   @RequirePermission('notifications.delete')
   @ApiOperation({
-    summary: 'Delete a notification',
+    summary: 'Delete a sent notification',
+    description:
+      "Removes it from every recipient's bell, not just the row named by :id.",
   })
   @ApiParam({
     name: 'id',

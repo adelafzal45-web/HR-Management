@@ -65,17 +65,20 @@ import {
   type UpdateEmployeePayload,
 } from "@/modules/employees/types/employee.types";
 import {
+  ADDRESS_REQUIRED_MESSAGE,
   compact,
+  hasAnyAddressField,
   validateAccountNumber,
   validateDate,
   validateDateOfBirth,
   validateEmail,
   validateEmployeeCode,
   validateName,
+  validateOptionalName,
   validateOptionalPhone,
+  validateOptionalPostalCode,
   validatePassword,
   validatePhone,
-  validatePostalCode,
   validateRoutingCode,
   validateSalary,
   type FieldError,
@@ -90,15 +93,25 @@ import DocumentsUpload, {
   type SessionDocument,
 } from "@/modules/employees/components/DocumentsUpload";
 import {
-  Checkbox,
   EmployeeFormSkeleton,
   Field,
+  PhoneField,
   ReadOnlyField,
   SectionCard,
   Select,
   SubmitError,
+  Toggle,
   ValidationSummary,
 } from "@/modules/employees/components/EmployeeFormShell";
+import {
+  COUNTRIES,
+  DEFAULT_COUNTRY_CODE,
+  countryByCode,
+  countryByName,
+  joinPhone,
+  splitPhone,
+  statesForCountryName,
+} from "@/modules/employees/data/geo";
 
 // ---- Form state -------------------------------------------------------------
 
@@ -149,6 +162,18 @@ type FormState = {
 /** The spec's stated default: 01-01-2000. */
 const DEFAULT_DOB = "2000-01-01";
 
+/** Address and phone both start on the company's home country. */
+const DEFAULT_COUNTRY = countryByCode(DEFAULT_COUNTRY_CODE);
+const DEFAULT_COUNTRY_NAME = DEFAULT_COUNTRY?.name ?? "Pakistan";
+const DEFAULT_DIAL = DEFAULT_COUNTRY?.dial ?? "+92";
+
+/**
+ * Employment type no longer has a control — job category already carries that
+ * distinction — but the create DTO still requires the column, so every payload
+ * sends this value. Existing records keep whatever they were saved with.
+ */
+const DEFAULT_EMPLOYMENT_TYPE = EMPLOYMENT_TYPES[0];
+
 /** Today in the `yyyy-mm-dd` form a date input expects, in local time. */
 function todayISO(): string {
   const now = new Date();
@@ -169,10 +194,10 @@ const emptyForm = (): FormState => ({
   city: "",
   state_province: "",
   postal_code: "",
-  country: "",
+  country: DEFAULT_COUNTRY_NAME,
   employee_code: "",
   joining_date: todayISO(),
-  employee_type: "",
+  employee_type: DEFAULT_EMPLOYMENT_TYPE,
   department_id: "",
   designation_id: "",
   job_category_id: "",
@@ -211,7 +236,7 @@ function formFromEmployee(e: Employee): FormState {
     country: e.country ?? "",
     employee_code: e.employee_code ?? "",
     joining_date: dateOnly(e.joining_date),
-    employee_type: e.employee_type ?? "",
+    employee_type: e.employee_type ?? DEFAULT_EMPLOYMENT_TYPE,
     department_id: e.department?.department_id ?? "",
     designation_id: e.designation?.designation_id ?? "",
     job_category_id: e.jobCategory?.job_category_id ?? "",
@@ -262,7 +287,6 @@ const FIELD_SECTION: Partial<Record<keyof FormState, SectionId>> = {
   country: "address",
   employee_code: "employment",
   joining_date: "employment",
-  employee_type: "employment",
   department_id: "employment",
   designation_id: "employment",
   job_category_id: "employment",
@@ -557,6 +581,19 @@ export default function EmployeeForm({
     [teamLeads],
   );
 
+  /**
+   * Country is the unit of state choice: picking one that has a curated list
+   * swaps the free-text state input for a dropdown, so a stale value from a
+   * previous country is reset rather than silently offered.
+   */
+  const stateOptions = useMemo(() => statesForCountryName(form.country), [form.country]);
+
+  /** The country the phone number belongs to, driving its default dial code. */
+  const selectedDial = useMemo(
+    () => countryByName(form.country)?.dial ?? DEFAULT_DIAL,
+    [form.country],
+  );
+
   const currentPhotoUrl = photoCleared
     ? undefined
     : photoUrl(employee?.profile_image, API_BASE_URL);
@@ -591,6 +628,34 @@ export default function EmployeeForm({
     }));
   }, []);
 
+  /**
+   * Country drives the state list and the phone's dial code.
+   *
+   * The state value is only cleared when the new country has a curated list that
+   * doesn't contain it — moving between two free-text countries keeps whatever
+   * was typed. The dial code is only re-prefixed while the number is still
+   * empty; once digits exist they belong to a specific code and rewriting it
+   * would corrupt a number the user has already entered.
+   */
+  const onCountryChange = useCallback((countryName: string) => {
+    setForm((prev) => {
+      const states = statesForCountryName(countryName);
+      const keepState =
+        states.length === 0 || states.includes(prev.state_province) ? prev.state_province : "";
+      const dial = countryByName(countryName)?.dial ?? DEFAULT_DIAL;
+      const { national } = splitPhone(prev.phone, dial);
+
+      return {
+        ...prev,
+        country: countryName,
+        state_province: keepState,
+        phone: national ? prev.phone : joinPhone(dial, ""),
+      };
+    });
+    setDirty(true);
+    setErrors((prev) => ({ ...prev, country: undefined, state_province: undefined }));
+  }, []);
+
   const scrollToSection = useCallback((id: SectionId) => {
     setActiveSection(id);
     sectionRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -622,19 +687,20 @@ export default function EmployeeForm({
           : undefined
         : validatePassword(form.password),
 
-      street_address: form.street_address.trim()
+      // Address: each part optional, at least one required. The group message
+      // is reported on `street_address` so ValidationSummary counts it and the
+      // scroll-to-section jump lands on the address card; the individual fields
+      // only complain about their format.
+      street_address: hasAnyAddressField(form)
         ? undefined
-        : "Street address is required.",
-      city: form.city.trim() ? undefined : "City is required.",
-      state_province: form.state_province.trim()
-        ? undefined
-        : "State / province is required.",
-      postal_code: validatePostalCode(form.postal_code),
-      country: form.country.trim() ? undefined : "Country is required.",
+        : ADDRESS_REQUIRED_MESSAGE,
+      city: validateOptionalName(form.city, "City"),
+      state_province: validateOptionalName(form.state_province, "State / province"),
+      postal_code: validateOptionalPostalCode(form.postal_code),
+      country: validateOptionalName(form.country, "Country"),
 
       employee_code: isEdit ? validateEmployeeCode(form.employee_code) : undefined,
       joining_date: validateDate(form.joining_date, "Joining date"),
-      employee_type: form.employee_type ? undefined : "Employment type is required.",
       department_id: form.department_id ? undefined : "Department is required.",
       designation_id: form.designation_id ? undefined : "Designation is required.",
       job_category_id: form.job_category_id ? undefined : "Job category is required.",
@@ -680,14 +746,17 @@ export default function EmployeeForm({
       gender: form.gender,
       blood_group: optional(form.blood_group),
 
-      street_address: t(form.street_address),
-      city: t(form.city),
-      state_province: t(form.state_province),
-      postal_code: t(form.postal_code),
-      country: t(form.country),
+      // Blank address parts are dropped like any other optional field. Sending
+      // "" instead would fail the format regexes server-side, telling the user
+      // their postal code is invalid for a field they deliberately left empty.
+      street_address: optional(form.street_address),
+      city: optional(form.city),
+      state_province: optional(form.state_province),
+      postal_code: optional(form.postal_code),
+      country: optional(form.country),
 
       joining_date: form.joining_date,
-      employee_type: form.employee_type,
+      employee_type: form.employee_type || DEFAULT_EMPLOYMENT_TYPE,
       department_id: form.department_id,
       designation_id: form.designation_id,
       job_category_id: form.job_category_id,
@@ -1123,15 +1192,15 @@ export default function EmployeeForm({
                 error={errors.email}
                 autoComplete="email"
               />
-              <Field
+              <PhoneField
                 label="Phone"
                 name="phone"
-                type="tel"
                 requiredMark
                 value={form.phone}
-                onChange={(e) => update("phone", e.target.value)}
+                onChange={(v) => update("phone", v)}
                 error={errors.phone}
-                autoComplete="tel"
+                defaultDial={selectedDial}
+                hint="The country code follows the selected country; change it here if this number is registered elsewhere."
               />
               {isEdit && !canResetPassword ? (
                 <ReadOnlyField
@@ -1163,7 +1232,7 @@ export default function EmployeeForm({
           <SectionCard
             id="address"
             title="Address"
-            description="House / street / area, and the rest of the postal address."
+            description="Fill in whichever parts apply — at least one is required."
             icon={MapPin}
             sectionRef={setRef("address")}
           >
@@ -1172,7 +1241,6 @@ export default function EmployeeForm({
                 <Field
                   label="Street Address"
                   name="street_address"
-                  requiredMark
                   placeholder="House / street / area"
                   value={form.street_address}
                   onChange={(e) => update("street_address", e.target.value)}
@@ -1183,38 +1251,47 @@ export default function EmployeeForm({
               <Field
                 label="City"
                 name="city"
-                requiredMark
                 value={form.city}
                 onChange={(e) => update("city", e.target.value)}
                 error={errors.city}
                 autoComplete="address-level2"
               />
-              <Field
-                label="State / Province"
-                name="state_province"
-                requiredMark
-                value={form.state_province}
-                onChange={(e) => update("state_province", e.target.value)}
-                error={errors.state_province}
-                autoComplete="address-level1"
+              <Select
+                label="Country"
+                value={form.country}
+                onChange={onCountryChange}
+                options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
+                placeholder="Select country"
+                error={errors.country}
               />
+              {stateOptions.length > 0 ? (
+                <Select
+                  label="State / Province"
+                  value={form.state_province}
+                  onChange={(v) => update("state_province", v)}
+                  options={stateOptions.map((s) => ({ value: s, label: s }))}
+                  placeholder="Select state / province"
+                  error={errors.state_province}
+                />
+              ) : (
+                // No curated list for this country — a text field beats a
+                // dropdown that can't contain the right answer.
+                <Field
+                  label="State / Province"
+                  name="state_province"
+                  value={form.state_province}
+                  onChange={(e) => update("state_province", e.target.value)}
+                  error={errors.state_province}
+                  autoComplete="address-level1"
+                />
+              )}
               <Field
                 label="Postal Code"
                 name="postal_code"
-                requiredMark
                 value={form.postal_code}
                 onChange={(e) => update("postal_code", e.target.value)}
                 error={errors.postal_code}
                 autoComplete="postal-code"
-              />
-              <Field
-                label="Country"
-                name="country"
-                requiredMark
-                value={form.country}
-                onChange={(e) => update("country", e.target.value)}
-                error={errors.country}
-                autoComplete="country-name"
               />
             </div>
           </SectionCard>
@@ -1310,15 +1387,6 @@ export default function EmployeeForm({
                 }))}
                 placeholder="Select shift"
                 error={errors.shift_id}
-              />
-              <Select
-                label="Employment Type"
-                requiredMark
-                value={form.employee_type}
-                onChange={(v) => update("employee_type", v)}
-                options={EMPLOYMENT_TYPES.map((t) => ({ value: t, label: t }))}
-                placeholder="Select employment type"
-                error={errors.employee_type}
               />
             </div>
           </SectionCard>
@@ -1443,19 +1511,22 @@ export default function EmployeeForm({
                 error={errors.bank_account_number}
               />
               <Field
-                label="IFSC / Routing Code"
+                label="IBAN Number"
                 name="bank_routing_code"
                 placeholder="Optional"
                 value={form.bank_routing_code}
                 onChange={(e) => update("bank_routing_code", e.target.value)}
                 error={errors.bank_routing_code}
+                hint="e.g. PK36SCBL0000001123456702"
               />
             </div>
-            <Checkbox
+            <Toggle
               label="Overtime allowed"
               description="Lets this employee log overtime hours against their shift."
               checked={form.is_overtime}
               onChange={(checked) => update("is_overtime", checked)}
+              onText="Allowed"
+              offText="Not allowed"
             />
           </SectionCard>
 

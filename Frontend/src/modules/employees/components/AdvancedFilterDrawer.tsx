@@ -194,7 +194,7 @@ export default function AdvancedFilterDrawer({
  <FilterSelect label="Status" value={draft.status} onChange={(v) => set("status", v)} options={statusOptions} placeholder="All Statuses" />
  <FilterSelect label="Shift" value={draft.shiftId} onChange={(v) => set("shiftId", v)} options={shiftOptions} placeholder="All Shifts" />
  <FilterSelect label="Role" value={draft.roleId} onChange={(v) => set("roleId", v)} options={roleOptions} placeholder="All Roles" />
- <FilterSelect label="Manager" value={draft.managerId} onChange={(v) => set("managerId", v)} options={managerOptions} placeholder="All Managers" />
+ <FilterSelect label="Team Lead" value={draft.managerId} onChange={(v) => set("managerId", v)} options={managerOptions} placeholder="All Team Leads" />
  <FilterSelect label="Employment Type" value={draft.employmentType} onChange={(v) => set("employmentType", v)} options={employmentTypeOptions} placeholder="All Types" />
 
  <div>

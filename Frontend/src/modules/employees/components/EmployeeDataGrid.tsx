@@ -16,6 +16,7 @@ import {
  GripVertical,
  FileSpreadsheet,
  FileType,
+ Filter,
 } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
 import type { ExportFormat } from "@/utils/exportUtils";
@@ -36,6 +37,21 @@ export type GridColumn<T> = {
 };
 
 export type FilterChip = { key: string; label: string; onRemove: () => void };
+
+/**
+ * An always-visible dropdown in the toolbar that filters as soon as it
+ * changes — no Apply step, unlike the advanced filter drawer. Kept to the
+ * handful of fields people narrow by constantly; everything else stays in
+ * the drawer so the toolbar doesn't turn into a form.
+ */
+export type QuickFilter = {
+ key: string;
+ /** Shown as the "all" option and as the accessible label. */
+ label: string;
+ value: string;
+ options: { value: string; label: string }[];
+ onChange: (value: string) => void;
+};
 
 export type BulkAction<T> = {
  key: string;
@@ -60,9 +76,15 @@ type Props<T> = {
  pageSizeOptions?: number[];
  actions?: (row: T) => ReactNode;
  addButton?: ReactNode;
- onOpenFilters: () => void;
+ /** Opens the advanced filter drawer; omit on grids whose quick filters are
+  * the whole filter story, and the Filters button is left out entirely. */
+ onOpenFilters?: () => void;
  activeFilterCount: number;
  filterChips: FilterChip[];
+ /** Live dropdowns rendered in the toolbar; omit for no quick-filter row. */
+ quickFilters?: QuickFilter[];
+ /** Shown as "Clear all" beside the quick filters while any filter is set. */
+ onResetFilters?: () => void;
  onExport: (rowsToExport: T[], format: ExportFormat) => void;
  selectedIds: Set<string>;
  onSelectedIdsChange: (ids: Set<string>) => void;
@@ -138,6 +160,8 @@ export default function EmployeeDataGrid<T>({
  onOpenFilters,
  activeFilterCount,
  filterChips,
+ quickFilters,
+ onResetFilters,
  onExport,
  selectedIds,
  onSelectedIdsChange,
@@ -169,7 +193,10 @@ export default function EmployeeDataGrid<T>({
 
  useEffect(() => saveJSON(widthKey, widths), [widthKey, widths]);
  useEffect(() => saveJSON(visKey, visibility), [visKey, visibility]);
- useEffect(() => setPage(1), [rows.length, search, sort, pageSize]);
+ // Row count alone misses a filter swap that happens to match the same
+ // number of rows, which would leave the viewer on a now-meaningless page.
+ const filterSignature = filterChips.map((c) => `${c.key}:${c.label}`).join("|");
+ useEffect(() => setPage(1), [rows.length, search, sort, pageSize, filterSignature]);
 
  useEffect(() => {
  if (!columnsMenuOpen) return;
@@ -301,6 +328,7 @@ export default function EmployeeDataGrid<T>({
  </label>
 
  <div className="flex flex-wrap items-center gap-2">
+ {onOpenFilters && (
  <button
  type="button"
  onClick={onOpenFilters}
@@ -317,6 +345,7 @@ export default function EmployeeDataGrid<T>({
  </span>
  )}
  </button>
+ )}
 
  <div className="relative" ref={columnsMenuRef}>
  <button
@@ -387,6 +416,45 @@ export default function EmployeeDataGrid<T>({
  {addButton}
  </div>
  </div>
+
+ {/* Live quick filters — these apply on change, so there is no Apply
+     button and no separate "pending" state to keep in sync. */}
+ {quickFilters && quickFilters.length > 0 && (
+ <div className="flex flex-wrap items-center gap-2">
+ <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+ <Filter size={13} /> Filter
+ </span>
+ {quickFilters.map((qf) => (
+ <select
+ key={qf.key}
+ value={qf.value}
+ aria-label={qf.label}
+ onChange={(e) => qf.onChange(e.target.value)}
+ className={`min-h-9 max-w-[190px] rounded-lg border px-2.5 text-sm outline-none transition focus:ring-2 focus:ring-brand/40 ${
+ qf.value
+ ? "border-brand/60 bg-brand-light/40 font-medium text-brand-dark"
+ : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+ }`}
+ >
+ <option value="">{qf.label}: All</option>
+ {qf.options.map((opt) => (
+ <option key={opt.value} value={opt.value}>
+ {opt.label}
+ </option>
+ ))}
+ </select>
+ ))}
+ {onResetFilters && (activeFilterCount > 0 || search) && (
+ <button
+ type="button"
+ onClick={onResetFilters}
+ className="flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+ >
+ <X size={13} /> Clear all
+ </button>
+ )}
+ </div>
+ )}
 
  {/* Active filter chips */}
  {filterChips.length > 0 && (
@@ -468,7 +536,9 @@ export default function EmployeeDataGrid<T>({
  ))}
  {actions && <col style={{ width: ACTIONS_COL_WIDTH }} />}
  </colgroup>
- <thead className="sticky top-0 z-10">
+ {/* z-30 keeps the whole header above the pinned Actions cells in the
+     body (z-10), which otherwise paint over it when scrolling. */}
+ <thead className="sticky top-0 z-30">
  <tr className="border-b border-gray-100 bg-gray-50/95 text-xs font-semibold uppercase tracking-wide text-gray-500 backdrop-blur">
  <th className="px-4 py-3.5">
  <input
@@ -513,13 +583,22 @@ export default function EmployeeDataGrid<T>({
  </span>
  </th>
  ))}
- {actions && <th className="px-4 py-3.5 text-right font-semibold">Actions</th>}
+ {actions && (
+ <th className="sticky right-0 z-20 border-l border-gray-100 bg-gray-50 px-4 py-3.5 text-right font-semibold">
+ Actions
+ </th>
+ )}
  </tr>
  </thead>
  <tbody>
  {pageRows.map((row, i) => {
  const id = rowKey(row);
  const selected = selectedIds.has(id);
+ const rowTint = selected ? "bg-brand-light/30" : i % 2 === 1 ? "bg-gray-50/40" : "bg-white";
+ // The pinned Actions cell paints its own opaque backdrop so columns
+ // scrolling underneath it can't show through; the row tint (which is
+ // translucent) is re-applied on a layer above that backdrop.
+ const pinnedTint = selected ? "before:bg-brand-light/30" : i % 2 === 1 ? "before:bg-gray-50/40" : "";
  return (
  <tr
  key={id}
@@ -536,9 +615,9 @@ export default function EmployeeDataGrid<T>({
  }
  tabIndex={onRowClick ? 0 : undefined}
  role={onRowClick ? "button" : undefined}
- className={`border-b border-gray-50 transition-colors last:border-0 hover:bg-brand-light/20 ${
+ className={`group border-b border-gray-50 transition-colors last:border-0 hover:bg-brand-light/20 ${
  onRowClick ? "cursor-pointer" : ""
- } ${selected ? "bg-brand-light/30" : i % 2 === 1 ? "bg-gray-50/40" : "bg-white"}`}
+ } ${rowTint}`}
  >
  <td className="px-4 py-3.5 align-middle" onClick={(e) => e.stopPropagation()}>
  <input
@@ -558,8 +637,11 @@ export default function EmployeeDataGrid<T>({
  </td>
  ))}
  {actions && (
- <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
- {actions(row)}
+ <td
+ className={`sticky right-0 z-10 border-l border-gray-100 bg-white px-4 py-3.5 text-right before:absolute before:inset-0 before:-z-10 before:content-[''] group-hover:before:bg-brand-light/20 ${pinnedTint}`}
+ onClick={(e) => e.stopPropagation()}
+ >
+ <div className="relative">{actions(row)}</div>
  </td>
  )}
  </tr>

@@ -1,11 +1,16 @@
+// Must be the first import: it populates process.env from .env, and the auth,
+// mail and database constants below read it while their modules are being
+// evaluated. Loading it any later means those reads see an empty environment.
+import './config/env';
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { resolve } from 'path';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { UPLOADS_ROOT, UPLOADS_URL_PREFIX } from './config/upload-paths';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
@@ -67,8 +72,13 @@ async function bootstrap() {
   // Mounted before setGlobalPrefix so the URL has no /api prefix, matching the
   // paths written to the database. `index: false` and `dotfiles: 'deny'` keep it
   // to serving the image files only.
-  app.useStaticAssets(resolve(process.cwd(), 'uploads'), {
-    prefix: '/uploads',
+  //
+  // The directory is UPLOADS_ROOT rather than a literal, so pointing UPLOADS_DIR
+  // at a persistent disk moves both where files are written and where they are
+  // read back. If those two disagreed, uploads would appear to succeed and then
+  // 404 on the way out.
+  app.useStaticAssets(UPLOADS_ROOT, {
+    prefix: UPLOADS_URL_PREFIX,
     index: false,
     dotfiles: 'deny',
     // Filenames are content-addressed UUIDs, so a stored file never changes and

@@ -69,6 +69,27 @@ export class CompanySettings {
   @Column({ length: 20, default: '#F1B344' })
   primary_color!: string;
 
+  // ---- Certificate signatories ----------------------------------------
+  //
+  // Who signs an employment or experience certificate, and the image of their
+  // signature. All four are optional and independent: a company with only a CEO
+  // configured prints one block, and one with neither still produces a valid
+  // certificate under a generic "Authorised Signatory".
+  //
+  // Certificates only. Payslips and ID cards are unaffected.
+
+  @Column({ length: 150, nullable: true })
+  ceo_name?: string;
+
+  @Column({ length: 500, nullable: true })
+  ceo_signature_url?: string;
+
+  @Column({ length: 150, nullable: true })
+  cofounder_name?: string;
+
+  @Column({ length: 500, nullable: true })
+  cofounder_signature_url?: string;
+
   @CreateDateColumn()
   created_at!: Date;
 

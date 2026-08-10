@@ -33,6 +33,10 @@ import {
   UpdateOwnProfileDto,
 } from './dto/update-own-profile.dto';
 import {
+  ADDRESS_REQUIRED_MESSAGE,
+  hasAnyAddressField,
+} from './dto/validation.constants';
+import {
   paginatedResult,
   type PaginatedResult,
 } from '../common/dto/pagination-query.dto';
@@ -888,6 +892,17 @@ export class UserService {
       }
 
       Object.assign(existing, this.mapScalars(updateUserDto));
+
+      // The "at least one address field" rule, checked against the merged
+      // record. It cannot live in UpdateUserDto: a PATCH body sees only what
+      // was sent, so a request clearing `city` alone looks like an empty
+      // address even when the street and country are still on file. Here both
+      // halves are visible, so an edit is rejected only when it would actually
+      // leave the employee with no address at all.
+      if (!hasAnyAddressField(existing)) {
+        throw new BadRequestException(ADDRESS_REQUIRED_MESSAGE);
+      }
+
       const saved = await repository.save(existing);
 
       if (updateUserDto.leave_assignments) {

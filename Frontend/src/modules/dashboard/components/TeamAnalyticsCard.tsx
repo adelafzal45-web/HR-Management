@@ -30,7 +30,10 @@ export default function TeamAnalyticsCard() {
     const today = new Date().toISOString().slice(0, 10);
 
     Promise.all([
-      myProfileService.team({ limit: 500, status: true }),
+      // 100 is the endpoint's ceiling (PaginationQueryDto caps `limit`), and
+      // well past any real direct-report count — the tabs and the search box
+      // filter this list client-side, so it wants the team in one page.
+      myProfileService.team({ limit: 100, status: true }),
       canAttendance ? adminAttendanceApi.list({ date: today }) : Promise.resolve({ data: [], total: 0 }),
     ])
       .then(([empRes, attRes]) => {

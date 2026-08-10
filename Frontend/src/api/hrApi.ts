@@ -23,15 +23,16 @@
 // (plural of the table name, same convention as every confirmed route) so
 // they start working the moment the backend adds them; until then the 404
 // handler in api.ts routes them to demo data. Notifications *is* a confirmed
-// live route (full CRUD at /notifications) — see the dedicated comment
-// above that block for its specific shape.
+// live route, with audience targeting and per-user read state — see the
+// dedicated comment above that block for its shape.
 
 import { apiRequest, withDemoFallback } from "@/api/client";
+import { apiUpload } from "@/lib/apiClient";
 import { parseAttendanceRow } from "@/modules/attendance/api/attendanceAdapter";
 import { parseLeaveRow } from "@/modules/leave/api/leaveAdapter";
 import { parsePayrollRow, type ParsedPayrollRow } from "@/modules/payroll/api/payrollAdapter";
 import { ENDPOINTS } from "@/app/config/endpoints";
-import { leaveTypesApi } from "@/modules/settings/api/settingsApi";
+import { leaveTypesApi, resolveUploadUrl } from "@/modules/settings/api/settingsApi";
 import { getSession } from "@/utils/auth";
 import {
  mockAttendanceApi,
@@ -47,6 +48,7 @@ import {
  type PayrollRecord,
  type NotificationRecord,
  type NotificationType,
+ type NotificationAudienceType,
 } from "@/mocks/hrMockData";
 
 function currentEmployeeId(): string | undefined {
@@ -469,33 +471,116 @@ export const payrollApi = {
 // entry here pointed at /performance-reviews?employeeId=, which no longer
 // exists, so it silently resolved to demo data.
 
-// ---- Notifications — confirmed live REST CRUD at /notifications -----------
-// Confirmed against the live Swagger doc: `POST /api/notifications` takes
-// `{ title, message, type, createdBy }` (createdBy is the creating user's
-// user_id) and `GET /api/notifications` returns every notification with the
-// full `createdBy` user nested inside — there is no `?employeeId=` filter,
-// no `isRead` column, and no dedicated "mark all read" route. In other
-// words the schema models company-wide broadcasts (Admin/HR → everyone),
-// not per-recipient inbox rows. `GET`'s example response also doesn't echo
-// back the `type` it was created with, so the adapter below defaults to
-// "General" when it's missing rather than assuming the field is dropped
-// server-side for good.
+// ---- Notifications — live REST CRUD at /notifications ---------------------
+// A composed notification is fanned out server-side: one row per resolved
+// recipient, grouped by `batch_id`. That shape drives everything here.
+//
+//   POST /notifications          { title, message, category, audience_type,
+//                                  audience_department_id?, recipient_ids? }
+//                                The author comes from the JWT — it is NOT a
+//                                body field, because the recipient sees
+//                                "from <name>" and a client-supplied sender is
+//                                forgeable.
+//   GET  /notifications          the sender's Sent view: one entry per send,
+//                                with recipient_count / read_count. Gated on
+//                                `notifications.view` (HR/Admin).
+//   GET  /notifications/me       the signed-in user's bell: { data, unread }.
+//                                Open to every authenticated user.
+//   PATCH /notifications/me/:id/read , POST /notifications/me/read-all
+//                                per-user read state, persisted server-side.
+//
+// `category` is the backend column name; the frontend type is called `type`,
+// so the adapter maps between them. Rows written before targeting landed have
+// no batch or audience, hence the optional fields.
 function adaptNotificationRow(row: any): NotificationRecord {
  const createdBy = row?.createdBy ?? null;
- const createdByName = createdBy ? `${createdBy.first_name ?? ""} ${createdBy.last_name ?? ""}`.trim() : undefined;
+ const nestedName = createdBy
+ ? `${createdBy.first_name ?? ""} ${createdBy.last_name ?? ""}`.trim()
+ : "";
+ // The Sent view is a grouped aggregate, so it returns flat `created_by_*`
+ // columns; single-row responses nest the whole user under `createdBy`.
+ const createdByName = nestedName || row?.created_by_name || undefined;
+
+ const recipientCount = row?.recipient_count ?? row?.recipientCount;
+ const readCount = row?.read_count ?? row?.readCount;
+ // The Sent view aggregates with MIN(), so this arrives as a numeric string
+ // from postgres on that route and as a number on the single-row ones.
+ const attachmentSize = row?.attachment_size ?? row?.attachmentSize;
+ const attachmentUrl = row?.attachment_url ?? row?.attachmentUrl;
+
  return {
  notificationId: String(row?.notification_id ?? row?.notificationId ?? row?.id ?? ""),
  title: row?.title ?? "",
  message: row?.message ?? "",
- type: (row?.type as NotificationType) ?? "General",
- isRead: false, // stitched in client-side by NotificationsContext (see there for why)
+ type: (row?.category ?? row?.type ?? "General") as NotificationType,
+ // Server-owned now: each recipient has their own row, so `read_at` is
+ // genuinely this user's read state rather than a shared flag.
+ isRead: Boolean(row?.read_at ?? row?.readAt),
  createdAt: row?.created_at ?? row?.createdAt ?? new Date().toISOString(),
- createdById: createdBy?.user_id,
+ createdById: createdBy?.user_id ?? row?.created_by_id ?? undefined,
  createdByName: createdByName || undefined,
+ batchId: row?.batch_id ?? row?.batchId ?? undefined,
+ audienceType: row?.audience_type ?? row?.audienceType ?? undefined,
+ audienceDepartmentId: row?.audience_department_id ?? row?.audienceDepartmentId ?? undefined,
+ audienceDepartmentName: row?.audience_department_name ?? row?.audienceDepartmentName ?? undefined,
+ recipientCount: recipientCount == null ? undefined : Number(recipientCount),
+ readCount: readCount == null ? undefined : Number(readCount),
+ // Resolved to an absolute URL here so every consumer gets something it can
+ // put straight in an `href`. The column holds a server-relative path, which
+ // would 404 against the Vite dev-server origin.
+ attachmentUrl: attachmentUrl ? resolveUploadUrl(attachmentUrl) : undefined,
+ attachmentName: row?.attachment_name ?? row?.attachmentName ?? undefined,
+ attachmentMime: row?.attachment_mime ?? row?.attachmentMime ?? undefined,
+ attachmentSize: attachmentSize == null ? undefined : Number(attachmentSize),
  };
 }
 
+/** What the compose form sends. Mirrors `CreateNotificationDto`. */
+export type SendNotificationPayload = {
+ title: string;
+ message: string;
+ type: NotificationType;
+ audienceType: NotificationAudienceType;
+ /** Required when audienceType is "Department". */
+ audienceDepartmentId?: string;
+ /** Required when audienceType is "Specific". */
+ recipientIds?: string[];
+ /** Optional document, as returned by `uploadAttachment`. */
+ attachment?: NotificationAttachment;
+};
+
+/** The metadata `POST /notifications/attachment` hands back after storing a file. */
+export type NotificationAttachment = {
+ url: string;
+ name: string;
+ mime: string;
+ size: number;
+};
+
 export const notificationApi = {
+ /**
+  * Store a file and get back the metadata to send with the notification.
+  *
+  * Deliberately not folded into `create`: the file is validated (size, and real
+  * magic bytes rather than the claimed mimetype) before the sender has chosen
+  * an audience, so a rejected PDF costs one error message instead of a failed
+  * send. No demo fallback — there is nowhere to put a file without a server,
+  * and pretending the upload worked would produce a notification whose
+  * attachment link is dead.
+  */
+ uploadAttachment: async (file: File): Promise<NotificationAttachment> => {
+ const form = new FormData();
+ form.append("file", file);
+ const raw = await apiUpload<any>(ENDPOINTS.notifications.attachment, form);
+ return {
+ url: String(raw?.url ?? ""),
+ name: String(raw?.name ?? file.name),
+ mime: String(raw?.mime ?? file.type),
+ size: Number(raw?.size ?? file.size),
+ };
+ },
+
+ /** The sender's Sent view — grouped batches, not one row per recipient. */
  getAll: () =>
  withDemoFallback<NotificationRecord[]>(
  async () => {
@@ -505,10 +590,53 @@ export const notificationApi = {
  () => mockNotificationApi.getAll(),
  ),
 
- // `createdBy` defaults to the signed-in user (matches the confirmed
- // Swagger example body), but is accepted as an override for admin
- // "send on behalf of" tooling if that's ever added.
- create: (payload: { title: string; message: string; type: NotificationType; createdBy?: string }) =>
+ /**
+  * The signed-in user's bell. Distinct from `getAll` in both scope and
+  * permission: this returns only what was addressed to *them*, and does not
+  * require `notifications.view`.
+  */
+ getMine: (options: { unreadOnly?: boolean; limit?: number } = {}) =>
+ withDemoFallback<{ data: NotificationRecord[]; unread: number }>(
+ async () => {
+ const params = new URLSearchParams();
+ if (options.unreadOnly) params.set("unread", "true");
+ if (options.limit) params.set("limit", String(options.limit));
+ const query = params.toString();
+
+ const res = await apiRequest<any>(
+ query ? `${ENDPOINTS.notifications.me}?${query}` : ENDPOINTS.notifications.me,
+ );
+ return {
+ data: toArray(res?.data ?? res).map(adaptNotificationRow),
+ unread: Number(res?.unread ?? 0),
+ };
+ },
+ () => mockNotificationApi.getMine(),
+ ),
+
+ markRead: (notificationId: string) =>
+ withDemoFallback<NotificationRecord>(
+ async () =>
+ adaptNotificationRow(
+ await apiRequest<any>(ENDPOINTS.notifications.markRead(notificationId), {
+ method: "PATCH",
+ }),
+ ),
+ () => mockNotificationApi.markRead(notificationId),
+ ),
+
+ markAllRead: () =>
+ withDemoFallback<{ updated: number }>(
+ () => apiRequest<{ updated: number }>(ENDPOINTS.notifications.markAllRead, { method: "POST" }),
+ () => mockNotificationApi.markAllRead(),
+ ),
+
+ /**
+  * Send to everyone, one department, or a chosen set of employees. The
+  * response is the batch summary, so `recipientCount` tells the sender how
+  * many people it actually reached.
+  */
+ create: (payload: SendNotificationPayload) =>
  withDemoFallback<NotificationRecord>(
  async () => {
  const created = await apiRequest<any>(ENDPOINTS.notifications.base, {
@@ -516,27 +644,59 @@ export const notificationApi = {
  body: {
  title: payload.title,
  message: payload.message,
- type: payload.type,
- createdBy: payload.createdBy ?? currentEmployeeId(),
+ category: payload.type,
+ audience_type: payload.audienceType,
+ // Sent only for the audience that uses them: the DTO validates
+ // these conditionally, and a stray department id on an "All"
+ // send would be recorded as if it had been targeted.
+ ...(payload.audienceType === "Department"
+ ? { audience_department_id: payload.audienceDepartmentId }
+ : {}),
+ ...(payload.audienceType === "Specific"
+ ? { recipient_ids: payload.recipientIds ?? [] }
+ : {}),
+ // All four together or none at all. The backend checks the URL
+ // names a file it issued, so a half-populated attachment would be
+ // rejected rather than stored as a broken link.
+ ...(payload.attachment
+ ? {
+ attachment_url: payload.attachment.url,
+ attachment_name: payload.attachment.name,
+ attachment_mime: payload.attachment.mime,
+ attachment_size: payload.attachment.size,
+ }
+ : {}),
  },
  });
  return adaptNotificationRow(created);
  },
- () => mockNotificationApi.create({ ...payload, createdById: currentEmployeeId() }),
+ () =>
+ mockNotificationApi.create({
+ title: payload.title,
+ message: payload.message,
+ type: payload.type,
+ createdById: currentEmployeeId(),
+ }),
  ),
 
+ /** Applies to every recipient's copy — the batch, not one person's row. */
  update: (notificationId: string, payload: { title: string; message: string; type: NotificationType }) =>
  withDemoFallback<NotificationRecord>(
  async () => {
  const updated = await apiRequest<any>(ENDPOINTS.notifications.byId(notificationId), {
  method: "PATCH",
- body: payload,
+ body: {
+ title: payload.title,
+ message: payload.message,
+ category: payload.type,
+ },
  });
  return adaptNotificationRow(updated);
  },
  () => mockNotificationApi.update(notificationId, payload),
  ),
 
+ /** Removes it from every recipient's bell, not just the row named by the id. */
  remove: (notificationId: string) =>
  withDemoFallback<{ notificationId: string }>(
  () => apiRequest<{ notificationId: string }>(ENDPOINTS.notifications.byId(notificationId), { method: "DELETE" }),
@@ -554,5 +714,6 @@ export type {
  PayComponent,
  NotificationRecord,
  NotificationType,
+ NotificationAudienceType,
 } from "@/mocks/hrMockData";
 export { monthLabel } from "@/mocks/hrMockData";

@@ -714,7 +714,7 @@ export default function ProfessionalForm({ mode, professional, onCancel, onSaved
               <FieldWithError label="Salary" type="number" min="0" step="1000" value={form.salary} onChange={(e) => update("salary", e.target.value)} error={errors.salary} required />
               <FormField label="Bank Name" placeholder="Optional" value={form.bankName} onChange={(e) => update("bankName", e.target.value)} />
               <FormField label="Account Number" placeholder="Optional" value={form.accountNumber} onChange={(e) => update("accountNumber", e.target.value)} />
-              <FormField label="IFSC / Routing Code" placeholder="Optional" value={form.ifsc} onChange={(e) => update("ifsc", e.target.value)} />
+              <FormField label="IBAN Number" placeholder="Optional" value={form.ifsc} onChange={(e) => update("ifsc", e.target.value)} />
             </div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-900">
               <input

@@ -513,12 +513,13 @@ export function monthLabel(month: number, year: number) {
 // ---------------------------------------------------------------------------
 export type NotificationType = "Leave" | "Payroll" | "Attendance" | "Appraisal" | "Announcement" | "General";
 
-// The live `Notification` table has no per-employee recipient or `isRead`
-// column — every notification created by an Admin/HR user is a broadcast
-// visible to everyone (see hrApi.ts for the confirmed GET/POST shape).
-// `isRead` therefore isn't part of the wire record at all; it's tracked
-// client-side (see NotificationsContext.tsx) and only stitched onto this
-// type for backward compatibility with screens that already key off it.
+/** How the sender chose the recipients. Mirrors the backend enum. */
+export type NotificationAudienceType = "Specific" | "Department" | "All";
+
+// A notification is delivered as one row per recipient, so `isRead` is a real
+// server column (`read_at`) owned by the signed-in user — not a client-side
+// guess. The `audience*` and `*Count` fields are only populated on the sender's
+// Sent view, where the rows of one send are grouped into a single entry.
 export type NotificationRecord = {
  notificationId: string;
  title: string;
@@ -528,6 +529,22 @@ export type NotificationRecord = {
  createdAt: string;
  createdById?: string;
  createdByName?: string;
+ /** Groups the rows written by one send. Absent on pre-targeting rows. */
+ batchId?: string;
+ audienceType?: NotificationAudienceType;
+ audienceDepartmentId?: string;
+ audienceDepartmentName?: string;
+ recipientCount?: number;
+ readCount?: number;
+ /**
+  * An optional document or image sent with the notification. The filename is
+  * carried separately from the URL because the stored file is named by UUID —
+  * without it a download would save as `9f3c…-ab12.pdf`.
+  */
+ attachmentUrl?: string;
+ attachmentName?: string;
+ attachmentMime?: string;
+ attachmentSize?: number;
 };
 
 type NotificationDraft = { title: string; message: string; type: NotificationType };
@@ -595,6 +612,31 @@ export const mockNotificationApi = {
  return [...notifications].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
  },
 
+ /**
+  * The demo bell. Mirrors `GET /notifications/me`: the rows plus the unread
+  * count, so the context can treat demo and live identically.
+  */
+ async getMine(): Promise<{ data: NotificationRecord[]; unread: number }> {
+ await delay(300);
+ const data = [...notifications].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+ return { data, unread: data.filter((n) => !n.isRead).length };
+ },
+
+ async markRead(notificationId: string): Promise<NotificationRecord> {
+ await delay(150);
+ const record = notifications.find((n) => n.notificationId === notificationId);
+ if (!record) throw new Error("Notification not found.");
+ record.isRead = true;
+ return { ...record };
+ },
+
+ async markAllRead(): Promise<{ updated: number }> {
+ await delay(200);
+ const unread = notifications.filter((n) => !n.isRead);
+ unread.forEach((n) => { n.isRead = true; });
+ return { updated: unread.length };
+ },
+
  async create(payload: NotificationDraft & { createdById?: string; createdByName?: string }): Promise<NotificationRecord> {
  await delay(300);
  const record: NotificationRecord = {
@@ -606,6 +648,9 @@ export const mockNotificationApi = {
  createdAt: new Date().toISOString(),
  createdById: payload.createdById,
  createdByName: payload.createdByName,
+ audienceType: "All",
+ recipientCount: 1,
+ readCount: 0,
  };
  notifications.unshift(record);
  return { ...record };

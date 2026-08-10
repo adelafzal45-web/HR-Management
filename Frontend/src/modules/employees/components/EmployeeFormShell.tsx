@@ -7,8 +7,15 @@
 // ============================================================================
 
 import type React from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ChevronDown } from "lucide-react";
 import { FormField } from "@/components/forms/FormField";
+import {
+  COUNTRIES,
+  countryByCode,
+  countryForDial,
+  joinPhone,
+  splitPhone,
+} from "@/modules/employees/data/geo";
 
 /** Marks a control as mandatory for both sighted and assistive-tech users. */
 export function RequiredMark() {
@@ -167,6 +174,171 @@ export function Checkbox({
       <span>
         <span className="font-medium text-gray-900">{label}</span>
         {description && <span className="mt-0.5 block text-xs text-gray-500">{description}</span>}
+      </span>
+    </label>
+  );
+}
+
+/**
+ * Phone entry as a dial-code select plus a national-number input.
+ *
+ * The two halves are joined back into one string for the caller (and the
+ * backend column) rather than stored apart, so nothing downstream has to learn
+ * about a split representation. Typing a number that already carries a `+` code
+ * re-splits it into the select instead of producing a doubled prefix, which is
+ * what happens when someone pastes a full international number.
+ */
+export function PhoneField({
+  label,
+  name,
+  value,
+  onChange,
+  error,
+  hint,
+  requiredMark,
+  defaultDial,
+  placeholder = "300 1234567",
+}: {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  hint?: string;
+  requiredMark?: boolean;
+  /** Dial code used when the value carries none — the form's default country. */
+  defaultDial: string;
+  placeholder?: string;
+}) {
+  const { dial, national } = splitPhone(value, defaultDial);
+  const country = countryForDial(dial);
+  const described = error ? `${name}-error` : undefined;
+
+  const handleNational = (next: string) => {
+    // A pasted `+…` number carries its own code; honour it rather than
+    // prefixing the current one a second time.
+    if (next.trim().startsWith("+")) {
+      const parsed = splitPhone(next, dial);
+      onChange(joinPhone(parsed.dial, parsed.national));
+      return;
+    }
+    onChange(joinPhone(dial, next));
+  };
+
+  return (
+    <div className="mb-5">
+      <span className="mb-2 block text-[15px] font-medium text-gray-900">
+        {label}
+        {requiredMark && <RequiredMark />}
+      </span>
+
+      <div
+        className={`flex items-stretch overflow-hidden rounded-lg bg-gray-100 focus-within:ring-2 ${
+          error ? "ring-2 ring-rose-400" : "focus-within:ring-brand/60"
+        }`}
+      >
+        <div className="relative flex shrink-0 items-center gap-1.5 border-r border-gray-200 pl-3.5 pr-2 text-sm text-gray-700">
+          <span aria-hidden="true">{country?.flag ?? "🌐"}</span>
+          <span className="font-medium tabular-nums">{dial}</span>
+          <ChevronDown size={14} className="text-gray-400" aria-hidden="true" />
+          <select
+            value={country?.code ?? ""}
+            onChange={(e) => {
+              const next = countryByCode(e.target.value);
+              if (next) onChange(joinPhone(next.dial, national));
+            }}
+            aria-label={`${label} country code`}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          >
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name} ({c.dial})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <input
+          type="tel"
+          name={name}
+          value={national}
+          onChange={(e) => handleNational(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="tel-national"
+          inputMode="tel"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={described}
+          className="w-full bg-transparent px-4 py-3.5 text-sm text-gray-800 outline-none placeholder:text-gray-400"
+        />
+      </div>
+
+      {error ? (
+        <p id={described} className="mt-1.5 text-xs text-rose-500">
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="mt-1.5 text-xs text-gray-400">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Switch-style boolean control.
+ *
+ * Same contract as `Checkbox`, rendered as a track-and-knob toggle with the
+ * current state spelled out in words next to it. It stays a real
+ * `<input type="checkbox">` under a `sr-only` class so keyboard focus, the
+ * space key and screen-reader semantics come for free; `peer-*` classes drive
+ * the visual state off the input rather than off React state.
+ */
+export function Toggle({
+  label,
+  checked,
+  onChange,
+  disabled,
+  description,
+  onText = "Enabled",
+  offText = "Disabled",
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  description?: string;
+  onText?: string;
+  offText?: string;
+}) {
+  return (
+    <label
+      className={`flex items-start justify-between gap-4 rounded-xl bg-gray-50 p-4 ring-1 ring-inset ring-gray-100 ${
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+      }`}
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-gray-900">{label}</span>
+        {description && <span className="mt-0.5 block text-xs text-gray-500">{description}</span>}
+      </span>
+
+      <span className="flex shrink-0 items-center gap-2.5">
+        <span
+          className={`text-xs font-semibold ${checked ? "text-brand-dark" : "text-gray-400"}`}
+          aria-hidden="true"
+        >
+          {checked ? onText : offText}
+        </span>
+        <span className="relative inline-flex">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={checked}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.checked)}
+            className="peer sr-only"
+          />
+          <span className="h-6 w-11 rounded-full bg-gray-300 transition-colors peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand/60 peer-focus-visible:ring-offset-2" />
+          <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+        </span>
       </span>
     </label>
   );

@@ -210,7 +210,7 @@ export default function EmployeeDetailsDrawer({ open, employee, onClose }: Props
  <InfoRow icon={IdCard} label="Employee ID" value={employee.employeeCode} />
  <InfoRow icon={Building2} label="Department" value={employee.departmentName} />
  <InfoRow icon={Tags} label="Designation" value={employee.designationName} />
- <InfoRow icon={UserCog} label="Reports To / Manager" value={employee.managerName} />
+ <InfoRow icon={UserCog} label="Team Lead" value={employee.managerName} />
  <InfoRow icon={Boxes} label="Job Category" value={employee.jobCategoryName} />
  <InfoRow icon={Briefcase} label="Employment Type" value={EMPLOYMENT_TYPE_LABEL[employee.employmentType] ?? employee.employmentType} />
  <InfoRow icon={Clock} label="Shift" value={employee.shiftName} />

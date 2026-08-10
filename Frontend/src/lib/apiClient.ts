@@ -13,8 +13,12 @@
 // deliberately not sent.
 // ============================================================================
 
-export const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:3000/api";
+import { API_BASE_URL } from "./apiBaseUrl";
+
+// Re-exported rather than defined here: this module and `api/client.ts` both
+// need it, and two copies of the fallback is how one of them ended up pointing
+// at the visitor's own machine in production. See `lib/apiBaseUrl.ts`.
+export { API_BASE_URL, API_ORIGIN } from "./apiBaseUrl";
 
 export const TOKEN_STORAGE_KEY = "hrms.auth.token";
 
@@ -526,7 +530,16 @@ export const ENDPOINTS = {
   },
   leaveRequests: { base: "/leave-requests", byId: (id: string) => `/leave-requests/${id}` },
   payroll: { base: "/payroll", byId: (id: string) => `/payroll/${id}` },
-  notifications: { base: "/notifications", byId: (id: string) => `/notifications/${id}` },
+  notifications: {
+    base: "/notifications",
+    byId: (id: string) => `/notifications/${id}`,
+    // The signed-in user's own bell. `base` is the *sender's* view and is
+    // gated on `notifications.view` (HR/Admin only), so an ordinary employee
+    // reading from it gets a 403 — `me` is the route their bell must use.
+    me: "/notifications/me",
+    markRead: (id: string) => `/notifications/me/${id}/read`,
+    markAllRead: "/notifications/me/read-all",
+  },
 
   // Company details + branding. Single global row, so no :id — the backend
   // pins it to id = 1. `branding` is @Public(): the login screen renders the

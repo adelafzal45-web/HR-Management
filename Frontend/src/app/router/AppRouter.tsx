@@ -69,6 +69,9 @@ const RoleDetailPage = lazy(() => import("@/modules/settings/pages/RoleDetail"))
 const PermissionsPage = lazy(() => import("@/modules/settings/pages/Permissions"));
 const FilterPanelDemoPage = lazy(() => import("@/modules/settings/pages/FilterPanelDemo"));
 const BrandingPage = lazy(() => import("@/modules/settings/pages/Branding"));
+const CertificateSignaturesPage = lazy(
+ () => import("@/modules/settings/pages/CertificateSignatures"),
+);
 const SmtpSettingsPage = lazy(() => import("@/modules/settings/pages/SmtpSettings"));
 const EmailTemplatesPage = lazy(() => import("@/modules/settings/pages/EmailTemplates"));
 
@@ -506,6 +509,14 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
  <BrandingPage />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/settings/certificate-signatures"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <CertificateSignaturesPage />
  </ProtectedRoute>,
  )}
  />

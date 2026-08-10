@@ -357,7 +357,7 @@ export default function ViewEmployeePage() {
  <div className="grid grid-cols-1 gap-x-6 divide-y divide-gray-50 sm:grid-cols-2 sm:divide-y-0">
  <DetailRow icon={Building2} label="Department" value={employee.departmentName} />
  <DetailRow icon={IdCard} label="Designation" value={employee.designationName} />
- <DetailRow icon={UserCog} label="Reports To" value={employee.managerName} />
+ <DetailRow icon={UserCog} label="Team Lead" value={employee.managerName} />
  <DetailRow icon={Tags} label="Job Category / Type" value={`${employee.jobCategoryName} · ${EMPLOYMENT_TYPE_LABEL[employee.employmentType]}`} />
  <DetailRow icon={Clock} label="Shift" value={employee.shiftName} />
  <DetailRow

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Plus, CalendarX2, Check, X } from "lucide-react";
+import { Plus, CalendarX2, Check, X, Scale } from "lucide-react";
 import StatusBadge from "@/components/common/StatusBadge";
 import EmptyState from "@/components/common/EmptyState";
 import Modal from "@/components/dialogs/Modal";
@@ -7,8 +7,43 @@ import { PrimaryButton } from "@/components/forms/FormField";
 import { useToast } from "@/app/providers/ToastContext";
 import { adminLeaveApi, type AdminLeaveRequest, type AdminLeaveStatus } from "@/modules/settings/api/adminOpsApi";
 import { leaveApi, type LeaveType } from "@/api/hrApi";
+import { employeeService } from "@/modules/employees/api/employeeService";
+import type { LeaveBalance } from "@/modules/employees/types/employee.types";
 
 const STATUS_OPTIONS: AdminLeaveStatus[] = ["Pending", "Approved", "Rejected"];
+
+// `remaining_days` is derived server-side, so it's read as-is rather than
+// recomputed here. Numbers arrive as strings from the numeric columns.
+function BalanceCard({ balance, typeName }: { balance: LeaveBalance; typeName: string }) {
+ const allocated = Number(balance.allocated_days) || 0;
+ const used = Number(balance.used_days) || 0;
+ const remaining = Number(balance.remaining_days) || 0;
+ const usedPct = allocated > 0 ? Math.min(100, Math.round((used / allocated) * 100)) : 0;
+ const depleted = allocated > 0 && remaining <= 0;
+
+ return (
+ <div className="rounded-xl border border-gray-100 bg-white p-4">
+ <div className="flex items-baseline justify-between gap-2">
+ <p className="truncate text-sm font-semibold text-gray-900" title={typeName}>
+ {typeName}
+ </p>
+ <p className={`shrink-0 text-sm font-bold ${depleted ? "text-rose-600" : "text-gray-900"}`}>
+ {remaining}
+ <span className="text-xs font-medium text-gray-400"> / {allocated}</span>
+ </p>
+ </div>
+ <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
+ <div
+ className={`h-full rounded-full ${depleted ? "bg-rose-400" : usedPct >= 75 ? "bg-amber-400" : "bg-brand"}`}
+ style={{ width: `${usedPct}%` }}
+ />
+ </div>
+ <p className="mt-2 text-xs text-gray-400">
+ {used} used · {remaining} day{remaining === 1 ? "" : "s"} left
+ </p>
+ </div>
+ );
+}
 
 type Decision = { request: AdminLeaveRequest; action: "approve" | "reject" };
 
@@ -18,6 +53,9 @@ export default function EmployeeLeaveTab({ employeeId }: { employeeId: string })
  const [rows, setRows] = useState<AdminLeaveRequest[]>([]);
  const [loading, setLoading] = useState(true);
  const [statusFilter, setStatusFilter] = useState<AdminLeaveStatus | "">("");
+
+ const [balances, setBalances] = useState<LeaveBalance[]>([]);
+ const [loadingBalances, setLoadingBalances] = useState(true);
 
  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
  const [modalOpen, setModalOpen] = useState(false);
@@ -42,10 +80,26 @@ export default function EmployeeLeaveTab({ employeeId }: { employeeId: string })
  .finally(() => setLoading(false));
  };
 
+ const loadBalances = () => {
+ setLoadingBalances(true);
+ employeeService
+ .leaveBalances(employeeId)
+ .then(setBalances)
+ // A missing balance row isn't an error worth a toast — it just means
+ // nothing has been allocated to this employee yet.
+ .catch(() => setBalances([]))
+ .finally(() => setLoadingBalances(false));
+ };
+
  useEffect(() => {
  load();
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [employeeId, statusFilter]);
+
+ useEffect(() => {
+ loadBalances();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [employeeId]);
 
  useEffect(() => {
  leaveApi.getLeaveTypes().then(setLeaveTypes).catch(() => undefined);
@@ -119,6 +173,9 @@ export default function EmployeeLeaveTab({ employeeId }: { employeeId: string })
  }
  setDecision(null);
  load();
+ // Approving deducts working days server-side, so the balance shown
+ // above is stale the moment the decision goes through.
+ if (decision.action === "approve") loadBalances();
  } catch (err) {
  setDecisionError(err instanceof Error ? err.message : "Couldn't update the request.");
  } finally {
@@ -126,7 +183,49 @@ export default function EmployeeLeaveTab({ employeeId }: { employeeId: string })
  }
  };
 
+ // The balance rows carry their own `leaveType`, but fall back to the
+ // catalogue this tab already loads for the "File Leave" form when the
+ // relation isn't expanded.
+ const typeNameFor = (b: LeaveBalance) =>
+ b.leaveType?.name ?? leaveTypes.find((lt) => lt.leaveTypeId === b.leave_type_id)?.leaveTypeName ?? "Leave";
+
+ const totalAllocated = balances.reduce((sum, b) => sum + (Number(b.allocated_days) || 0), 0);
+ const totalRemaining = balances.reduce((sum, b) => sum + (Number(b.remaining_days) || 0), 0);
+
  return (
+ <div className="space-y-6">
+ {/* Leave balance — allocations, what's been used, and what's left. */}
+ <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+ <div className="flex flex-wrap items-baseline justify-between gap-2">
+ <h3 className="text-sm font-semibold text-gray-900">Leave Balance</h3>
+ {!loadingBalances && balances.length > 0 && (
+ <p className="text-xs text-gray-400">
+ {totalRemaining} of {totalAllocated} day{totalAllocated === 1 ? "" : "s"} remaining
+ </p>
+ )}
+ </div>
+
+ {loadingBalances ? (
+ <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+ {[...Array(4)].map((_, i) => (
+ <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-100" />
+ ))}
+ </div>
+ ) : balances.length === 0 ? (
+ <EmptyState
+ icon={Scale}
+ title="No leave allocated"
+ description="This employee has no leave entitlement set up yet. Allocations can be assigned from the employee's edit form."
+ />
+ ) : (
+ <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+ {balances.map((b) => (
+ <BalanceCard key={b.user_leave_balance_id} balance={b} typeName={typeNameFor(b)} />
+ ))}
+ </div>
+ )}
+ </div>
+
  <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
  <div className="flex flex-wrap items-center justify-between gap-3">
  <h3 className="text-sm font-semibold text-gray-900">Leave Requests</h3>
@@ -341,6 +440,7 @@ export default function EmployeeLeaveTab({ employeeId }: { employeeId: string })
  </div>
  </form>
  </Modal>
+ </div>
  </div>
  );
 }

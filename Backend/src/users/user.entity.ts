@@ -187,8 +187,9 @@ export class User {
   })
   bank_account_number?: string;
 
+  /** IBAN (up to the ISO 13616 maximum of 34), or a shorter IFSC / SWIFT code. */
   @Column({
-    length: 20,
+    length: 34,
     nullable: true,
   })
   bank_routing_code?: string;

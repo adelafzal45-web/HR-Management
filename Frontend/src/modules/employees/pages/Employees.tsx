@@ -198,7 +198,7 @@ export default function EmployeesPage() {
  }
  if (filters.managerId) {
  const emp = allEmployees.find((e) => e.employeeId === filters.managerId);
- chips.push({ key: "managerId", label: `Manager: ${emp ? `${emp.firstName} ${emp.lastName}` : "—"}`, onRemove: () => clear("managerId") });
+ chips.push({ key: "managerId", label: `Team Lead: ${emp ? `${emp.firstName} ${emp.lastName}` : "—"}`, onRemove: () => clear("managerId") });
  }
  if (filters.employmentType) {
  chips.push({
@@ -356,7 +356,7 @@ export default function EmployeesPage() {
  { key: "department", label: "Department" },
  { key: "designation", label: "Designation" },
  { key: "role", label: "Role" },
- { key: "manager", label: "Manager" },
+ { key: "manager", label: "Team Lead" },
  { key: "shift", label: "Shift" },
  { key: "employmentType", label: "Employment Type" },
  { key: "salary", label: "Salary" },
@@ -429,7 +429,7 @@ export default function EmployeesPage() {
  { key: "department", label: "Department", width: 160, minWidth: 120, sortAccessor: (e) => e.departmentName, render: (e) => e.departmentName },
  { key: "designation", label: "Designation", width: 170, minWidth: 130, sortAccessor: (e) => e.designationName, render: (e) => e.designationName },
  { key: "role", label: "Role", width: 150, minWidth: 110, hiddenByDefault: true, sortAccessor: (e) => e.roleName, render: (e) => e.roleName },
- { key: "manager", label: "Manager", width: 170, minWidth: 130, hiddenByDefault: true, sortAccessor: (e) => e.managerName, render: (e) => e.managerName },
+ { key: "manager", label: "Team Lead", width: 170, minWidth: 130, hiddenByDefault: true, sortAccessor: (e) => e.managerName, render: (e) => e.managerName },
  { key: "shift", label: "Shift", width: 150, minWidth: 110, hiddenByDefault: true, sortAccessor: (e) => e.shiftName, render: (e) => e.shiftName },
  {
  key: "employmentType",
@@ -483,6 +483,40 @@ export default function EmployeesPage() {
  onOpenFilters={() => setFilterDrawerOpen(true)}
  activeFilterCount={activeFilterCount}
  filterChips={filterChips}
+ quickFilters={[
+ {
+ key: "department",
+ label: "Department",
+ value: filters.departmentId,
+ options: departments.map((d) => ({ value: d.departmentId, label: d.name })),
+ onChange: (v) => setFilters((f) => ({ ...f, departmentId: v })),
+ },
+ {
+ key: "designation",
+ label: "Designation",
+ value: filters.designationId,
+ options: designations.map((d) => ({ value: d.designationId, label: d.name })),
+ onChange: (v) => setFilters((f) => ({ ...f, designationId: v })),
+ },
+ {
+ key: "status",
+ label: "Status",
+ value: filters.status,
+ options: STATUS_OPTIONS,
+ onChange: (v) => setFilters((f) => ({ ...f, status: v })),
+ },
+ {
+ key: "employmentType",
+ label: "Employment Type",
+ value: filters.employmentType,
+ options: [...EMPLOYMENT_TYPE_OPTIONS],
+ onChange: (v) => setFilters((f) => ({ ...f, employmentType: v })),
+ },
+ ]}
+ onResetFilters={() => {
+ setFilters(EMPTY_FILTERS);
+ setSearch("");
+ }}
  onExport={handleExport}
  selectedIds={selectedIds}
  onSelectedIdsChange={setSelectedIds}

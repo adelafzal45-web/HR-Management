@@ -2,6 +2,8 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 
+import { databaseConfig } from './config/database.config';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -41,22 +43,13 @@ import { MeetingsModule } from './meetings/meetings.module';
 
 @Module({
   imports: [
+    // Connection settings come from the environment via `databaseConfig`, which
+    // `data-source.ts` also uses, so the migration CLI and the running app can
+    // never point at different databases.
     TypeOrmModule.forRoot({
-      type: 'postgres',
-
-      host: 'localhost',
-
-      port: 5432,
-
-      username: 'postgres',
-
-      password: 'admin',
-
-      database: 'HR',
+      ...databaseConfig,
 
       autoLoadEntities: true,
-
-      synchronize: false,
 
       migrationsRun: false,
 

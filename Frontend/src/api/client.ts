@@ -1,9 +1,13 @@
 import { mockAuthApi } from "@/modules/auth/mocks/authMockData";
 import { apiRequest as sharedApiRequest, ApiError } from "@/lib/apiClient";
+import { API_BASE_URL } from "@/lib/apiBaseUrl";
 
 // Central place for API configuration.
-// Point this at your NestJS backend once it's deployed / running locally.
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+// Resolved in one place for the whole app — see `lib/apiBaseUrl.ts` for why the
+// fallback is same-origin rather than localhost. Re-exported because this
+// module has long been one of the two places the rest of the app imports it
+// from.
+export { API_BASE_URL, API_ORIGIN } from "@/lib/apiBaseUrl";
 
 // Thrown whenever a request is attempted but the backend can't be reached
 // AT ALL (network failure / DNS / connection refused). Distinct from a real

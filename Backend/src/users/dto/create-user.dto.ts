@@ -37,6 +37,7 @@ import {
   GENDERS,
   EMPLOYMENT_TYPES,
   BLOOD_GROUPS,
+  RequiresAnyAddressField,
   Trim,
   TrimOptional,
   NormalizeEmail,
@@ -192,45 +193,74 @@ export class CreateUserDto {
   // ==========================================
   // ADDRESS
   // ==========================================
+  //
+  // Every part is optional on its own; at least one must be filled in. Real
+  // addresses skip parts all the time — plenty of places have no postal code —
+  // and requiring all five blocked an employee record on a field nobody had.
+  // The group rule below keeps "no address at all" from getting through.
+  //
+  // `TrimOptional` rather than `Trim`: an untouched input submits `""`, which
+  // satisfies `@IsOptional()` (the value is present) and would then fail the
+  // format regex, so the user is told their postal code is invalid for a field
+  // they deliberately left blank.
 
-  @ApiProperty({ example: 'House 12, Street 4, Gulberg III' })
-  @Trim()
+  @ApiPropertyOptional({ example: 'House 12, Street 4, Gulberg III' })
+  @TrimOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Street address is required' })
   @MaxLength(500)
-  street_address!: string;
+  street_address?: string;
 
-  @ApiProperty({ example: 'Lahore' })
-  @Trim()
+  @ApiPropertyOptional({ example: 'Lahore' })
+  @TrimOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'City is required' })
   @MaxLength(100)
   @Matches(NAME_REGEX, { message: `City ${NAME_MESSAGE}` })
-  city!: string;
+  city?: string;
 
-  @ApiProperty({ example: 'Punjab' })
-  @Trim()
+  @ApiPropertyOptional({ example: 'Punjab' })
+  @TrimOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'State / province is required' })
   @MaxLength(100)
   @Matches(NAME_REGEX, { message: `State / province ${NAME_MESSAGE}` })
-  state_province!: string;
+  state_province?: string;
 
-  @ApiProperty({ example: '54000' })
-  @Trim()
+  @ApiPropertyOptional({ example: '54000' })
+  @TrimOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Postal code is required' })
   @MaxLength(20)
   @Matches(POSTAL_CODE_REGEX, { message: `Postal code ${POSTAL_CODE_MESSAGE}` })
-  postal_code!: string;
+  postal_code?: string;
 
-  @ApiProperty({ example: 'Pakistan' })
-  @Trim()
+  @ApiPropertyOptional({ example: 'Pakistan' })
+  @TrimOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Country is required' })
   @MaxLength(100)
   @Matches(NAME_REGEX, { message: `Country ${NAME_MESSAGE}` })
-  country!: string;
+  country?: string;
+
+  /**
+   * Carries the "at least one address field" rule. Not a real field — nothing
+   * is ever read from or written to it.
+   *
+   * It exists because the rule has to be attached to a property that is *not*
+   * `@IsOptional()`: that decorator suppresses every validator on its own
+   * property, so hung on `street_address` the check would be skipped precisely
+   * when all five are empty. See `RequiresAnyAddressField`.
+   *
+   * A client may set it — `whitelist: true` keeps any property carrying a
+   * validator, so unlike a genuinely unknown key this one survives the pipe.
+   * It stays out of the database because `UserService.mapScalars` copies an
+   * explicit list of columns rather than spreading the DTO, and setting it
+   * cannot satisfy the rule either: the validator reads the five address
+   * fields, never its own value.
+   */
+  @RequiresAnyAddressField()
+  address_group?: never;
 
   // ==========================================
   // EMPLOYMENT DETAILS
@@ -340,7 +370,7 @@ export class CreateUserDto {
   @TrimOptional()
   @IsString()
   @Matches(ROUTING_CODE_REGEX, {
-    message: `Routing / IFSC code ${ROUTING_CODE_MESSAGE}`,
+    message: `IBAN number ${ROUTING_CODE_MESSAGE}`,
   })
   bank_routing_code?: string;
 

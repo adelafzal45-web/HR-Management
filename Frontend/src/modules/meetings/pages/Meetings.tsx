@@ -15,7 +15,16 @@
 // the organisation, including ones they did not create.
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarClock, Pencil, Plus, Ban } from "lucide-react";
+import {
+  CalendarClock,
+  Pencil,
+  Plus,
+  Ban,
+  Eye,
+  MapPin,
+  Users,
+  Video,
+} from "lucide-react";
 
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
@@ -101,6 +110,27 @@ function formatWhen(iso: string): { date: string; time: string } {
   };
 }
 
+/**
+ * Is this location a web link we can safely turn into an anchor?
+ *
+ * `location` is one free-text column holding either a room name or a joining
+ * URL, so the only way to tell is to parse it. The protocol allow-list is the
+ * point of the function, not a detail: without it a location of
+ * `javascript:fetch(...)` would be rendered as a working href, so anyone who can
+ * schedule a meeting could run script in a participant's session. `new URL` also
+ * accepts `mailto:`, `file:` and `data:`, none of which belong in an href here.
+ */
+function meetingLinkOf(location: string): string | null {
+  const trimmed = location.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /** "All of Engineering" beats twelve chips for a department-wide invitation. */
 function audienceLabel(meeting: Meeting): string {
   if (meeting.audienceType === "All") return "Everyone";
@@ -138,6 +168,12 @@ export default function MeetingsPage() {
   const [form, setForm] = useState<FormState>(BLANK_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // The meeting being viewed. List rows carry no `participants` array — the
+  // backend sends it only on the detail response — so opening the view fetches
+  // the full record and shows the list row meanwhile.
+  const [viewing, setViewing] = useState<Meeting | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   const [cancelling, setCancelling] = useState<Meeting | null>(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -214,6 +250,24 @@ export default function MeetingsPage() {
     setForm(BLANK_FORM);
     setFormError(null);
     setFormOpen(true);
+  };
+
+  /**
+   * Open the read-only detail view.
+   *
+   * Shows the list row immediately, then upgrades it with the detail response so
+   * the invitee names appear. A failed fetch leaves the row on screen rather than
+   * an error: everything except the participant list is already in hand, and the
+   * agenda — the reason this view exists — is on the row.
+   */
+  const openView = (meeting: Meeting) => {
+    setViewing(meeting);
+    setViewLoading(true);
+    meetingsApi
+      .getById(meeting.meetingId)
+      .then((full) => setViewing((current) => (current?.meetingId === full.meetingId ? full : current)))
+      .catch(() => undefined)
+      .finally(() => setViewLoading(false));
   };
 
   const openEdit = (meeting: Meeting) => {
@@ -346,12 +400,34 @@ export default function MeetingsPage() {
       key: "location",
       label: "Location / Link",
       hideBelow: "lg",
-      render: (m) =>
-        m.location ? (
-          <span className="line-clamp-1 max-w-[220px] break-all">{m.location}</span>
-        ) : (
-          <span className="text-gray-400">—</span>
-        ),
+      render: (m) => {
+        if (!m.location) return <span className="text-gray-400">—</span>;
+
+        const link = meetingLinkOf(m.location);
+        if (!link) {
+          return (
+            <span className="flex min-w-0 items-center gap-1.5 text-gray-700">
+              <MapPin size={14} className="shrink-0 text-gray-400" />
+              <span className="line-clamp-1 max-w-[200px]">{m.location}</span>
+            </span>
+          );
+        }
+
+        return (
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            // Joining the meeting is all this click should do, whatever the row
+            // around it may come to handle.
+            onClick={(e) => e.stopPropagation()}
+            className="flex min-w-0 items-center gap-1.5 font-medium text-brand-dark hover:underline"
+          >
+            <Video size={14} className="shrink-0" />
+            <span className="line-clamp-1 max-w-[200px] break-all">{m.location}</span>
+          </a>
+        );
+      },
     },
     {
       key: "participants",
@@ -452,39 +528,52 @@ export default function MeetingsPage() {
             </select>
           ) : undefined
         }
-        actions={
-          canManage
-            ? (m) =>
-                m.status === "Scheduled" ? (
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(m)}
-                      aria-label={`Edit ${m.title}`}
-                      className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCancelling(m);
-                        setCancelReason("");
-                        setCancelError(null);
-                      }}
-                      aria-label={`Cancel ${m.title}`}
-                      className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-rose-400 transition hover:bg-rose-50 hover:text-rose-600"
-                    >
-                      <Ban size={16} />
-                    </button>
-                  </div>
-                ) : (
-                  <span className="block text-right text-xs text-gray-400">
-                    {m.status === "Cancelled" ? "Cancelled" : "Done"}
-                  </span>
-                )
-            : undefined
-        }
+        actions={(m) => (
+          // View is offered to everyone, including employees who hold no meeting
+          // permission at all — it reads what is already on their own row, and
+          // it is the only way to see the agenda without opening the editor.
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => openView(m)}
+              aria-label={`View ${m.title}`}
+              className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+            >
+              <Eye size={16} />
+            </button>
+
+            {canManage && m.status === "Scheduled" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => openEdit(m)}
+                  aria-label={`Edit ${m.title}`}
+                  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelling(m);
+                    setCancelReason("");
+                    setCancelError(null);
+                  }}
+                  aria-label={`Cancel ${m.title}`}
+                  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-rose-400 transition hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <Ban size={16} />
+                </button>
+              </>
+            )}
+
+            {canManage && m.status !== "Scheduled" && (
+              <span className="pl-1 text-xs text-gray-400">
+                {m.status === "Cancelled" ? "Cancelled" : "Done"}
+              </span>
+            )}
+          </div>
+        )}
       />
 
       <Modal
@@ -705,6 +794,121 @@ export default function MeetingsPage() {
             </div>
           </div>
         </form>
+      </Modal>
+
+      {/* Read-only detail. The agenda is the reason it exists: it was stored,
+          emailed to participants, and visible nowhere in the app outside the
+          edit form — which employees cannot open. */}
+      <Modal
+        open={!!viewing}
+        title={viewing?.title ?? "Meeting"}
+        description={
+          viewing
+            ? `${formatWhen(viewing.scheduledAt).date} at ${formatWhen(viewing.scheduledAt).time}`
+            : undefined
+        }
+        onClose={() => setViewing(null)}
+        maxWidth="max-w-lg"
+      >
+        {viewing && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={viewing.status} />
+              {viewing.organizerName && (
+                <span className="text-sm text-gray-500">
+                  Organized by {viewing.organizerName}
+                </span>
+              )}
+            </div>
+
+            {viewing.status === "Cancelled" && viewing.cancellationReason && (
+              <div className="rounded-xl bg-rose-50 p-3.5 text-sm text-rose-800 ring-1 ring-rose-100">
+                <p className="mb-0.5 font-medium">Cancelled</p>
+                <p className="whitespace-pre-wrap">{viewing.cancellationReason}</p>
+              </div>
+            )}
+
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Location / Link
+              </p>
+              {(() => {
+                if (!viewing.location) {
+                  return <p className="text-sm text-gray-400">Not specified</p>;
+                }
+                const link = meetingLinkOf(viewing.location);
+                return link ? (
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-light px-3.5 py-2.5 text-sm font-medium text-brand-dark transition hover:brightness-95"
+                  >
+                    <Video size={15} className="shrink-0" />
+                    <span className="break-all">{viewing.location}</span>
+                  </a>
+                ) : (
+                  <p className="flex items-start gap-2 text-sm text-gray-800">
+                    <MapPin size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                    <span>{viewing.location}</span>
+                  </p>
+                );
+              })()}
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Agenda
+              </p>
+              {viewing.agenda ? (
+                <p className="whitespace-pre-wrap rounded-xl bg-gray-50 p-3.5 text-sm leading-relaxed text-gray-800">
+                  {viewing.agenda}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-400">No agenda was added.</p>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Participants
+              </p>
+              <p className="mb-2 flex items-center gap-2 text-sm text-gray-800">
+                <Users size={15} className="shrink-0 text-gray-400" />
+                {viewing.participantCount}{" "}
+                {viewing.participantCount === 1 ? "person" : "people"} ·{" "}
+                {audienceLabel(viewing)}
+              </p>
+
+              {viewing.participants.length > 0 ? (
+                <ul className="max-h-52 space-y-1 overflow-y-auto rounded-xl bg-gray-50 p-2">
+                  {viewing.participants.map((p) => (
+                    <li key={p.userId} className="rounded-lg px-2.5 py-1.5">
+                      <p className="truncate text-sm text-gray-800">{p.name || p.email}</p>
+                      {p.name && p.email && (
+                        <p className="truncate text-xs text-gray-500">{p.email}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400">
+                  {viewLoading ? "Loading the invitee list…" : "The invitee list isn't available."}
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewing(null)}
+                className="min-h-11 rounded-full border border-gray-200 px-5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
     </DashboardLayout>

@@ -1,4 +1,9 @@
 import { Transform } from 'class-transformer';
+import {
+  registerDecorator,
+  type ValidationArguments,
+  type ValidationOptions,
+} from 'class-validator';
 
 /**
  * Shared validation vocabulary for the employee DTOs.
@@ -56,9 +61,18 @@ export const ACCOUNT_NUMBER_REGEX = /^[A-Za-z0-9-]{6,34}$/;
 export const ACCOUNT_NUMBER_MESSAGE =
   'must be 6-34 alphanumeric characters (hyphens allowed)';
 
-/** IFSC / routing / SWIFT style codes. */
-export const ROUTING_CODE_REGEX = /^[A-Za-z0-9]{6,20}$/;
-export const ROUTING_CODE_MESSAGE = 'must be 6-20 alphanumeric characters';
+/**
+ * IBAN, or an IFSC / routing / SWIFT style code.
+ *
+ * 34 is the ISO 13616 maximum IBAN length (Pakistan's is 24), so the upper bound
+ * has to clear it — a 20-char cap rejected every real IBAN. The lower bound stays
+ * at 6 so the shorter SWIFT/IFSC codes already stored remain valid. The format
+ * itself isn't checked beyond "alphanumeric": country-specific IBAN lengths and
+ * the mod-97 checksum are more than this field needs, and getting them subtly
+ * wrong would block valid input.
+ */
+export const ROUTING_CODE_REGEX = /^[A-Za-z0-9]{6,34}$/;
+export const ROUTING_CODE_MESSAGE = 'must be 6-34 alphanumeric characters';
 
 export const GENDERS = ['Male', 'Female', 'Other'] as const;
 
@@ -113,3 +127,66 @@ export const NormalizeEmail = () =>
   Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   );
+
+/** The structured address parts, in the order the form presents them. */
+export const ADDRESS_FIELDS = [
+  'street_address',
+  'city',
+  'state_province',
+  'postal_code',
+  'country',
+] as const;
+
+export const ADDRESS_REQUIRED_MESSAGE =
+  'Enter at least one address field (street, city, state / province, postal code or country)';
+
+/** True when a record carries a non-blank value in any address column. */
+export function hasAnyAddressField(
+  record: Partial<Record<(typeof ADDRESS_FIELDS)[number], unknown>>,
+): boolean {
+  return ADDRESS_FIELDS.some((field) => {
+    const value = record[field];
+    return typeof value === 'string' && value.trim().length > 0;
+  });
+}
+
+/**
+ * "At least one address field must be filled in."
+ *
+ * Every part is individually optional — plenty of real addresses have no
+ * postal code, and an employee record should not be blocked on one — but an
+ * employee with no address at all is a record nobody can post a letter to, so
+ * the group as a whole is required.
+ *
+ * Declared on a synthetic property rather than on `street_address`, because
+ * `@IsOptional()` suppresses *every* validator on the property it decorates:
+ * hung on a real address field the check would be skipped in exactly the case
+ * it exists to catch — all five left empty. The validator reads the address
+ * fields off the object under validation, so the property it is attached to
+ * carries no value of its own and setting one cannot satisfy the rule.
+ *
+ * This covers creates only. `UpdateUserDto` derives from this class through
+ * `PartialType`, which marks each inherited property optional and so disables
+ * this rule too — deliberately, since a PATCH body carrying no address is an
+ * edit to something else, not an attempt to erase one. The equivalent check for
+ * edits is made against the *merged* record in `UserService.update`, which is
+ * the only place the stored values and the incoming ones are both visible.
+ */
+export function RequiresAnyAddressField(options?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'requiresAnyAddressField',
+      target: object.constructor,
+      propertyName,
+      options,
+      validator: {
+        validate(_value: unknown, args: ValidationArguments) {
+          return hasAnyAddressField(args.object as Record<string, unknown>);
+        },
+        defaultMessage() {
+          return ADDRESS_REQUIRED_MESSAGE;
+        },
+      },
+    });
+  };
+}

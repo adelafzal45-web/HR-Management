@@ -9,11 +9,12 @@ import { In, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, createReadStream } from 'fs';
 import { unlink, writeFile } from 'fs/promises';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import type { Response } from 'express';
 import archiver = require('archiver');
 
 import { User } from '../users/user.entity';
+import { uploadDir } from '../config/upload-paths';
 import type { UploadedFile } from '../common/upload/image-upload';
 import { EmployeeDocument } from './employee-document.entity';
 
@@ -76,11 +77,7 @@ const MAGIC_BYTES: Record<string, number[][]> = {
   ],
 };
 
-export const DOCUMENT_UPLOAD_DIR = resolve(
-  process.cwd(),
-  'uploads',
-  'employee-documents',
-);
+export const DOCUMENT_UPLOAD_DIR = uploadDir('employee-documents');
 
 /**
  * Strips anything that could escape a directory or break a zip entry.

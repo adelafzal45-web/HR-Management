@@ -190,7 +190,14 @@ export function maskIban(raw: string): string {
 // has been configured (or its URL fails to load) — so every payslip carries
 // a logo instead of quietly falling back to text-only.
 
-async function fetchAsDataUrl(url: string): Promise<string | undefined> {
+/**
+ * Fetch any image URL as a base64 data URL, or `undefined` if it can't be read.
+ *
+ * Exported for callers that must not get the bundled fallback logo — a
+ * certificate signature, for instance, where `resolveLogoDataUrl` would print
+ * the company logo in place of a signature that was never configured.
+ */
+export async function fetchAsDataUrl(url: string): Promise<string | undefined> {
  try {
  const res = await fetch(url, { mode: "cors" });
  if (!res.ok) return undefined;

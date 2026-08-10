@@ -60,7 +60,8 @@
 // - /working-days: days are ISO-8601 numbered (1 = Mon ... 7 = Sun), matching
 // Postgres EXTRACT(ISODOW FROM date), so no day-number conversion is needed.
 
-import { apiRequest, withDemoFallback, normalizeListResult } from "@/api/client";
+import { apiRequest, withDemoFallback, normalizeListResult, API_ORIGIN } from "@/api/client";
+import { apiUpload } from "@/lib/apiClient";
 import {
  mockDepartmentsApi,
  mockDesignationsApi,
@@ -124,6 +125,26 @@ export type BrandingSettings = {
  website: string;
  /** Hex, e.g. "#F1B344". Applied app-wide as a CSS custom property. */
  primaryColor: string;
+};
+
+/**
+ * Who signs a generated certificate.
+ *
+ * Every field is optional and independent: a company with only a CEO configured
+ * prints one block, and one with neither still produces a valid certificate
+ * under a generic "Authorised Signatory".
+ *
+ * Kept apart from BrandingSettings because the two are fetched differently —
+ * branding comes from the public endpoint the login screen uses, these come
+ * from an authenticated one. A signature image is not something to serve to an
+ * anonymous caller.
+ */
+export type CertificateSignatories = {
+ ceoName: string;
+ /** Server path from the upload endpoint, e.g. "/uploads/company-signatures/x.png". */
+ ceoSignatureUrl: string;
+ cofounderName: string;
+ cofounderSignatureUrl: string;
 };
 
 export type LeaveType = {
@@ -827,6 +848,81 @@ type ApiCompanySettings = {
  address?: string | null;
  website?: string | null;
  primary_color?: string | null;
+ ceo_name?: string | null;
+ ceo_signature_url?: string | null;
+ cofounder_name?: string | null;
+ cofounder_signature_url?: string | null;
+};
+
+/**
+ * Images the server stores for us, and the path segment each is uploaded under.
+ *
+ * Mirrors COMPANY_ASSET_KINDS in Backend/src/company-settings/company-settings.service.ts.
+ * The kind decides both the column the returned path lands in and the directory
+ * it is written to, so these strings have to match the backend exactly.
+ */
+export const COMPANY_ASSET_KINDS = [
+ "logo",
+ "logo-collapsed",
+ "favicon",
+ "ceo-signature",
+ "cofounder-signature",
+] as const;
+export type CompanyAssetKind = (typeof COMPANY_ASSET_KINDS)[number];
+
+/**
+ * Makes a stored upload path loadable.
+ *
+ * The backend stores a server-relative path like `/uploads/company-branding/x.png`
+ * and serves it from the API origin, not the Vite dev-server origin — so a bare
+ * path would 404 in development. Absolute URLs are passed through untouched,
+ * which is what keeps an externally hosted logo working: these columns accepted
+ * a pasted URL before the upload button existed, and still do.
+ *
+ * Applied when reading, so the rest of the app sees something it can put in a
+ * `src`. The un-resolved path is what gets written back — see `toStoredPath`.
+ */
+const toDisplayUrl = (path?: string | null): string => {
+ if (!path) return "";
+ if (/^(https?:|data:|blob:)/i.test(path)) return path;
+ return `${API_ORIGIN}${path.startsWith("/") ? "" : "/"}${path}`;
+};
+
+/**
+ * `toDisplayUrl` for callers outside this module.
+ *
+ * Every upload the backend stores — branding, signatures, notification
+ * attachments — is recorded as the same kind of server-relative path and needs
+ * the same treatment before it can go in a `src` or an `href`. Shared rather
+ * than reimplemented so the dev-server origin bug is fixed in one place.
+ */
+export const resolveUploadUrl = toDisplayUrl;
+
+/**
+ * Inverse of `toDisplayUrl`, for writing back.
+ *
+ * A display URL that points at our own uploads is stored as the bare path, so
+ * the row stays portable across origins — moving the API to a new host must not
+ * strand every logo. Anything else is stored as typed.
+ */
+const toStoredPath = (url: string): string => {
+ return url.startsWith(`${API_ORIGIN}/uploads/`) ? url.slice(API_ORIGIN.length) : url;
+};
+
+/**
+ * Upload an image and get back the URL to display it from.
+ *
+ * POST /company-settings/asset/:kind (multipart). The upload *is* the save —
+ * the server writes the file, points the column at it and removes whatever it
+ * replaced — so the caller does not need to follow it with a PATCH. The URL is
+ * echoed into form state so the preview updates immediately and a subsequent
+ * Save of the other fields doesn't clear it.
+ */
+export const uploadCompanyAsset = async (kind: CompanyAssetKind, file: File): Promise<string> => {
+ const form = new FormData();
+ form.append("file", file);
+ const { url } = await apiUpload<{ url: string }>(`/company-settings/asset/${kind}`, form);
+ return toDisplayUrl(url);
 };
 
 const fromApiCompanyDetails = (raw: ApiCompanySettings): CompanyDetails => ({
@@ -863,9 +959,9 @@ export const companyDetailsApi = {
 // requires company-settings.update.
 const fromApiBranding = (raw: ApiCompanySettings): BrandingSettings => ({
  companyName: raw.company_name ?? "",
- logoUrl: raw.logo_url ?? "",
- logoCollapsedUrl: raw.logo_collapsed_url ?? "",
- faviconUrl: raw.favicon_url ?? "",
+ logoUrl: toDisplayUrl(raw.logo_url),
+ logoCollapsedUrl: toDisplayUrl(raw.logo_collapsed_url),
+ faviconUrl: toDisplayUrl(raw.favicon_url),
  email: raw.email ?? "",
  phone: raw.phone ?? "",
  address: raw.address ?? "",
@@ -875,9 +971,9 @@ const fromApiBranding = (raw: ApiCompanySettings): BrandingSettings => ({
 
 const toApiBranding = (payload: BrandingSettings) => ({
  company_name: payload.companyName,
- logo_url: payload.logoUrl,
- logo_collapsed_url: payload.logoCollapsedUrl,
- favicon_url: payload.faviconUrl,
+ logo_url: toStoredPath(payload.logoUrl),
+ logo_collapsed_url: toStoredPath(payload.logoCollapsedUrl),
+ favicon_url: toStoredPath(payload.faviconUrl),
  email: payload.email,
  phone: payload.phone,
  address: payload.address,
@@ -893,6 +989,36 @@ export const brandingApi = {
  method: "PATCH",
  body: toApiBranding(payload),
  }).then(fromApiBranding),
+};
+
+// ---- Certificate signatories — GET /company-settings/signatories, PATCH ----
+// The GET is its own route, not part of /branding: branding is @Public() for the
+// login screen, and a signature image must not be readable without a token. It
+// requires employees.documents.view — the permission that gates generating a
+// certificate — so whoever can issue one can read who signs it.
+//
+// The images themselves go through uploadCompanyAsset; this PATCH only carries
+// the names and the "" that clears a signature.
+const fromApiSignatories = (raw: ApiCompanySettings): CertificateSignatories => ({
+ ceoName: raw.ceo_name ?? "",
+ ceoSignatureUrl: toDisplayUrl(raw.ceo_signature_url),
+ cofounderName: raw.cofounder_name ?? "",
+ cofounderSignatureUrl: toDisplayUrl(raw.cofounder_signature_url),
+});
+
+export const signatoriesApi = {
+ get: () => apiRequest<ApiCompanySettings>("/company-settings/signatories").then(fromApiSignatories),
+
+ update: (payload: CertificateSignatories) =>
+ apiRequest<ApiCompanySettings>("/company-settings", {
+ method: "PATCH",
+ body: {
+ ceo_name: payload.ceoName,
+ ceo_signature_url: toStoredPath(payload.ceoSignatureUrl),
+ cofounder_name: payload.cofounderName,
+ cofounder_signature_url: toStoredPath(payload.cofounderSignatureUrl),
+ },
+ }).then(fromApiSignatories),
 };
 
 // ---- Leave Types — GET/POST/GET :id/PATCH/DELETE /leave-types --------------

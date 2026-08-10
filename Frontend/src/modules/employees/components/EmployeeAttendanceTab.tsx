@@ -3,6 +3,7 @@ import { LogIn, LogOut, Clock, CalendarDays, CalendarX } from "lucide-react";
 import StatusBadge from "@/components/common/StatusBadge";
 import EmptyState from "@/components/common/EmptyState";
 import { useToast } from "@/app/providers/ToastContext";
+import AttendanceSummaryCards from "@/modules/attendance/components/AttendanceSummaryCards";
 import { adminAttendanceApi, type AdminAttendanceRecord, type AdminAttendanceStatus } from "@/modules/settings/api/adminOpsApi";
 
 const now = new Date();
@@ -98,6 +99,12 @@ export default function EmployeeAttendanceTab({ employeeId }: { employeeId: stri
  const yearOptions = [now.getFullYear(), now.getFullYear() - 1];
 
  return (
+ <div className="space-y-6">
+ {/* The same summary cards the Attendance Records page shows, scoped to
+     this one employee — so the tab reads like that page rather than a
+     second, differently-shaped view of the same data. */}
+ <AttendanceSummaryCards employeeId={employeeId} />
+
  <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
  {/* Today's check-in/out card */}
  <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
@@ -248,6 +255,7 @@ export default function EmployeeAttendanceTab({ employeeId }: { employeeId: stri
  </tbody>
  </table>
  )}
+ </div>
  </div>
  </div>
  </div>

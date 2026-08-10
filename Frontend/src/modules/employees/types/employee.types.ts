@@ -235,11 +235,12 @@ export type CreateEmployeePayload = {
   profile_image_thumb?: string;
   blood_group?: string;
 
-  street_address: string;
-  city: string;
-  state_province: string;
-  postal_code: string;
-  country: string;
+  // Each part is optional; the server requires at least one of the five.
+  street_address?: string;
+  city?: string;
+  state_province?: string;
+  postal_code?: string;
+  country?: string;
 
   joining_date: string;
   employee_type: string;

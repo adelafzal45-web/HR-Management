@@ -1,8 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { notificationApi, type NotificationRecord, type NotificationType } from "@/api/hrApi";
+import {
+ notificationApi,
+ type NotificationRecord,
+ type NotificationType,
+ type SendNotificationPayload,
+} from "@/api/hrApi";
 import { useAuth } from "@/app/providers/AuthContext";
 
 type NotificationsContextValue = {
+ /** The signed-in user's bell — only what was addressed to them. */
  notifications: NotificationRecord[];
  unreadCount: number;
  loading: boolean;
@@ -10,7 +16,7 @@ type NotificationsContextValue = {
  refresh: () => void;
  markAsRead: (id: string) => void;
  markAllAsRead: () => void;
- sendNotification: (payload: { title: string; message: string; type: NotificationType }) => Promise<void>;
+ sendNotification: (payload: SendNotificationPayload) => Promise<NotificationRecord>;
  updateNotification: (id: string, payload: { title: string; message: string; type: NotificationType }) => Promise<void>;
  deleteNotification: (id: string) => Promise<void>;
 };
@@ -19,64 +25,38 @@ const NotificationsContext = createContext<NotificationsContextValue | null>(nul
 
 const POLL_INTERVAL_MS = 30000;
 
-// The live `Notification` table is a company-wide broadcast — every
-// Admin/HR-created row is visible to everyone, with no per-recipient
-// `isRead` column on the backend (see hrApi.ts). "Read" is therefore
-// purely a per-browser, per-user preference, tracked here in localStorage
-// and merged onto the fetched list rather than round-tripped to the API.
-function readStorageKey(identity: string) {
- return `hrms.notifications.read.${identity}`;
-}
-
-function loadReadIds(identity: string): Set<string> {
- try {
- const raw = localStorage.getItem(readStorageKey(identity));
- if (!raw) return new Set();
- const parsed = JSON.parse(raw);
- return new Set(Array.isArray(parsed) ? parsed : []);
- } catch {
- return new Set();
- }
-}
-
-function saveReadIds(identity: string, ids: Set<string>) {
- try {
- localStorage.setItem(readStorageKey(identity), JSON.stringify([...ids]));
- } catch {
- // Best-effort — worst case, read state doesn't persist across reloads.
- }
-}
-
 export function NotificationsProvider({ children }: { children: ReactNode }) {
- const { isAuthenticated, user } = useAuth();
- const identity = user?.email || "guest";
+ const { isAuthenticated } = useAuth();
 
- const [raw, setRaw] = useState<NotificationRecord[]>([]);
- const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
+ const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+ const [unreadCount, setUnreadCount] = useState(0);
  const [loading, setLoading] = useState(false);
  const [error, setError] = useState<string | null>(null);
  const [tick, setTick] = useState(0);
 
  const refresh = useCallback(() => setTick((t) => t + 1), []);
 
- useEffect(() => {
- setReadIds(loadReadIds(identity));
- }, [identity]);
-
+ // Reads `/notifications/me`, not `/notifications`. The latter is the
+ // sender's view of everything ever sent and is gated on
+ // `notifications.view` (HR/Admin only), so an ordinary employee's bell used
+ // to 403 against it. Read state comes back from the server: each recipient
+ // owns their own row, so `isRead` is theirs and follows them between
+ // browsers.
  useEffect(() => {
  if (!isAuthenticated) {
- setRaw([]);
+ setNotifications([]);
+ setUnreadCount(0);
  return;
  }
  let active = true;
  setLoading(true);
  notificationApi
- .getAll()
- .then((data) => {
- if (active) {
- setRaw(data);
+ .getMine()
+ .then(({ data, unread }) => {
+ if (!active) return;
+ setNotifications(data);
+ setUnreadCount(unread);
  setError(null);
- }
  })
  .catch((err) => {
  if (active) setError(err instanceof Error ? err.message : "Couldn't load notifications.");
@@ -95,36 +75,50 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
  return () => clearInterval(id);
  }, [isAuthenticated, refresh]);
 
- const notifications = useMemo(
- () => raw.map((n) => ({ ...n, isRead: readIds.has(n.notificationId) })),
- [raw, readIds],
+ // Optimistic: the badge clears on click and the server call follows. A
+ // failure rolls the row back and refreshes, so the bell never claims a
+ // notice was read when the server still has it unread.
+ const markAsRead = useCallback((id: string) => {
+ let wasUnread = false;
+ setNotifications((prev) =>
+ prev.map((n) => {
+ if (n.notificationId !== id || n.isRead) return n;
+ wasUnread = true;
+ return { ...n, isRead: true };
+ }),
  );
+ if (!wasUnread) return;
+ setUnreadCount((c) => Math.max(0, c - 1));
 
- const markAsRead = useCallback(
- (id: string) => {
- setReadIds((prev) => {
- if (prev.has(id)) return prev;
- const next = new Set(prev).add(id);
- saveReadIds(identity, next);
- return next;
- });
- },
- [identity],
+ notificationApi.markRead(id).catch(() => {
+ setNotifications((prev) =>
+ prev.map((n) => (n.notificationId === id ? { ...n, isRead: false } : n)),
  );
+ setUnreadCount((c) => c + 1);
+ });
+ }, []);
 
  const markAllAsRead = useCallback(() => {
- setReadIds((prev) => {
- const next = new Set(prev);
- raw.forEach((n) => next.add(n.notificationId));
- saveReadIds(identity, next);
- return next;
- });
- }, [raw, identity]);
+ const previous = notifications;
+ const previousUnread = unreadCount;
+ if (previousUnread === 0) return;
 
+ setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+ setUnreadCount(0);
+
+ notificationApi.markAllRead().catch(() => {
+ setNotifications(previous);
+ setUnreadCount(previousUnread);
+ });
+ }, [notifications, unreadCount]);
+
+ // Returns the batch summary so the caller can report how many people it
+ // actually reached rather than assuming "everyone".
  const sendNotification = useCallback(
- async (payload: { title: string; message: string; type: NotificationType }) => {
- await notificationApi.create(payload);
+ async (payload: SendNotificationPayload) => {
+ const created = await notificationApi.create(payload);
  refresh();
+ return created;
  },
  [refresh],
  );
@@ -139,10 +133,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
  const deleteNotification = useCallback(async (id: string) => {
  await notificationApi.remove(id);
- setRaw((prev) => prev.filter((n) => n.notificationId !== id));
+ setNotifications((prev) => prev.filter((n) => n.notificationId !== id));
  }, []);
-
- const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
 
  const value = useMemo<NotificationsContextValue>(
  () => ({

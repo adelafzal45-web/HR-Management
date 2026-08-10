@@ -151,9 +151,21 @@ export const ENDPOINTS = {
  byId: (id: string) => `/payroll/${id}`,
  },
 
+ // `base` is the sender's view: one entry per notification sent, with the
+ // audience and the recipient/read counts. It is gated on `notifications.view`
+ // (HR/Admin), so the bell reads `me` instead — that route is open to every
+ // authenticated user and returns only what was addressed to them.
  notifications: {
  base: "/notifications",
  byId: (id: string) => `/notifications/${id}`,
+ me: "/notifications/me",
+ markRead: (id: string) => `/notifications/me/${id}/read`,
+ markAllRead: "/notifications/me/read-all",
+ // Staged before the send, not with it: the file is validated and stored
+ // first, and the JSON create then references the URL it returned. Keeps
+ // `create` a plain JSON contract and means a rejected file is reported
+ // before the sender has committed to an audience.
+ attachment: "/notifications/attachment",
  },
 
  // NOTE: appraisal/team endpoints deliberately do NOT live here.
