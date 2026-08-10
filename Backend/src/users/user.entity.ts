@@ -21,6 +21,7 @@ import { Notification } from '../notifications/notifications.entity';
 import { PerformanceReview } from '../performance-review/performance-review.entity';
 import { AppraisalForms } from '../appraisal-forms/appraisal-forms.entity';
 import { UserLeaveBalance } from './user-leave-balance.entity';
+import { Loan } from '../loans/loan.entity';
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -424,4 +425,6 @@ export class User {
 
   @UpdateDateColumn()
   updated_at!: Date;
+  @OneToMany(() => Loan, (loan) => loan.user)
+loans!: Loan[];
 }

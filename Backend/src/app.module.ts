@@ -38,6 +38,9 @@ import { EmployeeDocumentsModule } from './employee-documents/employee-documents
 import { HolidaysModule } from './holidays/holidays.module';
 import { LeaveEntitlementsModule } from './leave-entitlements/leave-entitlements.module';
 import { MeetingsModule } from './meetings/meetings.module';
+import { LoansModule } from './loans/loans.module';
+import { ReimbursementsModule } from './reimbursements/reimbursements.module';
+import { TaxModule } from './tax/tax.module';
 
 @Module({
   imports: [
@@ -152,6 +155,12 @@ import { MeetingsModule } from './meetings/meetings.module';
     // chosen audience (specific people, a department, or everyone) and notified
     // by email and/or in-app notification per the organizer's choice.
     MeetingsModule,
+
+    LoansModule,
+
+    ReimbursementsModule,
+
+    TaxModule,
   ],
 
   controllers: [AppController],

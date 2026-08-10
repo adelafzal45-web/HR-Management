@@ -1,0 +1,8 @@
+export enum PayrollAdjustmentType {
+  BONUS = 'BONUS',
+  ALLOWANCE = 'ALLOWANCE',
+  DEDUCTION = 'DEDUCTION',
+  PENALTY = 'PENALTY',
+  OVERTIME = 'OVERTIME',
+  OTHER = 'OTHER',
+}

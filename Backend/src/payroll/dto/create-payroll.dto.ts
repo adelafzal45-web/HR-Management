@@ -1,65 +1,64 @@
-import { IsDateString, IsNumber, IsUUID, Min } from 'class-validator';
-
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Max,
+  Min,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreatePayrollDto {
   @ApiProperty({
-    example: '2026-07-01',
+    description: 'ID of the employee for whom payroll is being created',
+    example: 15,
   })
-  @IsDateString()
-  payroll_month!: Date;
+  @IsInt()
+  employeeId!: number;
 
   @ApiProperty({
+    description: 'Payroll month',
+    example: 8,
+    minimum: 1,
+    maximum: 12,
+  })
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  payrollMonth!: number;
+
+  @ApiProperty({
+    description: 'Payroll year',
+    example: 2026,
+  })
+  @IsInt()
+  @Min(2000)
+  payrollYear!: number;
+
+  @ApiProperty({
+    description: 'Basic salary of the employee',
     example: 100000,
   })
   @IsNumber()
   @Min(0)
-  basic_salary!: number;
+  basicSalary!: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
+    description: 'Additional allowance amount',
+    example: 15000,
+    default: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  totalAllowances?: number;
+
+  @ApiPropertyOptional({
+    description: 'Additional deduction amount',
     example: 5000,
+    default: 0,
   })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  allowance!: number;
-
-  @ApiProperty({
-    example: 10000,
-  })
-  @IsNumber()
-  @Min(0)
-  bonus!: number;
-
-  @ApiProperty({
-    example: 2500,
-  })
-  @IsNumber()
-  @Min(0)
-  deduction!: number;
-
-  @ApiProperty({
-    example: 5000,
-  })
-  @IsNumber()
-  @Min(0)
-  tax!: number;
-
-  @ApiProperty({
-    example: 107500,
-  })
-  @IsNumber()
-  @Min(0)
-  net_salary!: number;
-
-  @ApiProperty({
-    example: '2026-07-31',
-  })
-  @IsDateString()
-  payment_date!: Date;
-
-  @ApiProperty({
-    example: 'employee-uuid',
-  })
-  @IsUUID()
-  user_id!: string;
+  totalDeductions?: number;
 }

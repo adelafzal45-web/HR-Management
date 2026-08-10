@@ -1,0 +1,8 @@
+export enum PayrollStatus {
+  DRAFT = 'DRAFT',
+  PROCESSING = 'PROCESSING',
+  PROCESSED = 'PROCESSED',
+  APPROVED = 'APPROVED',
+  PAID = 'PAID',
+  CANCELLED = 'CANCELLED',
+}
