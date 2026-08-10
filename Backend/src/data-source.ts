@@ -40,7 +40,13 @@ import { EmployeeDocument } from './employee-documents/employee-document.entity'
 import { Holiday } from './holidays/holiday.entity';
 import { LeaveEntitlement } from './leave-entitlements/leave-entitlement.entity';
 import { LeaveHistory } from './leave-entitlements/leave-history.entity';
-
+import { TaxSlab } from './tax/tax-slab.entity';
+import { Reimbursement } from './reimbursements/reimbursement.entity';
+import { PayrollAdjustment } from './payroll/payroll-adjustment.entity';
+import { PayrollItem} from './payroll/payroll-item.entity';
+import { PayrollAuditLog } from './payroll/payroll-audit-log.entity';
+import { LoanInstallment} from './loans/loan-installment.entity';
+import { Loan } from './loans/loan.entity';
 export const AppDataSource = new DataSource({
   type: 'postgres',
 
@@ -90,6 +96,13 @@ export const AppDataSource = new DataSource({
     Holiday,
     LeaveEntitlement,
     LeaveHistory,
+    TaxSlab,
+    Loan,
+    LoanInstallment,
+    Reimbursement,
+    PayrollAdjustment,
+    PayrollAuditLog,
+    PayrollItem
   ],
 
   migrations: ['src/migrations/*.ts'],
