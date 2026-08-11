@@ -115,11 +115,17 @@ export const NAV_TREE: NavNode[] = [
     implemented: true,
   }),
 
+  // "Payroll" is one flat sidebar entry whose destination follows the role:
+  //   HR/Admin -> /payroll/dashboard, the configuration + run workspace (pay
+  //               periods, salary components/structures, process runs, payslip
+  //               register, settings). Each is HR_ADMIN_ROLES-gated in AppRouter.
+  //   Employee -> /payroll, their own read-only payslips (self-service).
+  // Same technique as the Appraisal leaf above.
   leaf({
     key: "payroll",
     label: "Payroll",
     icon: Wallet,
-    path: "/payroll",
+    path: (role) => (role && HR_ADMIN.includes(role) ? "/payroll/dashboard" : "/payroll"),
     implemented: true,
   }),
   leaf({

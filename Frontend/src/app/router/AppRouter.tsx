@@ -36,6 +36,26 @@ const LeavePlannerPage = lazy(() => import("@/modules/leave/pages/LeavePlanner")
 const MeetingsPage = lazy(() => import("@/modules/meetings/pages/Meetings"));
 const Payroll = lazy(() => import("@/modules/payroll/pages/Payroll"));
 const ProcessPayrollPage = lazy(() => import("@/modules/payroll/pages/ProcessPayroll"));
+// New payroll engine (spec §1–14) — the HR/Admin configuration + run workspace.
+// The self-service `Payroll` above stays the employee view; these are gated to
+// HR_ADMIN_ROLES. `ProcessPayrollV2` is the period-based run screen (preview +
+// generate with a per-line "Why?"); the legacy `/payroll/process` route above
+// keeps the old fixed-formula screen reachable but read-only.
+const PayrollDashboard = lazy(() => import("@/modules/payroll/pages/PayrollDashboard"));
+const PayrollPeriods = lazy(() => import("@/modules/payroll/pages/PayrollPeriods"));
+const ProcessPayrollV2 = lazy(() => import("@/modules/payroll/pages/ProcessPayrollV2"));
+const SalaryComponents = lazy(() => import("@/modules/payroll/pages/SalaryComponents"));
+const SalaryStructures = lazy(() => import("@/modules/payroll/pages/SalaryStructures"));
+const PayrollSettings = lazy(() => import("@/modules/payroll/pages/PayrollSettings"));
+const Payslips = lazy(() => import("@/modules/payroll/pages/Payslips"));
+// Phase 2 — rule builders, statutory, loans, approvals, reports, setup gate.
+const PayrollRules = lazy(() => import("@/modules/payroll/pages/PayrollRules"));
+const PayrollTax = lazy(() => import("@/modules/payroll/pages/PayrollTax"));
+const PayrollLoans = lazy(() => import("@/modules/payroll/pages/PayrollLoans"));
+const PayrollBonuses = lazy(() => import("@/modules/payroll/pages/PayrollBonuses"));
+const PayrollApprovals = lazy(() => import("@/modules/payroll/pages/PayrollApprovals"));
+const PayrollReports = lazy(() => import("@/modules/payroll/pages/PayrollReports"));
+const PayrollSetup = lazy(() => import("@/modules/payroll/pages/PayrollSetup"));
 const Appraisal = lazy(() => import("@/modules/appraisal/pages/Appraisal"));
 const CompareStats = lazy(() => import("@/modules/appraisal/pages/CompareStats"));
 const Notifications = lazy(() => import("@/modules/notifications/pages/Notifications"));
@@ -323,6 +343,124 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
  <ProcessPayrollPage />
+ </ProtectedRoute>,
+ )}
+ />
+
+ {/* New payroll engine workspace (spec §1–14), HR/Admin only. These are all
+ static /payroll/* segments, so order among them is immaterial, but they must
+ precede the catch-all `*` far below. The self-service /payroll route (employee
+ payslips) is declared higher up and is unaffected. */}
+ <Route
+ path="/payroll/dashboard"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollDashboard />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/periods"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollPeriods />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/run"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <ProcessPayrollV2 />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/components"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <SalaryComponents />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/structures"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <SalaryStructures />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/payslips"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <Payslips />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/settings"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollSettings />
+ </ProtectedRoute>,
+ )}
+ />
+ {/* Phase 2 — configuration + workflow screens, all HR/Admin-gated. */}
+ <Route
+ path="/payroll/setup"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollSetup />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/rules"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollRules />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/tax"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollTax />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/loans"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollLoans />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/bonuses"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollBonuses />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/approvals"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollApprovals />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/reports"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollReports />
  </ProtectedRoute>,
  )}
  />

@@ -40,6 +40,15 @@ import { EmployeeDocumentsModule } from './employee-documents/employee-documents
 import { HolidaysModule } from './holidays/holidays.module';
 import { LeaveEntitlementsModule } from './leave-entitlements/leave-entitlements.module';
 import { MeetingsModule } from './meetings/meetings.module';
+import { PayrollSettingsModule } from './payroll-settings/payroll-settings.module';
+import { SalaryComponentsModule } from './salary-components/salary-components.module';
+import { SalaryStructuresModule } from './salary-structures/salary-structures.module';
+import { PayrollEngineModule } from './payroll-engine/payroll-engine.module';
+import { PayrollPeriodsModule } from './payroll-periods/payroll-periods.module';
+import { PayslipsModule } from './payslips/payslips.module';
+import { PayrollRulesModule } from './payroll-rules/payroll-rules.module';
+import { PayrollTaxModule } from './payroll-tax/payroll-tax.module';
+import { PayrollLoansModule } from './payroll-loans/payroll-loans.module';
 
 @Module({
   imports: [
@@ -145,6 +154,49 @@ import { MeetingsModule } from './meetings/meetings.module';
     // chosen audience (specific people, a department, or everyone) and notified
     // by email and/or in-app notification per the organizer's choice.
     MeetingsModule,
+
+    // ---- Flexible payroll engine (spec: Payroll Rule Builder) --------------
+    // A new, fully-configurable payroll stack that supersedes the legacy
+    // `PayrollModule` above (kept read-only for history). Order mirrors the data
+    // flow: global settings → components → structures → engine → periods →
+    // payslips.
+
+    // Global payroll configuration (single row): frequency, currency, working
+    // days source, approval/locking switches, overtime default-off, rounding.
+    PayrollSettingsModule,
+
+    // Reusable earning/deduction building blocks with calculation types and
+    // safe-evaluator formulas.
+    SalaryComponentsModule,
+
+    // Salary structures, their component memberships, scope-priority
+    // assignments, and per-employee component overrides.
+    SalaryStructuresModule,
+
+    // The calculation core: safe formula evaluator + PayrollCalculationService
+    // (preview + generate). No controller — imported by periods and payslips.
+    PayrollEngineModule,
+
+    // Payroll periods and the process → approve → lock workflow.
+    PayrollPeriodsModule,
+
+    // Payslip reads (org-wide + self-service) and the preview passthrough.
+    PayslipsModule,
+
+    // ---- Phase 2 rule builders (spec §4–10, §16) ---------------------------
+    // Configurable rules, statutory tax, and employee loans. The engine imports
+    // all three; they are also registered here so their controllers mount and
+    // their entities auto-load.
+
+    // Versioned rule builder: absence/late/repeated-late/leave/overtime/bonus,
+    // scope-priority resolved and effective-dated.
+    PayrollRulesModule,
+
+    // Income-tax configs + progressive slabs; annualized FBR-style math.
+    PayrollTaxModule,
+
+    // Employee loans / salary advances and their installment schedules.
+    PayrollLoansModule,
   ],
 
   controllers: [AppController],

@@ -74,7 +74,11 @@ const qs = (params: ListParams) => {
  const search = new URLSearchParams();
  if (params.search) search.set("search", params.search);
  if (params.departmentId) search.set("departmentId", params.departmentId);
- if (params.status) search.set("status", params.status);
+ // The app model carries status as "active" | "inactive"; `users.status` is a
+ // boolean column whose DTO rejects anything else with a 400. Translating here
+ // rather than at each call site keeps the string form everywhere in the UI,
+ // the same way employment type and gender are mapped just below.
+ if (params.status) search.set("status", params.status === "active" ? "true" : "false");
  if (params.page) search.set("page", String(params.page));
  if (params.pageSize) search.set("pageSize", String(params.pageSize));
  const str = search.toString();

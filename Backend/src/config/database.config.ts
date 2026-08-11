@@ -63,7 +63,7 @@ export const databaseConfig = {
   username: setting('DB_USER', 'postgres'),
   password: setting('DB_PASSWORD', 'admin'),
   database: setting('DB_NAME', 'HR'),
-  ssl: useSsl ? { rejectUnauthorized: false } : false,
+ 
 
   /**
    * Never enabled, and deliberately not configurable. The schema belongs to the

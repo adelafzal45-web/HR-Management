@@ -43,6 +43,13 @@ import { Holiday } from './holidays/holiday.entity';
 import { LeaveEntitlement } from './leave-entitlements/leave-entitlement.entity';
 import { LeaveHistory } from './leave-entitlements/leave-history.entity';
 
+import { PayrollRule } from './payroll-rules/payroll-rules.entity';
+import { TaxConfig, TaxSlab } from './payroll-tax/payroll-tax.entity';
+import {
+  EmployeeLoan,
+  LoanInstallment,
+} from './payroll-loans/payroll-loans.entity';
+
 /**
  * The DataSource the TypeORM CLI uses to generate, run and revert migrations
  * (see the `typeorm` script in package.json).
@@ -88,6 +95,11 @@ export const AppDataSource = new DataSource({
     Holiday,
     LeaveEntitlement,
     LeaveHistory,
+    PayrollRule,
+    TaxConfig,
+    TaxSlab,
+    EmployeeLoan,
+    LoanInstallment,
   ],
 
   migrations: ['src/migrations/*.ts'],

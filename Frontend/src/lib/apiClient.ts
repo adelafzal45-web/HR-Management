@@ -529,7 +529,105 @@ export const ENDPOINTS = {
     },
   },
   leaveRequests: { base: "/leave-requests", byId: (id: string) => `/leave-requests/${id}` },
+  // Legacy flat payroll (basic/allowance/bonus/deduction/tax/net per month).
+  // Kept read-only for history; superseded by `payrollEngine` below.
   payroll: { base: "/payroll", byId: (id: string) => `/payroll/${id}` },
+
+  // The flexible payroll engine (spec: Payroll Rule Builder + Config Center).
+  // Every path verified against a controller under Backend/src/{payroll-settings,
+  // salary-components,salary-structures,payroll-periods,payslips}. Route order
+  // matters server-side: literal segments (`variables`, `test-formula`,
+  // `preview`, `me`) are declared before `:id`, so they never collide.
+  payrollEngine: {
+    // Single global row — no :id, the backend pins it. GET + PATCH only.
+    settings: "/payroll-settings",
+
+    components: {
+      base: "/salary-components",
+      byId: (id: string) => `/salary-components/${id}`,
+      // The whitelisted formula variables the builder may reference.
+      variables: "/salary-components/variables",
+      // Evaluate a formula against sample values — the "Test Rule" feature.
+      testFormula: "/salary-components/test-formula",
+    },
+
+    structures: {
+      base: "/salary-structures",
+      byId: (id: string) => `/salary-structures/${id}`,
+      // Component memberships nested under a structure.
+      components: (id: string) => `/salary-structures/${id}/components`,
+      component: (id: string, structureComponentId: string) =>
+        `/salary-structures/${id}/components/${structureComponentId}`,
+    },
+
+    // Scope-priority assignments (company/department/designation/…/employee).
+    // Listed with an optional ?structureId filter.
+    assignments: {
+      base: "/salary-structure-assignments",
+      byId: (id: string) => `/salary-structure-assignments/${id}`,
+    },
+
+    // Per-employee component overrides. Listed with an optional ?userId filter.
+    overrides: {
+      base: "/employee-component-overrides",
+      byId: (id: string) => `/employee-component-overrides/${id}`,
+    },
+
+    periods: {
+      base: "/payroll-periods",
+      byId: (id: string) => `/payroll-periods/${id}`,
+      // The "Activate Payroll" readiness checklist. Declared before `:id`
+      // server-side so `setup-status` is never read as a period id.
+      setupStatus: "/payroll-periods/setup-status",
+      // The run workflow: process (generate payslips) → approve (Admin) → lock.
+      process: (id: string) => `/payroll-periods/${id}/process`,
+      approve: (id: string) => `/payroll-periods/${id}/approve`,
+      lock: (id: string) => `/payroll-periods/${id}/lock`,
+    },
+
+    payslips: {
+      base: "/payslips",
+      byId: (id: string) => `/payslips/${id}`,
+      // Compute a payslip without persisting it (with a per-line "Why?").
+      preview: "/payslips/preview",
+      // The period payroll register + roll-ups (read-only aggregate). Declared
+      // before `:id` server-side so `report` is never read as a payslip id.
+      report: "/payslips/report",
+      // Token-scoped self-service — resolves the employee from the JWT, no
+      // payroll permission required (the same pattern as `/attendance/me`).
+      me: "/payslips/me",
+      meById: (id: string) => `/payslips/me/${id}`,
+    },
+
+    // ---- Phase 2 rule builders (spec §4–10, §16) --------------------------
+
+    // Versioned rule builder: absence/late/repeated-late/leave/overtime/bonus.
+    // `versions` walks the supersede chain oldest → newest (§16). Listed with
+    // optional ?rule_type= and ?includeInactive= filters.
+    rules: {
+      base: "/payroll-rules",
+      byId: (id: string) => `/payroll-rules/${id}`,
+      versions: (id: string) => `/payroll-rules/${id}/versions`,
+    },
+
+    // Income-tax configs + progressive slabs; `preview` runs a sample annual
+    // income through a config's slabs (gated by payroll.preview, like the
+    // formula test) without touching a payslip.
+    tax: {
+      base: "/payroll-tax",
+      byId: (id: string) => `/payroll-tax/${id}`,
+      preview: "/payroll-tax/preview",
+    },
+
+    // Employee loans / salary advances. `schedule` (re)generates the
+    // installment ladder from principal / installment amount. Listed with
+    // optional ?userId= and ?status= filters.
+    loans: {
+      base: "/payroll-loans",
+      byId: (id: string) => `/payroll-loans/${id}`,
+      schedule: (id: string) => `/payroll-loans/${id}/schedule`,
+    },
+  },
   notifications: {
     base: "/notifications",
     byId: (id: string) => `/notifications/${id}`,
