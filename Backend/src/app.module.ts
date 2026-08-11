@@ -49,6 +49,8 @@ import { PayslipsModule } from './payslips/payslips.module';
 import { PayrollRulesModule } from './payroll-rules/payroll-rules.module';
 import { PayrollTaxModule } from './payroll-tax/payroll-tax.module';
 import { PayrollLoansModule } from './payroll-loans/payroll-loans.module';
+import { ReimbursementsModule } from './reimbursements/reimbursements.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -197,6 +199,20 @@ import { PayrollLoansModule } from './payroll-loans/payroll-loans.module';
 
     // Employee loans / salary advances and their installment schedules.
     PayrollLoansModule,
+
+    // ---- Phase 3 (spec §2 employee-initiated flows) ------------------------
+    // Expense claims: employee submits, HR/Admin approves, payroll pays it as a
+    // non-taxable earning. Also supplies PayrollNotifierService (the bell
+    // notifications for loan + claim events) which the loans module reuses.
+    ReimbursementsModule,
+
+    // ---- Dashboards --------------------------------------------------------
+    // Read-only aggregates for the Admin / Team Lead / Employee dashboards.
+    // Owns no entity: it reads the other modules' tables through their own
+    // resolution services (working-week ladder, holiday calendar, team roster)
+    // so a dashboard tile always agrees with the screen it links to. Registered
+    // last because it depends on those modules and nothing depends on it.
+    DashboardModule,
   ],
 
   controllers: [AppController],

@@ -5,6 +5,8 @@ import {
   ComputeInputs,
   BASIC_LINE_LABEL,
   ABSENCE_LINE_LABEL,
+  REIMBURSEMENT_LINE_LABEL,
+  TAX_LINE_LABEL,
   round2,
 } from './payroll-calculation';
 
@@ -412,6 +414,156 @@ describe('computePayslip', () => {
       for (const line of result.lines) {
         expect(line.calc_note.trim().length).toBeGreaterThan(0);
       }
+    });
+  });
+
+  // Phase 3. The whole point of the reimbursement line is what it does NOT
+  // touch: reimbursing a receipt is repayment, not income, so gross and tax
+  // must be identical with and without it. Only net moves.
+  describe('reimbursement (Phase 3)', () => {
+    const taxable: ComputeComponent = {
+      component_id: 'c1',
+      code: 'HRA',
+      name: 'House Rent',
+      type: 'earning',
+      calculation_type: 'percent_basic',
+      amount: 50, // 50000 → gross 150000
+      formula: null,
+      include_in_gross: true,
+      is_taxable: true,
+      include_in_overtime: false,
+      include_in_leave_deduction: false,
+      include_in_bonus: false,
+      display_order: 1,
+    };
+
+    // A single 10% bracket keeps the arithmetic obvious: any change in the
+    // taxable base would move the tax line by a visible amount.
+    const taxRule = {
+      name: 'Flat 10%',
+      slabs: [
+        {
+          lower_bound: 0,
+          upper_bound: null,
+          base_tax: 0,
+          rate_percent: 10,
+        },
+      ],
+      annualize: true,
+      periods_per_year: 12,
+    };
+
+    it('produces the Phase 2 result when no claims are approved', () => {
+      const base = computePayslip(ctx({ components: [taxable], taxRule }));
+      const withNulls = computePayslip(
+        ctx({ components: [taxable], taxRule, reimbursement: null }),
+      );
+      const withZero = computePayslip(
+        ctx({
+          components: [taxable],
+          taxRule,
+          reimbursement: { total: 0, count: 0 },
+        }),
+      );
+
+      expect(withNulls).toEqual(base);
+      expect(withZero).toEqual(base);
+      expect(
+        base.lines.some((l) => l.label === REIMBURSEMENT_LINE_LABEL),
+      ).toBe(false);
+    });
+
+    it('leaves gross and tax untouched and raises net by the claim total', () => {
+      const without = computePayslip(ctx({ components: [taxable], taxRule }));
+      const withClaims = computePayslip(
+        ctx({
+          components: [taxable],
+          taxRule,
+          reimbursement: {
+            total: 6500,
+            count: 2,
+            detail: 'Travel 4500.00 + Internet 2000.00',
+          },
+        }),
+      );
+
+      const taxOf = (r: typeof without) =>
+        r.lines.find((l) => l.label === TAX_LINE_LABEL)?.amount ?? 0;
+
+      // Not income: the taxable base never sees it.
+      expect(withClaims.gross_salary).toBe(without.gross_salary);
+      expect(taxOf(withClaims)).toBe(taxOf(without));
+      expect(taxOf(withClaims)).toBeGreaterThan(0); // the tax line is real
+      expect(withClaims.total_deductions).toBe(without.total_deductions);
+
+      // But it is money in hand: earnings and net rise by exactly the total.
+      expect(withClaims.total_earnings).toBe(
+        round2(without.total_earnings + 6500),
+      );
+      expect(withClaims.net_salary).toBe(round2(without.net_salary + 6500));
+    });
+
+    it('emits one explained earning line naming the claims', () => {
+      const result = computePayslip(
+        ctx({
+          components: [taxable],
+          taxRule,
+          reimbursement: {
+            total: 6500,
+            count: 2,
+            detail: 'Travel 4500.00 + Internet 2000.00',
+          },
+        }),
+      );
+
+      const line = result.lines.find(
+        (l) => l.label === REIMBURSEMENT_LINE_LABEL,
+      );
+      expect(line).toBeDefined();
+      expect(line!.type).toBe('earning');
+      expect(line!.amount).toBe(6500);
+      // The "Why?" note has to say how many claims, which ones, and why the
+      // amount is untaxed — that is the employee's explanation of their net.
+      expect(line!.calc_note).toContain('2 approved claims');
+      expect(line!.calc_note).toContain('Travel 4500.00 + Internet 2000.00');
+      expect(line!.calc_note).toContain('not taxed');
+
+      // Emitted after gross is settled, so it sorts below the salary lines.
+      const labels = result.lines.map((l) => l.label);
+      expect(labels.indexOf(REIMBURSEMENT_LINE_LABEL)).toBeGreaterThan(
+        labels.indexOf(BASIC_LINE_LABEL),
+      );
+    });
+
+    it('is not swallowed by a percent_gross deduction', () => {
+      const pf: ComputeComponent = {
+        component_id: 'c2',
+        code: 'PF',
+        name: 'Provident Fund',
+        type: 'deduction',
+        calculation_type: 'percent_gross',
+        amount: 10,
+        formula: null,
+        include_in_gross: false,
+        is_taxable: false,
+        include_in_overtime: false,
+        include_in_leave_deduction: false,
+        include_in_bonus: false,
+        display_order: 2,
+      };
+
+      const without = computePayslip(ctx({ components: [taxable, pf] }));
+      const withClaims = computePayslip(
+        ctx({
+          components: [taxable, pf],
+          reimbursement: { total: 6500, count: 1, detail: 'Travel 6500.00' },
+        }),
+      );
+
+      // Percent-of-gross components read the same gross either way, so the
+      // employee is not charged PF on their own expense refund.
+      expect(withClaims.total_deductions).toBe(without.total_deductions);
+      expect(withClaims.net_salary).toBe(round2(without.net_salary + 6500));
     });
   });
 });

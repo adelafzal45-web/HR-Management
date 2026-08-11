@@ -81,6 +81,43 @@ export class PayrollPeriodsController {
     return this.periodsService.getSetupStatus();
   }
 
+  @Get('quick-setup/preview')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('payroll.setup')
+  @ApiOperation({
+    summary: 'Preview what one-click payroll setup would create',
+    description:
+      'Dry run — writes nothing. Returns one line per item with action "create" or "skip", so HR can review before committing.',
+  })
+  @ApiResponse({ status: 200, description: 'Quick setup plan retrieved.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing payroll.setup permission.',
+  })
+  quickSetupPreview() {
+    return this.periodsService.previewQuickSetup();
+  }
+
+  @Post('quick-setup')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('payroll.setup')
+  @ApiOperation({
+    summary: 'Set up payroll automatically (one click)',
+    description:
+      'Creates only what is missing — settings, standard components, a company-wide structure assignment, tax slabs, and a default absence rule — in a single transaction. Idempotent: running it twice creates nothing the second time.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Setup applied; returns created/skipped plus the new status.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing payroll.setup permission.',
+  })
+  quickSetup() {
+    return this.periodsService.quickSetup();
+  }
+
   @Get(':id')
   @UseGuards(PermissionGuard)
   @RequirePermission('payroll-periods.view')

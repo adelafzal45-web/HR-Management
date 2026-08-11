@@ -35,6 +35,12 @@ const LeaveEntitlementsPage = lazy(() => import("@/modules/leave/pages/LeaveEnti
 const LeavePlannerPage = lazy(() => import("@/modules/leave/pages/LeavePlanner"));
 const MeetingsPage = lazy(() => import("@/modules/meetings/pages/Meetings"));
 const Payroll = lazy(() => import("@/modules/payroll/pages/Payroll"));
+// The other two tabs of the employee's own payroll view (spec §2/§9, Phase 3):
+// loan requests and expense claims. Ungated like `Payroll` — see their routes.
+const MyLoans = lazy(() => import("@/modules/payroll/pages/MyLoans"));
+const MyReimbursements = lazy(
+ () => import("@/modules/payroll/pages/MyReimbursements"),
+);
 const ProcessPayrollPage = lazy(() => import("@/modules/payroll/pages/ProcessPayroll"));
 // New payroll engine (spec §1–14) — the HR/Admin configuration + run workspace.
 // The self-service `Payroll` above stays the employee view; these are gated to
@@ -56,6 +62,10 @@ const PayrollBonuses = lazy(() => import("@/modules/payroll/pages/PayrollBonuses
 const PayrollApprovals = lazy(() => import("@/modules/payroll/pages/PayrollApprovals"));
 const PayrollReports = lazy(() => import("@/modules/payroll/pages/PayrollReports"));
 const PayrollSetup = lazy(() => import("@/modules/payroll/pages/PayrollSetup"));
+// HR-side expense claim queue (spec §2, Phase 3).
+const PayrollReimbursements = lazy(
+ () => import("@/modules/payroll/pages/PayrollReimbursements"),
+);
 const Appraisal = lazy(() => import("@/modules/appraisal/pages/Appraisal"));
 const CompareStats = lazy(() => import("@/modules/appraisal/pages/CompareStats"));
 const Notifications = lazy(() => import("@/modules/notifications/pages/Notifications"));
@@ -187,6 +197,27 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute>
  <Payroll />
+ </ProtectedRoute>,
+ )}
+ />
+ {/* The other two employee self-service payroll tabs (spec §9 loan requests,
+ §2 expense claims). Deliberately NOT gated on HR_ADMIN_ROLES — like
+ /payroll above, every request they make goes to a `/me` route that carries
+ no permission server-side and resolves the employee from the JWT. HR/Admin
+ can open them too; they just see their own records, same as anyone. */}
+ <Route
+ path="/payroll/my-loans"
+ element={withSuspense(
+ <ProtectedRoute>
+ <MyLoans />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
+ path="/payroll/my-reimbursements"
+ element={withSuspense(
+ <ProtectedRoute>
+ <MyReimbursements />
  </ProtectedRoute>,
  )}
  />
@@ -396,6 +427,17 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
  <Payslips />
+ </ProtectedRoute>,
+ )}
+ />
+ {/* The HR side of expense claims (spec §2). The employee side lives at
+ /payroll/my-reimbursements above and is deliberately ungated; this one
+ reads and decides the whole organisation's claims, so it is gated. */}
+ <Route
+ path="/payroll/reimbursements"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <PayrollReimbursements />
  </ProtectedRoute>,
  )}
  />

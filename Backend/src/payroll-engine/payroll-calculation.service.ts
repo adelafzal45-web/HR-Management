@@ -34,6 +34,7 @@ import {
   LeaveRuleResolved,
   TaxRuleResolved,
   LoanDeductionResolved,
+  ReimbursementResolved,
 } from './payroll-calculation';
 import { periodsPerYear } from './tax-calculation';
 import { derivePunctuality } from '../attendance/attendance-punctuality';
@@ -52,6 +53,7 @@ import {
 } from '../payroll-rules/payroll-rule.constants';
 import { PayrollTaxService } from '../payroll-tax/payroll-tax.service';
 import { PayrollLoansService } from '../payroll-loans/payroll-loans.service';
+import { ReimbursementsService } from '../reimbursements/reimbursements.service';
 
 /** The full preview payload returned to the UI (and snapshotted on generate). */
 export interface PayslipPreview extends ComputedResult {
@@ -66,6 +68,12 @@ export interface PayslipPreview extends ComputedResult {
   structure_id: string | null;
   structure_name: string | null;
   inputs: ComputeInputs;
+  /**
+   * Claims the Reimbursement line is paying (Phase 3). Carried on the preview so
+   * `persist` can flip exactly these to `paid` without re-querying, and so the
+   * snapshot records which receipts a payslip settled.
+   */
+  reimbursement_ids: string[];
 }
 
 /** Summary of a whole-period run. */
@@ -118,6 +126,7 @@ export class PayrollCalculationService {
     private readonly ruleResolver: PayrollRuleResolverService,
     private readonly taxService: PayrollTaxService,
     private readonly loansService: PayrollLoansService,
+    private readonly reimbursementsService: ReimbursementsService,
   ) {}
 
   // ---- Public entry points -------------------------------------------------
@@ -225,6 +234,19 @@ export class PayrollCalculationService {
       period.period_id,
     );
 
+    // Phase 3: approved expense claims dated inside the period. Read-only here —
+    // nothing is marked paid until `persist` commits a payslip.
+    const claims = await this.reimbursementsService.resolveForPeriod(
+      user.user_id,
+      periodStart,
+      periodEnd,
+      period.period_id,
+    );
+    const reimbursement: ReimbursementResolved | null =
+      claims.total > 0
+        ? { total: claims.total, count: claims.count, detail: claims.detail }
+        : null;
+
     const inputs = await this.gatherInputs(
       user,
       period,
@@ -250,6 +272,7 @@ export class PayrollCalculationService {
       leaveRule: this.resolveLeaveRule(rules),
       taxRule,
       loanDeduction,
+      reimbursement,
     });
 
     return {
@@ -265,6 +288,7 @@ export class PayrollCalculationService {
       structure_id: assignment?.structure_id ?? null,
       structure_name: structureName,
       inputs,
+      reimbursement_ids: claims.ids,
     };
   }
 
@@ -787,6 +811,22 @@ export class PayrollCalculationService {
     // (loan_id, period_id): re-generating a period never double-charges, and a
     // preview (which never reaches persist) leaves loan balances untouched.
     await this.loansService.applyDeduction(preview.user_id, preview.period_id);
+
+    // Same contract for expense claims: only a committed payslip flips a claim
+    // to `paid`, stamped with the period and payslip that settled it. Re-running
+    // a period re-marks the same rows (resolveForPeriod deliberately re-picks
+    // claims this period already paid), so a regenerate cannot double-pay.
+    // Claims released first, so a claim dropped from the recomputed payslip
+    // (approval reversed, date edited) does not stay stranded as `paid`.
+    await this.reimbursementsService.releaseForPeriod(
+      preview.period_id,
+      preview.user_id,
+    );
+    await this.reimbursementsService.markPaid(
+      preview.reimbursement_ids,
+      preview.period_id,
+      saved.payslip_id,
+    );
 
     return saved.payslip_id;
   }

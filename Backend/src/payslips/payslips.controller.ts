@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -16,6 +17,7 @@ import {
   ApiQuery,
   ApiBody,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 
 import { PayslipsService } from './payslips.service';
 import { PreviewPayslipDto } from './dto/preview-payslip.dto';
@@ -27,10 +29,11 @@ import { PermissionGuard } from 'src/authorization/guards/permission.guard';
 /**
  * Payslip reads + preview (spec §14).
  *
- * The `preview`, `me`, and `me/:id` routes are declared before the parametric
- * `:id` so Nest's in-order matcher does not read "preview"/"me" as a payslip
- * id. The two `me` routes carry no `@RequirePermission` — like `/attendance/me`
- * they are hard-scoped to the caller's own `user_id` from the verified JWT.
+ * The `preview`, `me`, `me/:id`, `report`, and `export` routes are declared
+ * before the parametric `:id` so Nest's in-order matcher does not read them as a
+ * payslip id. The two `me` routes carry no `@RequirePermission` — like
+ * `/attendance/me` they are hard-scoped to the caller's own `user_id` from the
+ * verified JWT.
  */
 @ApiTags('Payslips')
 @Controller('payslips')
@@ -119,6 +122,36 @@ export class PayslipsController {
   })
   report(@Query('periodId', ParseUUIDPipe) periodId: string) {
     return this.payslipsService.report(periodId);
+  }
+
+  @Get('export')
+  @UseGuards(PermissionGuard)
+  @RequirePermission('payroll-reports.view')
+  @ApiOperation({
+    summary: 'Download the period payroll register as an Excel workbook',
+    description:
+      'Returns a three-sheet .xlsx (Payroll Register, Component Totals, Summary) built from the same persisted payslips the report endpoint reads — nothing is recalculated at download time.',
+  })
+  @ApiQuery({ name: 'periodId', required: true, description: 'Period UUID' })
+  @ApiResponse({ status: 200, description: 'Workbook streamed.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing payroll-reports.view permission.',
+  })
+  async exportWorkbook(
+    @Query('periodId', ParseUUIDPipe) periodId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename } =
+      await this.payslipsService.exportWorkbook(periodId);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.end(buffer);
   }
 
   @Get(':id')

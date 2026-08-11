@@ -70,9 +70,30 @@ export class EmployeeLoan {
   @Column({ type: 'uuid', nullable: true })
   start_period_id?: string | null;
 
-  /** active | closed | paused. Paused loans are skipped by payroll runs. */
+  /**
+   * pending | active | closed | paused | rejected.
+   * An employee-submitted request starts `pending`; HR approval moves it to
+   * `active` (and generates the installment schedule), rejection to `rejected`.
+   * Paused loans are skipped by payroll runs, and the engine's deduction
+   * lookup filters status='active' — so pending/rejected loans are inert.
+   */
   @Column({ length: 20, default: 'active' })
   status!: string;
+
+  /** When the employee submitted the request (null for HR-created loans). */
+  @Column({ type: 'timestamptz', nullable: true })
+  requested_at?: Date | null;
+
+  /** Who approved/rejected a request (null until decided). */
+  @Column({ type: 'uuid', nullable: true })
+  decided_by?: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  decided_at?: Date | null;
+
+  /** HR's note accompanying the decision. */
+  @Column({ type: 'text', nullable: true })
+  decision_note?: string | null;
 
   @Column({ type: 'text', nullable: true })
   remarks?: string | null;

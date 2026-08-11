@@ -143,6 +143,17 @@ export interface LoanDeductionResolved {
   note: string;
 }
 
+/**
+ * Approved expense claims this period reimburses (Phase 3), pre-resolved by
+ * `ReimbursementsService.resolveForPeriod`.
+ */
+export interface ReimbursementResolved {
+  total: number;
+  count: number;
+  /** "Travel 4500.00 + Internet 2000.00" — material for the "Why?" note. */
+  detail?: string;
+}
+
 export interface ComputeContext {
   basic: number;
   workingHoursPerDay: number;
@@ -165,6 +176,13 @@ export interface ComputeContext {
   leaveRule?: LeaveRuleResolved | null;
   taxRule?: TaxRuleResolved | null;
   loanDeduction?: LoanDeductionResolved | null;
+  /**
+   * Approved expense claims for the period (Phase 3). Reimbursing a receipt is
+   * not income: the line is emitted after GROSS and the taxable base are
+   * finalised, so it never counts toward either — only toward total earnings
+   * and net pay.
+   */
+  reimbursement?: ReimbursementResolved | null;
 }
 
 export interface ComputedLine {
@@ -198,6 +216,7 @@ export const OVERTIME_LINE_LABEL = 'Overtime';
 export const BONUS_LINE_LABEL = 'Bonus';
 export const TAX_LINE_LABEL = 'Income Tax';
 export const LOAN_LINE_LABEL = 'Loan Repayment';
+export const REIMBURSEMENT_LINE_LABEL = 'Reimbursement';
 export const LATE_LINE_LABEL = 'Late Deduction';
 export const REPEATED_LATE_LINE_LABEL = 'Repeated Late Penalty';
 
@@ -215,7 +234,10 @@ export const REPEATED_LATE_LINE_LABEL = 'Repeated Late Penalty';
  *   3. Deduction components are computed against the final GROSS (so a
  *      percent-of-gross tax sees the real gross).
  *   4. The default unpaid-days deduction is appended when enabled.
- *   5. Net = total earnings − total deductions, then the configured rounding.
+ *   5. Approved expense claims are appended as an earning — after GROSS and the
+ *      taxable base are settled, so a reimbursement is paid in full, untaxed,
+ *      and excluded from gross.
+ *   6. Net = total earnings − total deductions, then the configured rounding.
  */
 export function computePayslip(ctx: ComputeContext): ComputedResult {
   const warnings: string[] = [];
@@ -447,6 +469,29 @@ export function computePayslip(ctx: ComputeContext): ComputedResult {
     warnings,
   );
   if (absence) lines.push(absence);
+
+  // 12. Reimbursement (Phase 3) — an earning, but deliberately emitted after
+  //     GROSS and the taxable base are final. Paying back a receipt is not
+  //     income: it must not inflate gross, must not be taxed, and must not feed
+  //     any percent-of-gross component. It does add to total earnings, and so
+  //     to net pay, which is the whole point of the claim.
+  if (ctx.reimbursement && ctx.reimbursement.total > 0) {
+    const { total, count, detail } = ctx.reimbursement;
+    const claims = `${count} approved claim${count === 1 ? '' : 's'}`;
+    lines.push(
+      syntheticLine(
+        'REIMBURSEMENT',
+        REIMBURSEMENT_LINE_LABEL,
+        'earning',
+        'fixed',
+        round2(total),
+        `${claims} in this period${detail ? ` — ${detail}` : ''}. ` +
+          'Paid in full and not taxed (expense repayment, not income), so it is ' +
+          'excluded from gross.',
+        9994,
+      ),
+    );
+  }
 
   const totalEarnings = round2(
     lines

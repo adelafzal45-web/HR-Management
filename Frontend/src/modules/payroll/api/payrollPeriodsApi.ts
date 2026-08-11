@@ -85,6 +85,29 @@ export type SetupStatus = {
   checks: SetupCheck[];
 };
 
+// ---- One-click Quick Setup (spec §1 — the alternative to six screens) -------
+
+/** What Quick Setup would do to one item. `skip` means it already exists. */
+export type QuickSetupItem = {
+  key: string;
+  label: string;
+  action: "create" | "skip";
+  detail: string;
+};
+
+/** The dry run — writes nothing, so HR can review before committing. */
+export type QuickSetupPreview = {
+  items: QuickSetupItem[];
+  already_complete: boolean;
+};
+
+/** What Quick Setup actually did, plus the checklist as it now stands. */
+export type QuickSetupResult = {
+  created: string[];
+  skipped: string[];
+  setup: SetupStatus;
+};
+
 const { periods } = ENDPOINTS.payrollEngine;
 
 export const payrollPeriodsApi = {
@@ -121,4 +144,16 @@ export const payrollPeriodsApi = {
   /** The "Activate Payroll" readiness checklist processing is hard-gated on. */
   setupStatus: (): Promise<SetupStatus> =>
     api.get<SetupStatus>(periods.setupStatus),
+
+  /** Dry run: what one-click setup would create vs skip. Writes nothing. */
+  quickSetupPreview: (): Promise<QuickSetupPreview> =>
+    api.get<QuickSetupPreview>(periods.quickSetupPreview),
+
+  /**
+   * Create everything still missing — settings, components, a company-wide
+   * structure, tax slabs, a default absence rule — in one transaction.
+   * Idempotent: running it again creates nothing.
+   */
+  quickSetup: (): Promise<QuickSetupResult> =>
+    api.post<QuickSetupResult>(periods.quickSetup),
 };

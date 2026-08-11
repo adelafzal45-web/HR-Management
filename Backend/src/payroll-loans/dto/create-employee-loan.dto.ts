@@ -10,7 +10,13 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export const LOAN_STATUSES = ['active', 'closed', 'paused'] as const;
+export const LOAN_STATUSES = [
+  'pending',
+  'active',
+  'closed',
+  'paused',
+  'rejected',
+] as const;
 
 /**
  * Create an employee loan (spec §9). Installments are NOT part of this payload —

@@ -18,6 +18,7 @@ import {
   ListChecks,
   CheckCircle2,
   AlertTriangle,
+  Wand2,
 } from "lucide-react";
 import PayrollLayout from "./PayrollLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
@@ -163,6 +164,37 @@ export default function PayrollDashboardPage() {
   return (
     <PayrollLayout activeTab="/payroll/dashboard">
       <BackendStatusBanner status={status} />
+
+      {/* Getting started. Payroll has a lot of configuration screens and it is
+          not obvious which to open first — while the checklist is incomplete,
+          the only thing worth doing is Quick Setup, so that is all this says.
+          It disappears the moment setup is ready. */}
+      {!loading && setup && !setupReady && (
+        <section className="mb-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-brand/30">
+          <div className="flex flex-wrap items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-light text-brand-dark">
+              <Wand2 size={22} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-semibold text-gray-900">
+                New here? Start with one click
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                {setupDone} of {setupRequired} required items are done. Instead of
+                filling in six configuration screens, let payroll set itself up —
+                pay settings, standard allowances, a company-wide salary structure
+                and tax slabs. Everything it creates is editable afterwards.
+              </p>
+              <Link
+                to="/payroll/setup"
+                className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-4 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+              >
+                Set Up Payroll Automatically <ArrowRight size={15} />
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {stats.map((s) => {

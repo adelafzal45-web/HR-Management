@@ -14,6 +14,8 @@ import DashboardLayout from "@/app/layouts/DashboardLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import StatusBadge from "@/components/common/StatusBadge";
 import EmptyState from "@/components/common/EmptyState";
+import SectionTabs from "@/components/common/SectionTabs";
+import { getPayrollTabs } from "@/config/featureTabs";
 import Modal from "@/components/dialogs/Modal";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useAuth } from "@/app/providers/AuthContext";
@@ -46,6 +48,7 @@ export default function Payroll() {
   const status = useBackendStatus();
   const { user } = useAuth();
   const { branding } = useBranding();
+  const tabs = getPayrollTabs(user?.role);
   const [records, setRecords] = useState<Payslip[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Payslip | null>(null);
@@ -134,6 +137,7 @@ export default function Payroll() {
 
   return (
     <DashboardLayout title="Payroll" activeKey="payroll">
+      <SectionTabs tabs={tabs} active="my-payslips" />
       <BackendStatusBanner status={status} />
 
       {loading ? (

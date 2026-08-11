@@ -3,90 +3,89 @@ import type { LucideIcon } from "lucide-react";
 import { CalendarDays, CalendarX, UserCheck, Clock3, UserX, Timer } from "lucide-react";
 import StatusBadge from "@/components/common/StatusBadge";
 import EmptyState from "@/components/common/EmptyState";
-import { attendanceApi, type AttendanceRecord } from "@/api/hrApi";
+import { ApiError } from "@/lib/apiClient";
+import { dashboardApi, type WorkingDayAttendance } from "@/modules/dashboard/api/dashboardApi";
 
-// The signed-in user's OWN attendance summary, for roles that can see their own
-// data but not the org-wide table (Team Lead, Employee). It reads the permission
-// -free self-service route `GET /attendance/me` via hrApi.attendanceApi.getHistory,
-// so it works without `attendance.view` — unlike the admin TodayAttendanceTable,
-// which fetches the whole org and is gated on that permission.
-
-const now = new Date();
+// The signed-in user's own attendance for the LAST 7 WORKING DAYS, from
+// GET /dashboard/me — a token-scoped route that needs no permission, so it works
+// for Team Lead and Employee alike (unlike the admin TodayAttendanceTable, which
+// is gated on `attendance.view`).
+//
+// "Working days" is the point: the backend walks backwards day by day through the
+// employee's own working-week schedule (designation -> department -> global) and
+// the holiday calendar, so a weekend or an Eid holiday never occupies one of the
+// seven rows. That resolution can't happen in the browser — reading the schedule
+// and holiday endpoints requires `working-days.view`, which an Employee does not
+// hold. It also replaces the old month/year pickers: a fixed seven-working-day
+// window is a straight answer to "how have I been doing lately", where an empty
+// month view was just a dead end.
+//
+// A row with a null status is a working day with no attendance record at all —
+// shown as "No record" rather than silently omitted, because the gap is the
+// information.
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function SelfAttendanceTable() {
-  const [history, setHistory] = useState<AttendanceRecord[]>([]);
+  const [days, setDays] = useState<WorkingDayAttendance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    attendanceApi
-      .getHistory({ month, year })
-      .then((rows) => {
-        if (!cancelled) setHistory(rows);
+    setError(null);
+
+    dashboardApi
+      .getMine()
+      .then((data) => {
+        if (!cancelled) setDays(data.last_working_days);
       })
-      .catch(() => {
-        if (!cancelled) setHistory([]);
+      .catch((err) => {
+        if (cancelled) return;
+        setDays([]);
+        setError(
+          err instanceof ApiError ? `Couldn't load attendance (${err.status})` : "Couldn't load attendance",
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [month, year]);
+  }, []);
 
+  // Summarises exactly the rows on screen, so the tiles and the table can never
+  // describe different windows.
   const summary = useMemo(() => {
-    const present = history.filter((r) => r.status === "Present").length;
-    const late = history.filter((r) => r.status === "Late").length;
-    const absent = history.filter((r) => r.status === "Absent").length;
-    const totalHours = history.reduce((sum, r) => sum + (r.workingHours ?? 0), 0);
+    const present = days.filter((d) => d.status === "Present").length;
+    const late = days.filter((d) => d.status === "Late").length;
+    const absent = days.filter((d) => d.status === "Absent").length;
+    const totalHours = days.reduce((sum, d) => sum + (d.working_hours ?? 0), 0);
     return { present, late, absent, totalHours: Math.round(totalHours * 10) / 10 };
-  }, [history]);
+  }, [days]);
 
-  const sorted = useMemo(
-    () => [...history].sort((a, b) => (a.attendanceDate < b.attendanceDate ? 1 : -1)),
-    [history],
-  );
-
-  const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
-  const yearOptions = [now.getFullYear(), now.getFullYear() - 1];
+  // The API returns them newest first; keep that order.
+  const range =
+    days.length > 0 ? `${formatDate(days[days.length - 1].date)} — ${formatDate(days[0].date)}` : null;
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-base font-bold text-gray-900 sm:text-lg">My Attendance</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-            className="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
-            aria-label="Filter by month"
-          >
-            {monthOptions.map((m) => (
-              <option key={m} value={m}>
-                {new Date(2000, m - 1, 1).toLocaleDateString(undefined, { month: "long" })}
-              </option>
-            ))}
-          </select>
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
-            aria-label="Filter by year"
-          >
-            {yearOptions.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
+        <div className="min-w-0">
+          <h3 className="text-base font-bold text-gray-900 sm:text-lg">My Attendance</h3>
+          <p className="mt-0.5 text-xs text-gray-400">
+            Last {days.length || 7} working days{range ? ` · ${range}` : ""} · weekends &amp; holidays
+            skipped
+          </p>
         </div>
       </div>
 
@@ -104,8 +103,14 @@ export default function SelfAttendanceTable() {
               <div key={i} className="h-11 animate-pulse rounded-lg bg-gray-100" />
             ))}
           </div>
-        ) : sorted.length === 0 ? (
-          <EmptyState icon={CalendarX} title="No records found" description="There's no attendance data for the selected month." />
+        ) : error ? (
+          <p className="rounded-lg bg-rose-50 px-3 py-3 text-xs font-medium text-rose-600">{error}</p>
+        ) : days.length === 0 ? (
+          <EmptyState
+            icon={CalendarX}
+            title="No working days yet"
+            description="There are no working days on your calendar in the recent past to report on."
+          />
         ) : (
           <table className="w-full min-w-[480px] text-left text-sm">
             <thead>
@@ -122,14 +127,20 @@ export default function SelfAttendanceTable() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r) => (
-                <tr key={r.attendanceId} className="border-b border-gray-50 last:border-0">
-                  <td className="py-3 font-medium text-gray-900">{formatDate(r.attendanceDate)}</td>
-                  <td className="py-3 text-gray-600">{r.checkIn ?? "—"}</td>
-                  <td className="py-3 text-gray-600">{r.checkOut ?? "—"}</td>
-                  <td className="py-3 text-gray-600">{r.workingHours != null ? `${r.workingHours}h` : "—"}</td>
+              {days.map((d) => (
+                <tr key={d.date} className="border-b border-gray-50 last:border-0">
+                  <td className="py-3 font-medium text-gray-900">{formatDate(d.date)}</td>
+                  <td className="py-3 text-gray-600">{d.check_in ?? "—"}</td>
+                  <td className="py-3 text-gray-600">{d.check_out ?? "—"}</td>
+                  <td className="py-3 text-gray-600">
+                    {d.working_hours != null ? `${d.working_hours}h` : "—"}
+                  </td>
                   <td className="py-3">
-                    <StatusBadge status={r.status} />
+                    {d.status ? (
+                      <StatusBadge status={d.status} />
+                    ) : (
+                      <span className="text-xs font-medium text-gray-400">No record</span>
+                    )}
                   </td>
                 </tr>
               ))}

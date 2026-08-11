@@ -49,6 +49,7 @@ import {
   EmployeeLoan,
   LoanInstallment,
 } from './payroll-loans/payroll-loans.entity';
+import { Reimbursement } from './reimbursements/reimbursement.entity';
 
 /**
  * The DataSource the TypeORM CLI uses to generate, run and revert migrations
@@ -100,6 +101,7 @@ export const AppDataSource = new DataSource({
     TaxSlab,
     EmployeeLoan,
     LoanInstallment,
+    Reimbursement,
   ],
 
   migrations: ['src/migrations/*.ts'],

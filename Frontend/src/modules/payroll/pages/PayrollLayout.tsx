@@ -4,10 +4,14 @@
 // scatter of routes. Pages render themselves inside via `children`.
 //
 // Every leaf is now a live, RBAC-guarded route: Overview (Dashboard), Payroll
-// Runs (Periods, Process, Payslips, Approvals), Configuration (Activate Payroll
-// setup gate, Settings, Components, Structures, Rule Builder, Tax, Loans,
-// Bonuses) and Insights (Reports). The `soon` flag remains on the tab type for
-// any future roadmap leaf, but nothing carries it today.
+// Runs (Periods, Process, Payslips, Claims, Approvals), Configuration (Activate
+// Payroll setup gate, Settings, Components, Structures, Rule Builder, Tax,
+// Loans, Bonuses) and Insights (Reports). The `soon` flag remains on the tab
+// type for any future roadmap leaf, but nothing carries it today.
+//
+// Each group also carries a one-line `hint` — payroll has a lot of screens and
+// the group labels alone ("Runs", "Configuration") don't say which one to open
+// first. The hint answers "what is this section for?" in plain language.
 
 import { useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
@@ -16,6 +20,7 @@ import {
   CalendarRange,
   PlayCircle,
   ReceiptText,
+  Receipt,
   CheckCheck,
   SlidersHorizontal,
   Blocks,
@@ -46,6 +51,8 @@ type PayrollGroup = {
   key: string;
   label: string;
   icon: typeof Wallet;
+  /** Plain-English "what is this section for" line, shown under the heading. */
+  hint: string;
   items: PayrollTab[];
 };
 
@@ -54,16 +61,19 @@ const GROUPS: PayrollGroup[] = [
     key: "overview",
     label: "Overview",
     icon: LayoutDashboard,
+    hint: "Where payroll stands right now.",
     items: [{ to: "/payroll/dashboard", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
     key: "runs",
     label: "Payroll Runs",
     icon: PlayCircle,
+    hint: "Do this every month: open a period, process it, share payslips.",
     items: [
       { to: "/payroll/periods", label: "Pay Periods", icon: CalendarRange },
       { to: "/payroll/run", label: "Process Payroll", icon: PlayCircle },
       { to: "/payroll/payslips", label: "Payslips", icon: ReceiptText },
+      { to: "/payroll/reimbursements", label: "Expense Claims", icon: Receipt },
       { to: "/payroll/approvals", label: "Approvals", icon: CheckCheck },
     ],
   },
@@ -71,6 +81,7 @@ const GROUPS: PayrollGroup[] = [
     key: "configuration",
     label: "Configuration",
     icon: Cog,
+    hint: "Set up once. Start with Activate Payroll — it can fill this in for you.",
     items: [
       { to: "/payroll/setup", label: "Activate Payroll", icon: ListChecks },
       { to: "/payroll/settings", label: "General Settings", icon: SlidersHorizontal },
@@ -86,6 +97,7 @@ const GROUPS: PayrollGroup[] = [
     key: "insights",
     label: "Insights",
     icon: LineChart,
+    hint: "What a run cost, per employee and per component.",
     items: [{ to: "/payroll/reports", label: "Reports", icon: BarChart3 }],
   },
 ];
@@ -179,6 +191,9 @@ export default function PayrollLayout({
 
                   {isOpen && (
                     <div className="ml-4 flex flex-col gap-0.5 border-l border-gray-100 py-1 pl-3">
+                      <p className="pb-1 pr-2 text-[11px] leading-snug text-gray-400">
+                        {group.hint}
+                      </p>
                       {group.items.map(({ to, label, icon: Icon, soon }) => (
                         <NavLink
                           key={to}

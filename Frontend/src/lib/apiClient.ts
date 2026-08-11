@@ -579,6 +579,11 @@ export const ENDPOINTS = {
       // The "Activate Payroll" readiness checklist. Declared before `:id`
       // server-side so `setup-status` is never read as a period id.
       setupStatus: "/payroll-periods/setup-status",
+      // One-click setup: `quickSetupPreview` is a dry run (writes nothing) that
+      // returns a create/skip line per item; `quickSetup` commits the missing
+      // ones in a single transaction and is idempotent.
+      quickSetupPreview: "/payroll-periods/quick-setup/preview",
+      quickSetup: "/payroll-periods/quick-setup",
       // The run workflow: process (generate payslips) → approve (Admin) → lock.
       process: (id: string) => `/payroll-periods/${id}/process`,
       approve: (id: string) => `/payroll-periods/${id}/approve`,
@@ -593,6 +598,9 @@ export const ENDPOINTS = {
       // The period payroll register + roll-ups (read-only aggregate). Declared
       // before `:id` server-side so `report` is never read as a payslip id.
       report: "/payslips/report",
+      // The same register as a real .xlsx, built server-side from the report
+      // data. Declared before `:id` server-side too.
+      export: "/payslips/export",
       // Token-scoped self-service — resolves the employee from the JWT, no
       // payroll permission required (the same pattern as `/attendance/me`).
       me: "/payslips/me",
@@ -626,8 +634,43 @@ export const ENDPOINTS = {
       base: "/payroll-loans",
       byId: (id: string) => `/payroll-loans/${id}`,
       schedule: (id: string) => `/payroll-loans/${id}/schedule`,
+      // Employee self-service (Phase 3): apply for an advance and track it.
+      // Token-scoped and ungated — an employee never holds `payroll-loans.*`.
+      me: "/payroll-loans/me",
+      meById: (id: string) => `/payroll-loans/me/${id}`,
+      // HR/Admin decision on a pending request (`payroll-loans.approve`).
+      // Approving sets the real installment and generates the schedule.
+      approve: (id: string) => `/payroll-loans/${id}/approve`,
+      reject: (id: string) => `/payroll-loans/${id}/reject`,
+    },
+
+    // ---- Phase 3 expense claims -------------------------------------------
+
+    // Reimbursements: an employee claims an out-of-pocket expense back, HR
+    // approves, and the next payroll run pays it as a non-taxable earning.
+    // The org-wide routes are permission-gated; the `me` routes are not — they
+    // resolve the employee from the JWT, same as `/payslips/me`.
+    reimbursements: {
+      base: "/reimbursements",
+      byId: (id: string) => `/reimbursements/${id}`,
+      approve: (id: string) => `/reimbursements/${id}/approve`,
+      reject: (id: string) => `/reimbursements/${id}/reject`,
+      me: "/reimbursements/me",
+      meById: (id: string) => `/reimbursements/me/${id}`,
     },
   },
+  // Role-scoped dashboard aggregates. One request per dashboard instead of
+  // stitching five list calls together in the browser — and, more importantly,
+  // the only way an Employee can get figures like "working days so far this
+  // month", which need the working-week ladder and the holiday calendar that
+  // `working-days.view` gates. `me` is token-scoped and ungated; `team` narrows
+  // to the caller's roster server-side; `admin` needs `employees.view`.
+  dashboard: {
+    me: "/dashboard/me",
+    team: "/dashboard/team",
+    admin: "/dashboard/admin",
+  },
+
   notifications: {
     base: "/notifications",
     byId: (id: string) => `/notifications/${id}`,

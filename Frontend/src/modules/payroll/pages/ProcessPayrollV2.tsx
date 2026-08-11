@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Sparkles,
+  FileSpreadsheet,
 } from "lucide-react";
 import PayrollLayout from "./PayrollLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
@@ -32,7 +33,7 @@ import { useToast } from "@/app/providers/ToastContext";
 import { payrollPeriodsApi, type PayrollPeriod, type PeriodRunResult } from "@/modules/payroll/api/payrollPeriodsApi";
 import { payslipsApi, type PayslipPreview, type ComputedLine } from "@/modules/payroll/api/payslipsApi";
 import { employeesApi, type Employee } from "@/modules/employees/api/employeeApi";
-import { money, shortDate } from "@/modules/payroll/utils/format";
+import { money, shortDate, registerFilename } from "@/modules/payroll/utils/format";
 
 const selectClass =
   "w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60 disabled:opacity-60";
@@ -98,6 +99,7 @@ export default function ProcessPayrollV2Page() {
   const [confirmGenerate, setConfirmGenerate] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [runResult, setRunResult] = useState<PeriodRunResult | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -171,6 +173,24 @@ export default function ProcessPayrollV2Page() {
 
   const earnings = preview?.lines.filter((l) => l.type === "earning") ?? [];
   const deductions = preview?.lines.filter((l) => l.type === "deduction") ?? [];
+
+  // The workbook is built server-side from the payslips this run just persisted,
+  // so it is only meaningful once something was actually generated.
+  const downloadWorkbook = async () => {
+    if (!selectedPeriod) return;
+    setDownloading(true);
+    try {
+      await payslipsApi.downloadWorkbook(
+        selectedPeriod.period_id,
+        registerFilename(selectedPeriod.name),
+      );
+      toast.showSuccess("Excel register downloaded.");
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : "Couldn't build the Excel file.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <PayrollLayout activeTab="/payroll/run">
@@ -280,6 +300,26 @@ export default function ProcessPayrollV2Page() {
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {/* The run is the natural moment to hand payroll the sheet they
+                  will actually work from — three tabs: the register with a
+                  column per component, component totals, and a summary. */}
+              {runResult.generated > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={downloadWorkbook}
+                    disabled={downloading}
+                    className="flex min-h-10 items-center gap-2 rounded-full border border-gray-200 px-4 text-sm font-semibold text-gray-700 transition hover:border-brand/60 hover:text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <FileSpreadsheet size={16} />
+                    {downloading ? "Building…" : "Download Excel"}
+                  </button>
+                  <span className="text-xs text-gray-400">
+                    Payroll register, component totals and a period summary.
+                  </span>
+                </div>
               )}
             </div>
           </div>

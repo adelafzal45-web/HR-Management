@@ -26,3 +26,17 @@ export function humanize(value: string): string {
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/**
+ * Filename for a downloaded payroll register, e.g. "payroll-register-august-2026.xlsx".
+ * Shared by every screen that offers the Excel export so a file downloaded from
+ * the run screen, Reports and Payslips is named identically for the same period.
+ */
+export function registerFilename(periodName: string, ext = "xlsx"): string {
+  const slug =
+    periodName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "period";
+  return `payroll-register-${slug}.${ext}`;
+}

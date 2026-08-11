@@ -10,6 +10,9 @@ import {
   CalendarDays,
   CalendarRange,
   PlusCircle,
+  Wallet,
+  HandCoins,
+  Receipt,
 } from "lucide-react";
 import type { SectionTab } from "@/components/common/SectionTabs";
 import { ROLES, type Role } from "@/constants/roles";
@@ -130,4 +133,26 @@ export function getAppraisalTabs(role: Role | undefined): SectionTab[] {
     );
   }
   return tabs;
+}
+
+/**
+ * Tabs for the employee-facing side of the single "Payroll" sidebar entry
+ * (spec §14 self-service). Deliberately the *same three tabs for everyone* —
+ * they are all `/me`-scoped routes that resolve the employee from the token, so
+ * there is nothing role-dependent to branch on.
+ *
+ * HR/Admin do not use these: their `payroll` nav leaf points at
+ * `/payroll/dashboard`, whose own `PayrollLayout` sub-nav carries the
+ * configuration screens. Keeping the two apart is what stops a configuration
+ * link ever rendering for an employee — the tab strip simply never lists one.
+ *
+ * The `role` argument is accepted for symmetry with the other helpers here and
+ * to leave room for a future employee-only split without touching call sites.
+ */
+export function getPayrollTabs(_role?: Role | undefined): SectionTab[] {
+  return [
+    { key: "my-payslips", label: "My Payslips", icon: Wallet, path: "/payroll" },
+    { key: "my-loans", label: "My Loans", icon: HandCoins, path: "/payroll/my-loans" },
+    { key: "my-claims", label: "My Claims", icon: Receipt, path: "/payroll/my-reimbursements" },
+  ];
 }

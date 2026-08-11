@@ -17,6 +17,7 @@ import { HolidaysModule } from '../holidays/holidays.module';
 import { PayrollRulesModule } from '../payroll-rules/payroll-rules.module';
 import { PayrollTaxModule } from '../payroll-tax/payroll-tax.module';
 import { PayrollLoansModule } from '../payroll-loans/payroll-loans.module';
+import { ReimbursementsModule } from '../reimbursements/reimbursements.module';
 
 /**
  * The payroll rule engine (spec §11/§14).
@@ -26,7 +27,8 @@ import { PayrollLoansModule } from '../payroll-loans/payroll-loans.module';
  * It reads across users, attendance, leave, structures, and settings, so it
  * registers those entities for its own repositories and imports HolidaysModule
  * for the shared working-day/holiday calendar. Phase 2 pulls in the rules, tax,
- * and loans modules for the rule resolver, tax config, and loan installments.
+ * and loans modules for the rule resolver, tax config, and loan installments;
+ * Phase 3 adds reimbursements for the non-taxable expense-claim earning line.
  */
 @Module({
   imports: [
@@ -46,6 +48,7 @@ import { PayrollLoansModule } from '../payroll-loans/payroll-loans.module';
     PayrollRulesModule,
     PayrollTaxModule,
     PayrollLoansModule,
+    ReimbursementsModule,
   ],
   providers: [PayrollCalculationService],
   exports: [PayrollCalculationService, TypeOrmModule],

@@ -4,11 +4,25 @@
 // the active installment for each period as a LOAN_DEDUCTION line and decrements
 // `outstanding` idempotently until the loan closes.
 //
+// Since Phase 3 an employee can also apply themselves (`POST /payroll-loans/me`).
+// Those land as `pending`, which the engine ignores entirely — nothing is
+// deducted until HR approves here, which sets the real installment and builds
+// the schedule. The "Pending Requests" panel above the table is that queue.
+//
 // Engine list endpoints return a BARE ARRAY — filter + paginate client-side,
 // total from the filtered length (same as SalaryComponents).
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { HandCoins, Plus, Pencil, Trash2, ListOrdered, X } from "lucide-react";
+import {
+  HandCoins,
+  Plus,
+  Pencil,
+  Trash2,
+  ListOrdered,
+  X,
+  Check,
+  Inbox,
+} from "lucide-react";
 import PayrollLayout from "./PayrollLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import Modal from "@/components/dialogs/Modal";
@@ -74,12 +88,27 @@ export default function PayrollLoansPage() {
   const [scheduleLoan, setScheduleLoan] = useState<EmployeeLoan | null>(null);
   const [scheduling, setScheduling] = useState(false);
 
+  // Employee-filed requests awaiting a decision. `approving` opens the panel
+  // where HR sets the installment payroll will actually deduct; `rejecting`
+  // collects a note the employee sees on their own screen.
+  const [approving, setApproving] = useState<EmployeeLoan | null>(null);
+  const [approveInstallment, setApproveInstallment] = useState("0");
+  const [approveNote, setApproveNote] = useState("");
+  const [rejecting, setRejecting] = useState<EmployeeLoan | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [deciding, setDeciding] = useState(false);
+
   const nameOf = useMemo(() => {
     const map = new Map(
       employees.map((e) => [e.employeeId, `${e.firstName} ${e.lastName}`.trim()]),
     );
     return (id: string) => map.get(id) ?? "Unknown employee";
   }, [employees]);
+
+  // Requests carry the employee relation; fall back to the roster lookup for
+  // rows HR created, which don't.
+  const employeeLabel = (l: EmployeeLoan) =>
+    l.user ? `${l.user.first_name} ${l.user.last_name}`.trim() : nameOf(l.user_id);
 
   const load = () => {
     setLoading(true);
@@ -108,6 +137,19 @@ export default function PayrollLoansPage() {
       (r) => r.name.toLowerCase().includes(q) || nameOf(r.user_id).toLowerCase().includes(q),
     );
   }, [rows, search, nameOf]);
+
+  // Oldest request first — a queue, so whoever has waited longest is on top.
+  const pending = useMemo(
+    () =>
+      rows
+        .filter((r) => r.status === "pending")
+        .sort((a, b) => {
+          const ka = a.requested_at ?? a.created_at;
+          const kb = b.requested_at ?? b.created_at;
+          return ka < kb ? -1 : ka > kb ? 1 : 0;
+        }),
+    [rows],
+  );
 
   const paged = useMemo(
     () => filtered.slice((page - 1) * pageSize, page * pageSize),
@@ -215,6 +257,63 @@ export default function PayrollLoansPage() {
       setScheduling(false);
     }
   };
+
+  // ---- Decisions on employee-filed requests -------------------------------
+
+  const openApprove = (loan: EmployeeLoan) => {
+    // The employee's requested months already produced a suggested installment
+    // server-side; pre-fill it so approving is a single click in the common case.
+    setApproveInstallment(String(loan.installment_amount || loan.principal || 0));
+    setApproveNote("");
+    setApproving(loan);
+  };
+
+  const confirmApprove = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!approving) return;
+    const installment = Number(approveInstallment);
+    if (!(installment > 0)) {
+      toast.showError("Installment amount must be greater than zero.");
+      return;
+    }
+    if (installment > Number(approving.principal)) {
+      toast.showError("Installment can't exceed the principal.");
+      return;
+    }
+    setDeciding(true);
+    try {
+      const updated = await payrollLoansApi.approve(approving.loan_id, {
+        installment_amount: installment,
+        note: approveNote.trim() || undefined,
+      });
+      toast.showSuccess("Loan approved — schedule generated.");
+      setApproving(null);
+      load();
+      // Show what the employee will repay, straight from the approval response.
+      setScheduleLoan(updated);
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : "Couldn't approve the request.");
+    } finally {
+      setDeciding(false);
+    }
+  };
+
+  const confirmReject = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!rejecting) return;
+    setDeciding(true);
+    try {
+      await payrollLoansApi.reject(rejecting.loan_id, rejectNote.trim() || undefined);
+      toast.showSuccess("Request rejected.");
+      setRejecting(null);
+      setRejectNote("");
+      load();
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : "Couldn't reject the request.");
+    } finally {
+      setDeciding(false);
+    }
+  };
   const columns: DataTableColumn<EmployeeLoan>[] = [
     {
       key: "name",
@@ -259,6 +358,72 @@ export default function PayrollLoansPage() {
   return (
     <PayrollLayout activeTab="/payroll/loans">
       <BackendStatusBanner status={status} />
+
+      {/* Employee requests waiting on HR. Rendered only when there is something
+          to decide, so the screen stays the plain loan register otherwise. */}
+      {pending.length > 0 && (
+        <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-brand/30">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-light text-brand-dark">
+              <Inbox size={16} />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">
+                Pending Requests ({pending.length})
+              </h2>
+              <p className="text-xs text-gray-500">
+                Nothing is deducted from pay until you approve. Approving sets the
+                installment and generates the repayment schedule.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {pending.map((l) => (
+              <div
+                key={l.loan_id}
+                className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">
+                    {l.name}
+                    <span className="ml-2 font-normal text-gray-500">
+                      · {employeeLabel(l)}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {money(l.principal)} requested {shortDate(l.requested_at ?? l.created_at)}
+                    {Number(l.installment_amount) > 0 &&
+                      ` · suggested ${money(l.installment_amount)} per period`}
+                  </p>
+                  {l.remarks && (
+                    <p className="mt-1 text-xs italic text-gray-500">“{l.remarks}”</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openApprove(l)}
+                    className="flex min-h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-4 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+                  >
+                    <Check size={15} /> Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRejectNote("");
+                      setRejecting(l);
+                    }}
+                    className="flex min-h-9 items-center gap-1.5 rounded-full border border-gray-200 px-4 text-sm font-medium text-gray-600 transition hover:bg-white"
+                  >
+                    <X size={15} /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <DataTable
         columns={columns}
@@ -492,6 +657,117 @@ export default function PayrollLoansPage() {
               </div>
             </div>
           </div>
+        )}
+      </Modal>
+
+      {/* Approve an employee request — the one decision that changes payroll:
+          it flips the loan to `active`, which is the only status the engine
+          deducts, and builds the installment ladder. */}
+      <Modal
+        open={!!approving}
+        onClose={() => setApproving(null)}
+        title="Approve Loan Request"
+        description={
+          approving
+            ? `${employeeLabel(approving)} asked for ${money(approving.principal)}. Set what payroll should deduct each period.`
+            : ""
+        }
+      >
+        {approving && (
+          <form onSubmit={confirmApprove}>
+            <FormField
+              label="Installment per period"
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={String(approving.principal)}
+              value={approveInstallment}
+              onChange={(e) => setApproveInstallment(e.target.value)}
+              required
+            />
+
+            <label className="mb-5 block">
+              <span className="mb-2 block text-[15px] font-medium text-gray-900">
+                Note to the employee (optional)
+              </span>
+              <textarea
+                value={approveNote}
+                onChange={(e) => setApproveNote(e.target.value)}
+                rows={2}
+                placeholder="Approved — repayment starts with next month's payroll."
+                className="w-full resize-none rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
+              />
+            </label>
+
+            <p className="mb-5 rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-600">
+              {Number(approveInstallment) > 0
+                ? `About ${Math.ceil(Number(approving.principal) / Number(approveInstallment))} period(s) to repay ${money(approving.principal)}. `
+                : ""}
+              Deductions begin with the next payroll run.
+            </p>
+
+            <div className="flex flex-col-reverse gap-2.5 xs:flex-row">
+              <button
+                type="button"
+                onClick={() => setApproving(null)}
+                className="min-h-11 flex-1 rounded-full border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <div className="flex-1">
+                <PrimaryButton type="submit" loading={deciding}>
+                  Approve &amp; Schedule
+                </PrimaryButton>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Reject — a note is optional but strongly implied, since this is the
+          only explanation the employee gets on their own screen. */}
+      <Modal
+        open={!!rejecting}
+        onClose={() => setRejecting(null)}
+        title="Reject Loan Request"
+        description={
+          rejecting
+            ? `${employeeLabel(rejecting)} — ${rejecting.name} (${money(rejecting.principal)})`
+            : ""
+        }
+      >
+        {rejecting && (
+          <form onSubmit={confirmReject}>
+            <label className="mb-5 block">
+              <span className="mb-2 block text-[15px] font-medium text-gray-900">
+                Reason (shown to the employee)
+              </span>
+              <textarea
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                rows={3}
+                placeholder="An advance is already being repaid — please reapply after it closes."
+                className="w-full resize-none rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
+              />
+            </label>
+
+            <div className="flex flex-col-reverse gap-2.5 xs:flex-row">
+              <button
+                type="button"
+                onClick={() => setRejecting(null)}
+                className="min-h-11 flex-1 rounded-full border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={deciding}
+                className="min-h-11 flex-1 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deciding ? "Please wait…" : "Reject Request"}
+              </button>
+            </div>
+          </form>
         )}
       </Modal>
 

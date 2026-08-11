@@ -6,7 +6,7 @@
 // preview/computed-line types below are shared: payrollPeriodsApi re-exports
 // them for the process/run summary, and the Process screen renders them.
 
-import { api, ENDPOINTS } from "@/lib/apiClient";
+import { api, apiDownload, saveBlob, ENDPOINTS } from "@/lib/apiClient";
 
 export const PAYSLIP_STATUSES = [
   "draft",
@@ -110,6 +110,8 @@ export type PayrollReportRow = {
   payslip_id: string;
   user_id: string;
   employee_name: string;
+  employee_code: string | null;
+  department: string | null;
   basic_salary: number;
   gross_salary: number;
   total_earnings: number;
@@ -117,6 +119,13 @@ export type PayrollReportRow = {
   net_salary: number;
   tax: number;
   loan: number;
+  reimbursement: number;
+  /**
+   * This employee's amount per line, keyed `${type}::${label}` — the same key
+   * `line_totals` uses. An absent line is missing rather than 0 (an employee
+   * with no HRA is not an employee whose HRA is zero).
+   */
+  lines: Record<string, number>;
 };
 
 /** A component/synthetic line rolled up across the whole period. */
@@ -129,7 +138,14 @@ export type PayrollReportLineTotal = {
 
 /** The period payroll register + roll-ups. Read-only — never recalculates. */
 export type PayrollReport = {
-  period: { period_id: string; name: string; status: string } | null;
+  period: {
+    period_id: string;
+    name: string;
+    status: string;
+    period_start: string | null;
+    period_end: string | null;
+    currency: string;
+  } | null;
   employee_count: number;
   totals: {
     basic: number;
@@ -139,6 +155,7 @@ export type PayrollReport = {
     net: number;
     tax: number;
     loan: number;
+    reimbursement: number;
   };
   rows: PayrollReportRow[];
   line_totals: PayrollReportLineTotal[];
@@ -177,4 +194,19 @@ export const payslipsApi = {
     api.get<PayrollReport>(
       `${payslips.report}?periodId=${encodeURIComponent(periodId)}`,
     ),
+
+  /**
+   * Download the register as a three-sheet `.xlsx`. The workbook is built
+   * server-side from the same persisted payslips `report` reads, so the file and
+   * the Reports screen can never disagree. Saves straight to disk.
+   */
+  downloadWorkbook: async (
+    periodId: string,
+    filename = "payroll-register.xlsx",
+  ): Promise<void> => {
+    const blob = await apiDownload(
+      `${payslips.export}?periodId=${encodeURIComponent(periodId)}`,
+    );
+    saveBlob(blob, filename);
+  },
 };

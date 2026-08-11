@@ -9,7 +9,16 @@
 
 import { api, ENDPOINTS } from "@/lib/apiClient";
 
-export const LOAN_STATUSES = ["active", "closed", "paused"] as const;
+// An employee's own request lands as `pending` and deducts nothing — the engine
+// only ever looks at `active` loans. HR/Admin approval flips it to `active` and
+// generates the schedule; rejection is terminal.
+export const LOAN_STATUSES = [
+  "pending",
+  "active",
+  "closed",
+  "paused",
+  "rejected",
+] as const;
 export type LoanStatus = (typeof LOAN_STATUSES)[number];
 
 export const INSTALLMENT_STATUSES = [
@@ -44,8 +53,19 @@ export type EmployeeLoan = {
   status: LoanStatus;
   remarks: string | null;
   installments: LoanInstallment[];
+  /** Set when an employee filed the request themselves. */
+  requested_at?: string | null;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  decision_note?: string | null;
   created_at: string;
   updated_at: string;
+  user?: {
+    user_id: string;
+    first_name: string;
+    last_name: string;
+    employee_code?: string | null;
+  };
 };
 
 export type EmployeeLoanPayload = {
@@ -56,6 +76,26 @@ export type EmployeeLoanPayload = {
   start_period_id?: string | null;
   status?: LoanStatus;
   remarks?: string | null;
+};
+
+/**
+ * What an employee asks for. Narrower than the HR payload on purpose: no
+ * `user_id` (the token decides) and no `installment_amount` — HR sets the real
+ * deduction on approval. `requested_months` is only a suggestion the approver
+ * sees, used to derive a starting installment.
+ */
+export type LoanRequestPayload = {
+  name: string;
+  principal: number;
+  requested_months?: number;
+  remarks?: string;
+};
+
+/** HR's approval sets the installment payroll will actually deduct. */
+export type ApproveLoanPayload = {
+  installment_amount?: number;
+  start_period_id?: string;
+  note?: string;
 };
 
 export type LoanListParams = { userId?: string; status?: LoanStatus };
@@ -88,4 +128,25 @@ export const payrollLoansApi = {
   /** (Re)generate the installment schedule from principal / installment amount. */
   schedule: (id: string): Promise<EmployeeLoan> =>
     api.post<EmployeeLoan>(loans.schedule(id)),
+
+  // ---- HR/Admin decisions on employee requests (`payroll-loans.approve`) ---
+
+  /** Approve a pending request: sets the installment and builds the schedule. */
+  approve: (id: string, payload: ApproveLoanPayload = {}): Promise<EmployeeLoan> =>
+    api.post<EmployeeLoan>(loans.approve(id), payload),
+
+  reject: (id: string, note?: string): Promise<EmployeeLoan> =>
+    api.post<EmployeeLoan>(loans.reject(id), { note }),
+
+  // ---- Employee self-service (token-scoped, no permission) ----------------
+
+  listMine: (): Promise<EmployeeLoan[]> => api.get<EmployeeLoan[]>(loans.me),
+
+  /** Apply for an advance. Lands as `pending` and deducts nothing until HR acts. */
+  request: (payload: LoanRequestPayload): Promise<EmployeeLoan> =>
+    api.post<EmployeeLoan>(loans.me, payload),
+
+  /** Withdraw an own request — the backend allows this only while pending. */
+  withdrawMine: (id: string): Promise<{ message: string }> =>
+    api.delete<{ message: string }>(loans.meById(id)),
 };

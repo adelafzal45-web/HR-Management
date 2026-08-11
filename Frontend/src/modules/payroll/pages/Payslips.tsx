@@ -9,7 +9,7 @@
 // way forever, even after the rules that produced it change.
 
 import { useEffect, useMemo, useState } from "react";
-import { ReceiptText, Eye, Download } from "lucide-react";
+import { ReceiptText, Eye, Download, FileSpreadsheet } from "lucide-react";
 import PayrollLayout from "./PayrollLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import Modal from "@/components/dialogs/Modal";
@@ -25,7 +25,7 @@ import {
 } from "@/modules/payroll/api/payslipsApi";
 import { payrollPeriodsApi, type PayrollPeriod } from "@/modules/payroll/api/payrollPeriodsApi";
 import { employeesApi, type Employee } from "@/modules/employees/api/employeeApi";
-import { money, humanize } from "@/modules/payroll/utils/format";
+import { money, humanize, registerFilename } from "@/modules/payroll/utils/format";
 import {
   downloadPayslipPdf,
   resolveLogoDataUrl,
@@ -80,6 +80,7 @@ export default function PayslipsPage() {
   const [selected, setSelected] = useState<Payslip | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState<string | undefined>();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const employeeById = useMemo(
     () => new Map(employees.map((e) => [e.employeeId, e])),
@@ -188,6 +189,22 @@ export default function PayslipsPage() {
     }
   };
 
+  // Whole-period register as a three-sheet workbook, built server-side from the
+  // same persisted payslips this table lists.
+  const downloadWorkbook = async () => {
+    if (!periodId) return;
+    setExporting(true);
+    try {
+      const name = periodById.get(periodId)?.name ?? "payroll";
+      await payslipsApi.downloadWorkbook(periodId, registerFilename(name));
+      toast.showSuccess("Excel register downloaded.");
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : "Couldn't build the Excel file.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const columns: DataTableColumn<Payslip>[] = [
     {
       key: "employee",
@@ -274,6 +291,21 @@ export default function PayslipsPage() {
                 </option>
               ))}
             </select>
+            {/* The workbook covers a whole period, so it needs one picked. The
+                per-row PDF button is the single-payslip equivalent. */}
+            <button
+              type="button"
+              onClick={downloadWorkbook}
+              disabled={!periodId || exporting}
+              title={
+                periodId
+                  ? "Download this period's register as Excel"
+                  : "Pick a period to export its register"
+              }
+              className="flex min-h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 text-sm font-semibold text-gray-700 transition hover:border-brand/60 hover:text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FileSpreadsheet size={15} /> {exporting ? "Building…" : "Excel"}
+            </button>
           </div>
         }
         actions={(p) => (

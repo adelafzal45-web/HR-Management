@@ -7,7 +7,7 @@
 // stable forever.
 
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, AlertTriangle, Download } from "lucide-react";
+import { BarChart3, AlertTriangle, Download, FileSpreadsheet } from "lucide-react";
 import PayrollLayout from "./PayrollLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
@@ -25,7 +25,7 @@ import {
   type PayrollReportRow,
   type PayrollReportLineTotal,
 } from "@/modules/payroll/api/payslipsApi";
-import { money, humanize } from "@/modules/payroll/utils/format";
+import { money, humanize, registerFilename } from "@/modules/payroll/utils/format";
 
 const selectClass =
   "w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60 disabled:opacity-60 sm:max-w-md";
@@ -80,6 +80,7 @@ export default function PayrollReportsPage() {
   const [loadingPeriods, setLoadingPeriods] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   // The register is a plain aggregate — search and paginate it client-side.
   const [search, setSearch] = useState("");
@@ -139,6 +140,24 @@ export default function PayrollReportsPage() {
     a.download = `payroll-register-${name.replace(/\s+/g, "-").toLowerCase()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Excel is built server-side from the same persisted payslips this screen
+  // reads, so the workbook and the table on screen can never disagree.
+  const downloadExcel = async () => {
+    if (!periodId) return;
+    setDownloading(true);
+    try {
+      await payslipsApi.downloadWorkbook(
+        periodId,
+        registerFilename(report?.period?.name ?? "payroll"),
+      );
+      toast.showSuccess("Excel register downloaded.");
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : "Couldn't build the Excel file.");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const columns: DataTableColumn<PayrollReportRow>[] = [
@@ -223,6 +242,17 @@ export default function PayrollReportsPage() {
             </select>
           </label>
           {report?.period && <StatusBadge status={report.period.status} />}
+          {/* Excel first — it is the file payroll actually works from (one sheet
+              per view, a column per component). CSV stays for anyone piping the
+              rows into something else. */}
+          <button
+            type="button"
+            onClick={downloadExcel}
+            disabled={!report || report.rows.length === 0 || downloading}
+            className="flex min-h-11 items-center gap-2 rounded-full bg-gradient-to-r from-brand to-brand-dark px-5 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FileSpreadsheet size={16} /> {downloading ? "Building…" : "Export Excel"}
+          </button>
           <button
             type="button"
             onClick={downloadCsv}

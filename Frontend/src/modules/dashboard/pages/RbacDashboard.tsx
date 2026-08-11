@@ -15,19 +15,23 @@ import SelfAttendanceTable from "@/modules/dashboard/components/SelfAttendanceTa
 //
 // Which widgets appear is decided by the signed-in user's normalized role
 // (AuthContext's `user.role`), per the product spec:
-//   - HR Manager / Administrator: org-wide stats — PeriodStatCards and the
-//     Today's Attendance table, both unscoped.
-//   - Team Lead: their OWN stats (PeriodStatCards + Today's Attendance scoped
-//     to their user id) plus Team Analytics listing their direct reports.
-//   - Employee: their OWN PeriodStatCards only.
+//   - HR Manager / Administrator: the org-wide counters (headcount, today's
+//     present/absent/on-leave, pending leave requests, pending appraisals) and
+//     the Today's Attendance table.
+//   - Team Lead: the team appraisal mean and appraisal workload, their OWN
+//     month-to-date figures, Team Analytics listing their real roster, and
+//     their own last 7 working days.
+//   - Employee: their OWN figures and their last 7 working days.
 // An unrecognised role falls through to the employee view, so it can never
 // render an org-wide widget by accident.
 //
-// Every number still comes from a real endpoint response, and each widget
-// keeps its own permission gate — role decides *composition*, permissions
-// decide *access*. There is no dashboard/stats aggregate endpoint, so the
-// widgets compute their own numbers client-side from the real list endpoints
-// (GET /attendance, GET /leave-requests, GET /users, GET /users/me/team).
+// Every number comes from the backend dashboard aggregates — one request per
+// dashboard (GET /dashboard/admin | /team | /me) rather than several list calls
+// counted up in the browser. That is not just a round-trip saving: figures like
+// "Working Days (Till Today)" need the working-week ladder and the holiday
+// calendar, whose endpoints are gated on `working-days.view`, so an Employee
+// could never have computed them client-side. Role decides *composition*,
+// permissions still decide *access* — each widget renders its own 403 state.
 // ============================================================================
 
 export default function RbacDashboard() {
@@ -58,7 +62,6 @@ export default function RbacDashboard() {
   const role = user?.role;
   const isHrAdmin = role === ROLES.HR_MANAGER || role === ROLES.ADMINISTRATOR;
   const isTeamLead = role === ROLES.TEAM_LEAD;
-  const ownId = session.userId;
 
   return (
     <DashboardLayout title={`Dashboard — ${session.role.role_name}`} activeKey="dashboard">
@@ -66,17 +69,18 @@ export default function RbacDashboard() {
         {/* ==================== MAIN GRID ==================== */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="space-y-6 xl:col-span-2">
-            {/* HR/Admin see org-wide stats; everyone else sees only their own. */}
-            <PeriodStatCards employeeId={isHrAdmin ? undefined : ownId} />
+            {/* One card set per role: org-wide counters for HR/Admin, team +
+                own figures for a Team Lead, own figures for everyone else. */}
+            <PeriodStatCards variant={isHrAdmin ? "admin" : isTeamLead ? "team" : "self"} />
 
-            {/* Team Analytics is the Team Lead's window into their own reports
-                (GET /users/me/team) — not shown to HR/Admin or plain employees. */}
+            {/* Team Analytics is the Team Lead's window into their real roster
+                (GET /dashboard/team) — not shown to HR/Admin or plain employees. */}
             {isTeamLead && <TeamAnalyticsCard />}
 
             {/* The attendance table is org-wide for HR/Admin and self-scoped for
-                a Team Lead and Employee. The self-scoped table reads the permission
-                -free `/attendance/me` route, so it works even though Team Lead and
-                Employee lack `attendance.view`. */}
+                a Team Lead and Employee. The self-scoped table reads the
+                permission-free `/dashboard/me` route, so it works even though
+                Team Lead and Employee lack `attendance.view`. */}
             {isHrAdmin ? (
               <TodayAttendanceTable />
             ) : (
