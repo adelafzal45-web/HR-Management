@@ -1,46 +1,115 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { Brackets, IsNull, Repository } from 'typeorm';
 
-import { Holiday } from './holiday.entity';
+import { Holiday, HolidayEventType } from './holiday.entity';
 import { CreateHolidayDto } from './dto/create-holiday.dto';
 import { UpdateHolidayDto } from './dto/update-holiday.dto';
 import { HolidayQueryDto } from './dto/holiday-query.dto';
+import {
+  NotificationsService,
+} from '../notifications/notifications.service';
+import {
+  NotificationAudienceType,
+  NotificationCategory,
+} from '../notifications/notifications.entity';
 
 @Injectable()
 export class HolidaysService {
+  private readonly logger = new Logger(HolidaysService.name);
+
   constructor(
     @InjectRepository(Holiday)
     private readonly holidayRepository: Repository<Holiday>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
-  async create(dto: CreateHolidayDto): Promise<Holiday> {
+  async create(dto: CreateHolidayDto, createdById?: string): Promise<Holiday> {
     const holidayDate = new Date(dto.holiday_date);
+    const eventType = dto.event_type ?? HolidayEventType.HOLIDAY;
+
     if (
       await this.hasDuplicate(
         holidayDate,
         dto.department_id ?? null,
         dto.is_recurring ?? false,
+        eventType,
       )
     ) {
       throw new ConflictException(
-        'A holiday already exists for this date and department scope',
+        eventType === HolidayEventType.EVENT
+          ? 'An event already exists for this date and department scope'
+          : 'A holiday already exists for this date and department scope',
       );
     }
 
     const holiday = this.holidayRepository.create({
       name: dto.name,
+      event_type: eventType,
       holiday_date: holidayDate,
       description: dto.description,
       department_id: dto.department_id ?? null,
       is_recurring: dto.is_recurring ?? false,
+      notify: dto.notify ?? false,
     });
 
-    return this.holidayRepository.save(holiday);
+    const saved = await this.holidayRepository.save(holiday);
+
+    if (saved.notify) {
+      await this.announce(saved, createdById);
+    }
+
+    return saved;
+  }
+
+  /**
+   * Best-effort in-app announcement to every active employee. Failures (no
+   * active employees, no resolvable author) are logged and swallowed rather
+   * than rolled back into the create/update call — the calendar entry itself
+   * already saved successfully and must not disappear because the broadcast
+   * could not be sent.
+   */
+  private async announce(holiday: Holiday, createdById?: string): Promise<void> {
+    if (!createdById) {
+      this.logger.warn(
+        `Skipped announcement for holiday ${holiday.holiday_id}: no author on the request.`,
+      );
+      return;
+    }
+
+    const dateLabel = new Date(holiday.holiday_date).toLocaleDateString(
+      'en-US',
+      { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
+    );
+    const isEvent = holiday.event_type === HolidayEventType.EVENT;
+
+    try {
+      await this.notificationsService.create(
+        {
+          title: `${isEvent ? 'New event' : 'Upcoming holiday'}: ${holiday.name}`,
+          message:
+            `${holiday.name} is scheduled on ${dateLabel}.` +
+            (holiday.description ? ` ${holiday.description}` : ''),
+          category: NotificationCategory.ANNOUNCEMENT,
+          audience_type: NotificationAudienceType.ALL,
+        },
+        createdById,
+      );
+      await this.holidayRepository.update(holiday.holiday_id, {
+        notified_at: new Date(),
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Announcement for holiday ${holiday.holiday_id} failed: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
   }
 
   async findAll(query: HolidayQueryDto): Promise<Holiday[]> {
@@ -48,6 +117,12 @@ export class HolidaysService {
       .createQueryBuilder('holiday')
       .leftJoinAndSelect('holiday.department', 'department')
       .orderBy('holiday.holiday_date', 'ASC');
+
+    if (query.event_type) {
+      qb.andWhere('holiday.event_type = :eventType', {
+        eventType: query.event_type,
+      });
+    }
 
     if (query.year) {
       qb.andWhere(
@@ -79,7 +154,11 @@ export class HolidaysService {
     return holiday;
   }
 
-  async update(id: string, dto: UpdateHolidayDto): Promise<Holiday> {
+  async update(
+    id: string,
+    dto: UpdateHolidayDto,
+    updatedById?: string,
+  ): Promise<Holiday> {
     const holiday = await this.findOne(id);
 
     const nextDate = dto.holiday_date
@@ -90,29 +169,46 @@ export class HolidaysService {
         ? dto.department_id
         : holiday.department_id ?? null;
     const nextIsRecurring = dto.is_recurring ?? holiday.is_recurring;
+    const nextEventType = dto.event_type ?? holiday.event_type;
 
     if (
       await this.hasDuplicate(
         nextDate,
         nextDepartmentId ?? null,
         nextIsRecurring,
+        nextEventType,
         holiday.holiday_id,
       )
     ) {
       throw new ConflictException(
-        'A holiday already exists for this date and department scope',
+        nextEventType === HolidayEventType.EVENT
+          ? 'An event already exists for this date and department scope'
+          : 'A holiday already exists for this date and department scope',
       );
     }
 
+    // A fresh notify request re-announces even if the row was already
+    // announced once — HR asking again after editing the date/description is
+    // a deliberate re-send, not a no-op.
+    const shouldAnnounce = dto.notify === true;
+
     Object.assign(holiday, {
       name: dto.name ?? holiday.name,
+      event_type: nextEventType,
       holiday_date: nextDate,
       description: dto.description ?? holiday.description,
       department_id: nextDepartmentId,
       is_recurring: nextIsRecurring,
+      notify: dto.notify ?? holiday.notify,
     });
 
-    return this.holidayRepository.save(holiday);
+    const saved = await this.holidayRepository.save(holiday);
+
+    if (shouldAnnounce) {
+      await this.announce(saved, updatedById);
+    }
+
+    return saved;
   }
 
   async remove(id: string): Promise<{ message: string }> {
@@ -139,11 +235,17 @@ export class HolidaysService {
 
     const qb = this.holidayRepository
       .createQueryBuilder('holiday')
-      .where('holiday.department_id IS NULL');
-
-    if (departmentId) {
-      qb.orWhere('holiday.department_id = :departmentId', { departmentId });
-    }
+      .where('holiday.event_type = :type', { type: HolidayEventType.HOLIDAY })
+      .andWhere(
+        new Brackets((sub) => {
+          sub.where('holiday.department_id IS NULL');
+          if (departmentId) {
+            sub.orWhere('holiday.department_id = :departmentId', {
+              departmentId,
+            });
+          }
+        }),
+      );
 
     const holidays = await qb.getMany();
 
@@ -184,10 +286,14 @@ export class HolidaysService {
     holidayDate: Date,
     departmentId: string | null,
     isRecurring: boolean,
+    eventType: HolidayEventType,
     excludeId?: string,
   ): Promise<boolean> {
     const candidates = await this.holidayRepository.find({
-      where: { department_id: departmentId ?? IsNull() },
+      where: {
+        department_id: departmentId ?? IsNull(),
+        event_type: eventType,
+      },
     });
 
     const month = holidayDate.getUTCMonth();

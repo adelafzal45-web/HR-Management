@@ -202,7 +202,7 @@ export default function ViewForm({ form, onClose, onEdit }: Props) {
 
 /** One question card, matching how it appears on the evaluation form. */
 function QuestionCard({ question, index }: { question: FormQuestion; index: number }) {
-  const kind = kindOf(question.questionType, question.ratingScale);
+  const kind = kindOf(question.questionType, question.ratingScale, question.ratingMin);
   const meta = KIND_META[kind];
 
   const isScored = question.questionType !== "text_feedback";
@@ -240,11 +240,11 @@ function QuestionCard({ question, index }: { question: FormQuestion; index: numb
       {question.questionType === "rating" && (
         <div className="rounded-lg bg-gray-50 p-3">
           <p className="mb-2 text-xs font-medium text-gray-700">
-            Rating scale: 1–{question.ratingScale}
+            Rating scale: {question.ratingMin}–{question.ratingScale}
           </p>
           <div className="flex items-center justify-between text-xs text-gray-500">
             {question.minLabel && <span>{question.minLabel}</span>}
-            {!question.minLabel && <span>1</span>}
+            {!question.minLabel && <span>{question.ratingMin}</span>}
             <div className="flex-1 px-3">
               <div className="h-1.5 rounded-full bg-gray-200" />
             </div>

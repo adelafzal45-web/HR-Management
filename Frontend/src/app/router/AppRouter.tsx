@@ -44,12 +44,16 @@ const MyReimbursements = lazy(
 const ProcessPayrollPage = lazy(() => import("@/modules/payroll/pages/ProcessPayroll"));
 // New payroll engine (spec §1–14) — the HR/Admin configuration + run workspace.
 // The self-service `Payroll` above stays the employee view; these are gated to
-// HR_ADMIN_ROLES. `ProcessPayrollV2` is the period-based run screen (preview +
-// generate with a per-line "Why?"); the legacy `/payroll/process` route above
-// keeps the old fixed-formula screen reachable but read-only.
+// HR_ADMIN_ROLES. `RunPayroll` (below) is the guided period run screen; the
+// legacy `/payroll/process` route above keeps the old fixed-formula screen
+// reachable but read-only.
 const PayrollDashboard = lazy(() => import("@/modules/payroll/pages/PayrollDashboard"));
 const PayrollPeriods = lazy(() => import("@/modules/payroll/pages/PayrollPeriods"));
-const ProcessPayrollV2 = lazy(() => import("@/modules/payroll/pages/ProcessPayrollV2"));
+// Guided "Run Payroll" wizard — the simplified Setup → Period → Process →
+// Approve → Share flow that now backs /payroll/run. Replaces the standalone
+// ProcessPayrollV2 screen (still on disk, unused) as the single place HR
+// starts a pay run instead of hunting across Periods/Process/Approvals.
+const RunPayroll = lazy(() => import("@/modules/payroll/pages/RunPayroll"));
 const SalaryComponents = lazy(() => import("@/modules/payroll/pages/SalaryComponents"));
 const SalaryStructures = lazy(() => import("@/modules/payroll/pages/SalaryStructures"));
 const PayrollSettings = lazy(() => import("@/modules/payroll/pages/PayrollSettings"));
@@ -402,7 +406,7 @@ export function AppRouter() {
  path="/payroll/run"
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
- <ProcessPayrollV2 />
+ <RunPayroll />
  </ProtectedRoute>,
  )}
  />

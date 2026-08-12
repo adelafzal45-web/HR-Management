@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, Plus, Pencil, Trash2 } from "lucide-react";
+import { CalendarDays, Plus, Pencil, Trash2, Bell, BellRing } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import SectionTabs from "@/components/common/SectionTabs";
@@ -11,18 +11,28 @@ import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useToast } from "@/app/providers/ToastContext";
 import { useAuth } from "@/app/providers/AuthContext";
 import { getLeaveTabs } from "@/config/featureTabs";
-import { holidaysApi, type Holiday, type HolidayPayload } from "@/modules/leave/api/holidaysApi";
+import { holidaysApi, type Holiday, type HolidayEventType, type HolidayPayload } from "@/modules/leave/api/holidaysApi";
 import { departmentsApi, type Department } from "@/modules/settings/api/settingsApi";
 
 type FormState = {
   name: string;
+  eventType: HolidayEventType;
   holidayDate: string;
   description: string;
   departmentId: string;
   isRecurring: boolean;
+  notify: boolean;
 };
 
-const EMPTY_FORM: FormState = { name: "", holidayDate: "", description: "", departmentId: "", isRecurring: false };
+const EMPTY_FORM: FormState = {
+  name: "",
+  eventType: "Holiday",
+  holidayDate: "",
+  description: "",
+  departmentId: "",
+  isRecurring: false,
+  notify: false,
+};
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - 1 + i);
@@ -93,10 +103,12 @@ export default function PublicHolidaysPage() {
     setEditing(holiday);
     setForm({
       name: holiday.name,
+      eventType: holiday.eventType,
       holidayDate: holiday.holidayDate,
       description: holiday.description,
       departmentId: holiday.departmentId ?? "",
       isRecurring: holiday.isRecurring,
+      notify: false,
     });
     setFormError(null);
     setModalOpen(true);
@@ -105,29 +117,31 @@ export default function PublicHolidaysPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) {
-      setFormError("Holiday name is required.");
+      setFormError(`${form.eventType} name is required.`);
       return;
     }
     if (!form.holidayDate) {
-      setFormError("Holiday date is required.");
+      setFormError("Date is required.");
       return;
     }
     setSaving(true);
     setFormError(null);
     const payload: HolidayPayload = {
       name: form.name.trim(),
+      eventType: form.eventType,
       holidayDate: form.holidayDate,
       description: form.description.trim() || undefined,
       departmentId: form.departmentId || null,
       isRecurring: form.isRecurring,
+      notify: form.notify,
     };
     try {
       if (editing) {
         await holidaysApi.update(editing.holidayId, payload);
-        toast.showSuccess("Holiday updated.");
+        toast.showSuccess(form.notify ? `${form.eventType} updated and announced.` : `${form.eventType} updated.`);
       } else {
         await holidaysApi.create(payload);
-        toast.showSuccess("Holiday created.");
+        toast.showSuccess(form.notify ? `${form.eventType} created and announced to everyone.` : `${form.eventType} created.`);
       }
       setModalOpen(false);
       load();
@@ -162,12 +176,25 @@ export default function PublicHolidaysPage() {
   const columns: DataTableColumn<Holiday>[] = [
     {
       key: "name",
-      label: "Holiday",
+      label: "Name",
       render: (h) => (
         <div className="min-w-0">
           <p className="truncate font-medium text-gray-900">{h.name}</p>
           {h.description && <p className="truncate text-xs text-gray-400">{h.description}</p>}
         </div>
+      ),
+    },
+    {
+      key: "type",
+      label: "Type",
+      render: (h) => (
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            h.eventType === "Event" ? "bg-violet-50 text-violet-700" : "bg-amber-50 text-amber-700"
+          }`}
+        >
+          {h.eventType}
+        </span>
       ),
     },
     { key: "date", label: "Date", render: (h) => formatDate(h.holidayDate) },
@@ -201,10 +228,26 @@ export default function PublicHolidaysPage() {
           <span className="text-gray-400">One-off</span>
         ),
     },
+    {
+      key: "notify",
+      label: "Notified",
+      align: "center",
+      hideBelow: "lg",
+      render: (h) =>
+        h.notifiedAt ? (
+          <span className="inline-flex items-center gap-1 text-emerald-600" title={`Announced ${formatDate(h.notifiedAt.slice(0, 10))}`}>
+            <BellRing size={14} /> <span className="text-xs font-medium">Sent</span>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-gray-300">
+            <Bell size={14} /> <span className="text-xs">—</span>
+          </span>
+        ),
+    },
   ];
 
   return (
-    <DashboardLayout title="Public Holidays" activeKey="leave">
+    <DashboardLayout title="Holidays & Events" activeKey="leave">
       <BackendStatusBanner status={status} />
       <SectionTabs tabs={tabs} active="public-holidays" />
 
@@ -215,10 +258,10 @@ export default function PublicHolidaysPage() {
         loading={loading}
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search holidays…"
+        searchPlaceholder="Search holidays and events…"
         emptyIcon={CalendarDays}
-        emptyTitle="No holidays yet"
-        emptyDescription="Add your organization's public holidays so they're excluded from leave and shown on the planner."
+        emptyTitle="No holidays or events yet"
+        emptyDescription="Add your organization's public holidays, or a one-off company event, so they show up on everyone's calendar."
         page={page}
         pageSize={pageSize}
         onPageSizeChange={setPageSize}
@@ -252,7 +295,7 @@ export default function PublicHolidaysPage() {
             onClick={openCreate}
             className="flex min-h-10 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-4 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
           >
-            <Plus size={16} /> Add Holiday
+            <Plus size={16} /> Add Holiday or Event
           </button>
         }
         actions={(h) => (
@@ -280,13 +323,47 @@ export default function PublicHolidaysPage() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? "Edit Holiday" : "Add Holiday"}
-        description={editing ? "Update this holiday's details." : "Add a public holiday to the calendar."}
+        title={editing ? `Edit ${editing.eventType}` : "Add Holiday or Event"}
+        description={
+          editing
+            ? "Update this entry's details."
+            : "A Holiday is excluded from leave and attendance day counts. An Event (like a dinner or town hall) is calendar-only."
+        }
       >
         <form onSubmit={handleSubmit}>
+          <fieldset className="mb-5">
+            <legend className="mb-2 block text-[15px] font-medium text-gray-900">Type</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { value: "Holiday" as const, hint: "Excluded from leave day counts" },
+                  { value: "Event" as const, hint: "Calendar only — not a day off" },
+                ]
+              ).map((t) => {
+                const active = form.eventType === t.value;
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, eventType: t.value }))}
+                    aria-pressed={active}
+                    className={`rounded-lg px-3 py-2.5 text-left text-sm transition ring-1 ${
+                      active
+                        ? "bg-brand/10 font-semibold text-brand-dark ring-brand/50"
+                        : "bg-gray-100 text-gray-700 ring-transparent hover:bg-gray-200"
+                    }`}
+                  >
+                    <span className="block">{t.value}</span>
+                    <span className="mt-0.5 block text-xs font-normal text-gray-500">{t.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
           <FormField
-            label="Holiday Name"
-            placeholder="e.g. New Year's Day"
+            label={`${form.eventType} Name`}
+            placeholder={form.eventType === "Event" ? "e.g. Team Dinner" : "e.g. New Year's Day"}
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             required
@@ -318,22 +395,41 @@ export default function PublicHolidaysPage() {
             <textarea
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Optional notes about this holiday"
+              placeholder="Optional notes"
               rows={2}
               className="w-full resize-none rounded-lg bg-gray-100 px-4 py-3.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
             />
           </label>
-          <label className="mb-5 flex items-start gap-3">
+          {form.eventType === "Holiday" && (
+            <label className="mb-5 flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={form.isRecurring}
+                onChange={(e) => setForm((f) => ({ ...f, isRecurring: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand/60"
+              />
+              <span className="text-sm text-gray-700">
+                <span className="font-medium text-gray-900">Recurs yearly</span>
+                <span className="mt-0.5 block text-xs text-gray-400">
+                  Applies on the same month and day every year — enter it once.
+                </span>
+              </span>
+            </label>
+          )}
+          <label className="mb-5 flex items-start gap-3 rounded-lg bg-amber-50/60 p-3 ring-1 ring-amber-100">
             <input
               type="checkbox"
-              checked={form.isRecurring}
-              onChange={(e) => setForm((f) => ({ ...f, isRecurring: e.target.checked }))}
+              checked={form.notify}
+              onChange={(e) => setForm((f) => ({ ...f, notify: e.target.checked }))}
               className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand/60"
             />
             <span className="text-sm text-gray-700">
-              <span className="font-medium text-gray-900">Recurs yearly</span>
-              <span className="mt-0.5 block text-xs text-gray-400">
-                Applies on the same month and day every year — enter it once.
+              <span className="flex items-center gap-1.5 font-medium text-gray-900">
+                <BellRing size={14} /> Notify all employees
+              </span>
+              <span className="mt-0.5 block text-xs text-gray-500">
+                Sends an in-app notification announcing this {form.eventType.toLowerCase()} to everyone.
+                {editing?.notifiedAt ? " This was already announced once — checking this sends it again." : ""}
               </span>
             </span>
           </label>
@@ -349,7 +445,7 @@ export default function PublicHolidaysPage() {
             </button>
             <div className="flex-1">
               <PrimaryButton type="submit" loading={saving}>
-                {editing ? "Save Changes" : "Create Holiday"}
+                {editing ? "Save Changes" : `Create ${form.eventType}`}
               </PrimaryButton>
             </div>
           </div>
@@ -359,7 +455,11 @@ export default function PublicHolidaysPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         title={`Delete "${deleteTarget?.name}"?`}
-        description="This holiday will no longer be excluded from leave calculations. This action cannot be undone."
+        description={
+          deleteTarget?.eventType === "Event"
+            ? "This event will be removed from the calendar. This action cannot be undone."
+            : "This holiday will no longer be excluded from leave calculations. This action cannot be undone."
+        }
         confirmLabel="Delete"
         tone="danger"
         loading={deleting}

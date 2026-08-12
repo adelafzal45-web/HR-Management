@@ -18,6 +18,8 @@ import { HolidayQueryDto } from './dto/holiday-query.dto';
 
 import { RequirePermission } from '../authorization/decorators/require-permission.decorator';
 import { PermissionGuard } from '../authorization/guards/permission.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { JwtUser } from '../auth/auth.constants';
 
 @ApiTags('Holidays')
 @ApiBearerAuth()
@@ -28,9 +30,13 @@ export class HolidaysController {
 
   @Post()
   @RequirePermission('holiday.manage')
-  @ApiOperation({ summary: 'Create a company or department holiday.' })
-  create(@Body() dto: CreateHolidayDto) {
-    return this.service.create(dto);
+  @ApiOperation({
+    summary: 'Create a company or department holiday or event.',
+    description:
+      'Set `notify: true` to also send an in-app notification announcing it to every active employee.',
+  })
+  create(@Body() dto: CreateHolidayDto, @CurrentUser() user: JwtUser) {
+    return this.service.create(dto, user.user_id);
   }
 
   @Get()
@@ -48,8 +54,12 @@ export class HolidaysController {
 
   @Patch(':id')
   @RequirePermission('holiday.manage')
-  update(@Param('id') id: string, @Body() dto: UpdateHolidayDto) {
-    return this.service.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateHolidayDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.service.update(id, dto, user.user_id);
   }
 
   @Delete(':id')

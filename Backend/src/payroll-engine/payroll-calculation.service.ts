@@ -368,16 +368,27 @@ export class PayrollCalculationService {
     const overrides = await this.overrideRepository.find({
       where: { user_id: userId },
     });
+    // An employee can hold more than one effective override for the same
+    // component — e.g. a standing one set in the structure builder plus a
+    // period-scoped one entered on the Run Payroll grid. "Narrowest wins"
+    // (see the doc comment above): a bounded window beats an open one, and a
+    // later-starting window beats an earlier one, so a single month's edit
+    // reliably overrides the standing figure without a coin-flip on insertion
+    // order.
     const overrideByComponent = new Map<string, EmployeeComponentOverride>();
     for (const o of overrides) {
       if (
-        this.isEffective(
+        !this.isEffective(
           o.effective_from,
           o.effective_to,
           periodStart,
           periodEnd,
         )
       ) {
+        continue;
+      }
+      const current = overrideByComponent.get(o.component_id);
+      if (!current || this.isNarrowerOverride(o, current)) {
         overrideByComponent.set(o.component_id, o);
       }
     }
@@ -878,6 +889,31 @@ export class PayrollCalculationService {
     if (from && new Date(from) > periodEnd) return false;
     if (to && new Date(to) < periodStart) return false;
     return true;
+  }
+
+  /**
+   * Tie-break between two overrides that are both effective for a period:
+   * the narrower (more specific) one wins. A bounded window is narrower than
+   * an open-ended one; between two equally-bounded windows the later start
+   * wins. This makes a period-scoped grid edit reliably beat a standing
+   * override without depending on row insertion order.
+   */
+  private isNarrowerOverride(
+    candidate: EmployeeComponentOverride,
+    current: EmployeeComponentOverride,
+  ): boolean {
+    const rank = (o: EmployeeComponentOverride): number =>
+      (o.effective_from ? 1 : 0) + (o.effective_to ? 1 : 0);
+    const candidateRank = rank(candidate);
+    const currentRank = rank(current);
+    if (candidateRank !== currentRank) return candidateRank > currentRank;
+    const candidateStart = candidate.effective_from
+      ? new Date(candidate.effective_from).getTime()
+      : 0;
+    const currentStart = current.effective_from
+      ? new Date(current.effective_from).getTime()
+      : 0;
+    return candidateStart > currentStart;
   }
 
   private effectiveFromTime(a: SalaryStructureAssignment): number {

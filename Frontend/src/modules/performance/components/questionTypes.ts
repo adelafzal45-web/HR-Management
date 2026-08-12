@@ -113,6 +113,8 @@ export function validate(draft: BankQuestionInput): string | null {
 export type QuestionKind =
   | "rating-5"
   | "rating-10"
+  | "rating-0-5"
+  | "rating-0-10"
   | "yes_no"
   | "multiple_choice"
   | "dropdown"
@@ -121,6 +123,8 @@ export type QuestionKind =
 export const KIND_ORDER: QuestionKind[] = [
   "rating-5",
   "rating-10",
+  "rating-0-5",
+  "rating-0-10",
   "yes_no",
   "multiple_choice",
   "dropdown",
@@ -136,6 +140,8 @@ export const KIND_META: Record<
     questionType: QuestionType;
     /** Undefined for the types where the scale is meaningless. */
     ratingScale?: number;
+    /** Lower bound of the rating scale. Undefined for non-rating kinds. */
+    ratingMin?: number;
     hasOptions: boolean;
     scored: boolean;
   }
@@ -146,6 +152,7 @@ export const KIND_META: Record<
     hint: "Reviewers pick a whole number from 1 to 5.",
     questionType: "rating",
     ratingScale: 5,
+    ratingMin: 1,
     hasOptions: false,
     scored: true,
   },
@@ -155,6 +162,27 @@ export const KIND_META: Record<
     hint: "Reviewers pick a whole number from 1 to 10.",
     questionType: "rating",
     ratingScale: 10,
+    ratingMin: 1,
+    hasOptions: false,
+    scored: true,
+  },
+  "rating-0-5": {
+    label: "Rating (0–5)",
+    short: "0–5",
+    hint: "Reviewers pick a whole number from 0 to 5 — 0 is a valid, lowest score.",
+    questionType: "rating",
+    ratingScale: 5,
+    ratingMin: 0,
+    hasOptions: false,
+    scored: true,
+  },
+  "rating-0-10": {
+    label: "Rating (0–10)",
+    short: "0–10",
+    hint: "Reviewers pick a whole number from 0 to 10 — 0 is a valid, lowest score.",
+    questionType: "rating",
+    ratingScale: 10,
+    ratingMin: 0,
     hasOptions: false,
     scored: true,
   },
@@ -192,11 +220,17 @@ export const KIND_META: Record<
   },
 };
 
-/** Collapses a stored `(type, ratingScale)` pair back into a builder preset. */
-export function kindOf(questionType: QuestionType, ratingScale: number): QuestionKind {
+/** Collapses a stored `(type, ratingScale, ratingMin)` triple back into a builder preset. */
+export function kindOf(
+  questionType: QuestionType,
+  ratingScale: number,
+  ratingMin: number = 1,
+): QuestionKind {
   if (questionType !== "rating") return questionType;
-  // Anything that is not exactly 5 reads as the 1–10 preset. Legacy rows can
-  // hold 7 or 100; rounding them to the nearer preset is better than crashing,
-  // and re-saving normalises them.
-  return ratingScale === 5 ? "rating-5" : "rating-10";
+  const zeroBased = ratingMin === 0;
+  // Anything that is not exactly 5 reads as the 1–10 / 0–10 preset. Legacy
+  // rows can hold 7 or 100; rounding them to the nearer preset is better than
+  // crashing, and re-saving normalises them.
+  if (ratingScale === 5) return zeroBased ? "rating-0-5" : "rating-5";
+  return zeroBased ? "rating-0-10" : "rating-10";
 }

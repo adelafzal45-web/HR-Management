@@ -130,7 +130,8 @@ export default function AppraisalCriteria() {
                         <p className="text-sm font-medium text-gray-900">{q.questionText}</p>
                         {(q.minLabel || q.maxLabel) && (
                           <p className="mt-1 text-xs text-gray-500">
-                            Scale: {q.minLabel ?? "1"} → {q.maxLabel ?? String(q.ratingScale)} (1–{q.ratingScale})
+                            Scale: {q.minLabel ?? String(q.ratingMin)} → {q.maxLabel ?? String(q.ratingScale)} (
+                            {q.ratingMin}–{q.ratingScale})
                           </p>
                         )}
                       </div>

@@ -5,15 +5,21 @@ import { Holiday } from './holiday.entity';
 import { HolidaysService } from './holidays.service';
 import { HolidaysController } from './holidays.controller';
 import { AuthorizationModule } from '../authorization/authorization.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
- * Company holiday calendar. Exports `HolidaysService` so
+ * Company holiday (and event) calendar. Exports `HolidaysService` so
  * `LeaveEntitlementsModule` (day counting) and `AttendanceModule` can both
  * exclude holidays from working-day calculations off the same source of
- * truth.
+ * truth. Imports `NotificationsModule` so a holiday/event created with
+ * `notify: true` can be announced to every active employee.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Holiday]), AuthorizationModule],
+  imports: [
+    TypeOrmModule.forFeature([Holiday]),
+    AuthorizationModule,
+    NotificationsModule,
+  ],
   controllers: [HolidaysController],
   providers: [HolidaysService],
   exports: [HolidaysService],

@@ -125,6 +125,18 @@ export class AppraisalFormQuestion {
   })
   rating_scale!: number;
 
+  /**
+   * Lower bound of the scale — 0 or 1 only. Reviewers rate from
+   * `rating_min`..`rating_scale`. Defaults to 1, which is the scale every
+   * form had before 0-based presets existed, so nothing already published
+   * changes behaviour.
+   */
+  @Column({
+    type: 'int',
+    default: 1,
+  })
+  rating_min!: number;
+
   /** Optional anchor shown under the low end of the scale, e.g. "Needs work". */
   @Column({
     type: 'varchar',

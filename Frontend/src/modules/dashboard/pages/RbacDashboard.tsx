@@ -6,6 +6,7 @@ import { ROLES } from "@/constants/roles";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import PeriodStatCards from "@/modules/dashboard/components/PeriodStatCards";
 import DashboardCalendar from "@/modules/dashboard/components/DashboardCalendar";
+import UpcomingEvents from "@/modules/dashboard/components/UpcomingEvents";
 import TeamAnalyticsCard from "@/modules/dashboard/components/TeamAnalyticsCard";
 import TodayAttendanceTable from "@/modules/dashboard/components/TodayAttendanceTable";
 import SelfAttendanceTable from "@/modules/dashboard/components/SelfAttendanceTable";
@@ -89,8 +90,12 @@ export default function RbacDashboard() {
           </div>
 
           <div className="xl:col-span-1">
-            <div className="xl:sticky xl:top-6">
+            <div className="space-y-6 xl:sticky xl:top-6">
               <DashboardCalendar />
+              {/* Same list for Employee, Team Lead, HR, and Admin — everyone
+                  reads the org's Holidays & Events calendar (Leave →
+                  Holidays & Events), so nothing here is role-gated. */}
+              <UpcomingEvents />
             </div>
           </div>
         </div>

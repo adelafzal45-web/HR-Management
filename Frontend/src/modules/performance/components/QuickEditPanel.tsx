@@ -199,8 +199,9 @@ export default function QuickEditPanel({
        * replaces the form's whole question set, so calling it needlessly would
        * rewrite every link row (and its display order) for a rename.
        *
-       * Every field is echoed back, not just the weight: an omitted ratingScale
-       * or minLabel would be re-defaulted server-side rather than preserved.
+       * Every field is echoed back, not just the weight: an omitted ratingScale,
+       * ratingMin or minLabel would be re-defaulted server-side rather than
+       * preserved.
        */
       if (weightsChanged) {
         await formsApi.saveQuestions(
@@ -214,6 +215,7 @@ export default function QuickEditPanel({
             isActive: q.isActive,
             isRequired: q.isRequired,
             ratingScale: q.ratingScale,
+            ratingMin: q.ratingMin,
             minLabel: q.minLabel ?? undefined,
             maxLabel: q.maxLabel ?? undefined,
           })),

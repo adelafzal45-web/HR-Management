@@ -45,6 +45,8 @@ export type FormQuestion = {
   isActive: boolean;
   isRequired: boolean;
   ratingScale: number;
+  /** Lower bound of the rating scale — 0 or 1. Always 1 for non-rating types. */
+  ratingMin: number;
   minLabel: string | null;
   maxLabel: string | null;
   displayOrder: number;
@@ -130,6 +132,8 @@ export type EvaluationScore = {
   questionType: QuestionType;
   weightage: number;
   ratingScale: number;
+  /** Lower bound of the rating scale — 0 or 1. Always 1 for non-rating types. */
+  ratingMin: number;
   /** Raw rating on the question's own scale. Always 0 for non-rating types. */
   score: number;
   /** Normalised 0–100, which is what every aggregate is computed from. */
@@ -225,6 +229,8 @@ export type FormQuestionInput = {
   isActive: boolean;
   isRequired?: boolean;
   ratingScale?: number;
+  /** Lower bound of the rating scale — 0 or 1. Omitted keeps the existing value. */
+  ratingMin?: number;
   minLabel?: string;
   maxLabel?: string;
   /** Required for `multiple_choice` and `dropdown`; ignored otherwise. */
@@ -399,7 +405,7 @@ export const teamAppraisalApi = {
    * Which field carries the answer depends on the question's type, and the
    * server validates the pairing rather than guessing:
    *
-   *  - `rating`                                  → `score`, 0..ratingScale
+   *  - `rating`                                  → `score`, ratingMin..ratingScale
    *  - `yes_no` / `multiple_choice` / `dropdown` → `selectedOptionId`
    *  - `text_feedback`                           → `remarks` only; unscored
    *

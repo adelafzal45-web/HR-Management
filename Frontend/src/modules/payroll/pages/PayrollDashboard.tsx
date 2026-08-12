@@ -15,9 +15,6 @@ import {
   SlidersHorizontal,
   ArrowRight,
   Clock,
-  ListChecks,
-  CheckCircle2,
-  AlertTriangle,
   Wand2,
 } from "lucide-react";
 import PayrollLayout from "./PayrollLayout";
@@ -115,8 +112,6 @@ export default function PayrollDashboardPage() {
 
   const setupRequired = setup?.checks.filter((c) => c.required).length ?? 0;
   const setupDone = setup?.checks.filter((c) => c.required && c.passed).length ?? 0;
-  const setupPct =
-    setupRequired > 0 ? Math.round((setupDone / setupRequired) * 100) : 0;
   const setupReady = setup?.ready ?? false;
 
   const pendingApproval = useMemo(
@@ -155,8 +150,11 @@ export default function PayrollDashboardPage() {
     },
   ];
 
+  // Most recent period overall (any status) — the primary action band shows
+  // its status next to the Run Payroll button once setup is ready.
+  const latestPeriod = recent[0] ?? null;
+
   const quickLinks = [
-    { label: "Process a period", description: "Preview and generate payslips", icon: PlayCircle, to: "/payroll/run" },
     { label: "View payslips", description: "Org-wide payslip register", icon: ReceiptText, to: "/payroll/payslips" },
     { label: "General settings", description: "Pay cycle, workflow & rounding", icon: SlidersHorizontal, to: "/payroll/settings" },
   ];
@@ -165,20 +163,20 @@ export default function PayrollDashboardPage() {
     <PayrollLayout activeTab="/payroll/dashboard">
       <BackendStatusBanner status={status} />
 
-      {/* Getting started. Payroll has a lot of configuration screens and it is
-          not obvious which to open first — while the checklist is incomplete,
-          the only thing worth doing is Quick Setup, so that is all this says.
-          It disappears the moment setup is ready. */}
-      {!loading && setup && !setupReady && (
-        <section className="mb-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-brand/30">
+      {/* Primary action band — the one thing worth doing right now. While
+          setup is incomplete, that's activating payroll; once it's ready,
+          that's running the next payroll, with the latest period's status
+          alongside so there's nothing else to check first. */}
+      <section className="mb-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+        {loading ? (
+          <div className="h-16 animate-pulse rounded-xl bg-gray-100" />
+        ) : setup && !setupReady ? (
           <div className="flex flex-wrap items-start gap-4">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-light text-brand-dark">
               <Wand2 size={22} />
             </span>
             <div className="min-w-0 flex-1">
-              <h2 className="text-base font-semibold text-gray-900">
-                New here? Start with one click
-              </h2>
+              <h2 className="text-base font-semibold text-gray-900">Activate payroll to get started</h2>
               <p className="mt-1 text-sm text-gray-600">
                 {setupDone} of {setupRequired} required items are done. Instead of
                 filling in six configuration screens, let payroll set itself up —
@@ -189,12 +187,44 @@ export default function PayrollDashboardPage() {
                 to="/payroll/setup"
                 className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-4 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
               >
-                Set Up Payroll Automatically <ArrowRight size={15} />
+                Activate Payroll <ArrowRight size={15} />
               </Link>
             </div>
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-light text-brand-dark">
+                <PlayCircle size={22} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-gray-900">
+                  {latestPeriod ? "Ready to run payroll" : "Run your first payroll"}
+                </h2>
+                {latestPeriod ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                    <span>
+                      Latest period: <span className="font-medium text-gray-900">{latestPeriod.name}</span>{" "}
+                      ({shortDate(latestPeriod.period_start)} – {shortDate(latestPeriod.period_end)})
+                    </span>
+                    <StatusBadge status={latestPeriod.status} />
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-600">
+                    No pay periods yet — start one to generate your first payslips.
+                  </p>
+                )}
+              </div>
+            </div>
+            <Link
+              to="/payroll/run"
+              className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-5 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+            >
+              Run Payroll <ArrowRight size={15} />
+            </Link>
+          </div>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {stats.map((s) => {
@@ -219,112 +249,51 @@ export default function PayrollDashboardPage() {
         })}
       </div>
 
-      {/* Activation gate + latest run cost. The checklist is a hard gate on
-          processing, so it leads; the money totals describe the newest run
-          that actually has a register. */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-              <ListChecks size={17} className="text-brand" /> Activation
-            </h2>
-            <Link
-              to="/payroll/setup"
-              className="text-sm font-medium text-brand-dark transition hover:brightness-95"
-            >
-              Open
-            </Link>
-          </div>
-
-          {loading ? (
-            <div className="mt-4 h-20 animate-pulse rounded-xl bg-gray-100" />
-          ) : !setup ? (
-            <p className="mt-4 text-sm text-gray-500">Setup status unavailable.</p>
-          ) : (
-            <>
-              <p className="mt-4 text-2xl font-semibold tracking-tight text-gray-900">
-                {setupDone}
-                <span className="text-base font-normal text-gray-400"> / {setupRequired}</span>
-              </p>
-              <p className="text-sm text-gray-500">required items complete</p>
-
-              <div
-                className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-100"
-                role="progressbar"
-                aria-valuenow={setupPct}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Payroll setup completeness"
-              >
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    setupReady ? "bg-emerald-500" : "bg-amber-400"
-                  }`}
-                  style={{ width: `${setupPct}%` }}
-                />
-              </div>
-
-              <p
-                className={`mt-3 flex items-start gap-2 text-sm font-medium ${
-                  setupReady ? "text-emerald-700" : "text-amber-700"
-                }`}
-              >
-                {setupReady ? (
-                  <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
-                ) : (
-                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                )}
-                {setupReady
-                  ? "Payroll is active — periods can be processed."
-                  : "Finish the required items before processing a period."}
-              </p>
-            </>
-          )}
+      {/* Latest run cost — the money totals for the newest run that actually
+          has a register. Activation status now lives in the band above, so
+          this card doesn't need to repeat it. */}
+      <div className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">Latest Run Cost</h2>
+          <Link
+            to="/payroll/reports"
+            className="text-sm font-medium text-brand-dark transition hover:brightness-95"
+          >
+            Reports
+          </Link>
         </div>
 
-        <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100 lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Latest Run Cost</h2>
-            <Link
-              to="/payroll/reports"
-              className="text-sm font-medium text-brand-dark transition hover:brightness-95"
-            >
-              Reports
-            </Link>
-          </div>
-
-          {loading ? (
-            <div className="mt-4 h-20 animate-pulse rounded-xl bg-gray-100" />
-          ) : !latestCosted || !latestReport ? (
-            <p className="mt-4 text-sm text-gray-500">
-              No processed period yet. Totals appear once a run is generated.
+        {loading ? (
+          <div className="mt-4 h-20 animate-pulse rounded-xl bg-gray-100" />
+        ) : !latestCosted || !latestReport ? (
+          <p className="mt-4 text-sm text-gray-500">
+            No processed period yet. Totals appear once a run is generated.
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-gray-500">
+              {latestCosted.name} · {latestReport.employee_count}{" "}
+              {latestReport.employee_count === 1 ? "employee" : "employees"}
             </p>
-          ) : (
-            <>
-              <p className="mt-1 text-sm text-gray-500">
-                {latestCosted.name} · {latestReport.employee_count}{" "}
-                {latestReport.employee_count === 1 ? "employee" : "employees"}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[
-                  { label: "Gross", value: latestReport.totals.gross },
-                  { label: "Tax", value: latestReport.totals.tax },
-                  { label: "Loans", value: latestReport.totals.loan },
-                  { label: "Net", value: latestReport.totals.net },
-                ].map((t) => (
-                  <div key={t.label} className="rounded-xl bg-gray-50 p-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      {t.label}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums text-gray-900">
-                      {money(t.value)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Gross", value: latestReport.totals.gross },
+                { label: "Tax", value: latestReport.totals.tax },
+                { label: "Loans", value: latestReport.totals.loan },
+                { label: "Net", value: latestReport.totals.net },
+              ].map((t) => (
+                <div key={t.label} className="rounded-xl bg-gray-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                    {t.label}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-gray-900">
+                    {money(t.value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">

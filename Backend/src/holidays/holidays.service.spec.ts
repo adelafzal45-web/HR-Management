@@ -60,13 +60,22 @@ function holiday(overrides: Partial<Holiday>): Holiday {
     holiday_date: overrides.holiday_date ?? new Date('2026-01-01'),
     department_id: overrides.department_id ?? null,
     is_recurring: overrides.is_recurring ?? false,
+    event_type: overrides.event_type ?? ('Holiday' as Holiday['event_type']),
   } as Holiday;
+}
+
+/** Fake — `notify` is untested here and defaults to false in every case. */
+class FakeNotificationsService {
+  create = jest.fn();
 }
 
 describe('HolidaysService — duplicate prevention', () => {
   function make(seed: Holiday[] = []) {
     const repo = new FakeHolidayRepo(seed);
-    const service = new HolidaysService(repo as any);
+    const service = new HolidaysService(
+      repo as any,
+      new FakeNotificationsService() as any,
+    );
     return { repo, service };
   }
 

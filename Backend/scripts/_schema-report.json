@@ -1,0 +1,5905 @@
+{
+  "generatedAt": "2026-08-12T14:34:39.600Z",
+  "database": "HR",
+  "counts": {
+    "appraisal_form_assignments": 3,
+    "appraisal_form_questions": 6,
+    "appraisal_forms": 1,
+    "appraisal_notifications": 1,
+    "appraisal_question_options": 0,
+    "appraisal_questions": 5,
+    "attendance": 10,
+    "audit_logs": 95,
+    "company_settings": 1,
+    "departments": 1,
+    "designations": 2,
+    "email_queue": 16,
+    "email_template_versions": 0,
+    "email_templates": 16,
+    "employee_component_overrides": 0,
+    "employee_documents": 0,
+    "employee_loans": 9,
+    "holidays": 1,
+    "job_categories": 1,
+    "leave_entitlements": 18,
+    "leave_history": 31,
+    "leave_requests": 1,
+    "leave_types": 6,
+    "loan_installments": 30,
+    "meeting_participants": 4,
+    "meetings": 2,
+    "migrations": 48,
+    "notifications": 80,
+    "password_history": 1,
+    "password_reset_tokens": 2,
+    "payroll": 1,
+    "payroll_periods": 17,
+    "payroll_rules": 16,
+    "payroll_settings": 1,
+    "payslip_lines": 276,
+    "payslips": 50,
+    "performance_review_answers": 3,
+    "performance_reviews": 6,
+    "permissions": 163,
+    "refresh_tokens": 141,
+    "reimbursements": 5,
+    "review_approvals": 1,
+    "role_permissions": 962,
+    "roles": 6,
+    "salary_components": 5,
+    "salary_structure_assignments": 2,
+    "salary_structure_components": 5,
+    "salary_structures": 2,
+    "shifts": 2,
+    "smtp_settings": 1,
+    "tax_configs": 1,
+    "tax_slabs": 6,
+    "team_lead_assignment_members": 0,
+    "team_lead_assignments": 0,
+    "user_leave_balances": 18,
+    "users": 4,
+    "working_day_schedules": 11
+  },
+  "columns": {
+    "appraisal_form_assignments": [
+      {
+        "name": "assignment_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "form_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "designation_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "appraisal_form_questions": [
+      {
+        "name": "form_question_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "display_order",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "weight_percentage",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "is_required",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "form_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "question_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "rating_scale",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "10"
+      },
+      {
+        "name": "min_label",
+        "type": "varchar",
+        "len": 60,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "max_label",
+        "type": "varchar",
+        "len": 60,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "snapshot_text",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "snapshot_type",
+        "type": "varchar",
+        "len": 30,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "snapshot_options",
+        "type": "jsonb",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "description",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "snapshot_description",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "version",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "rating_min",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      }
+    ],
+    "appraisal_forms": [
+      {
+        "name": "form_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "form_name",
+        "type": "varchar",
+        "len": 150,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "evaluation_type",
+        "type": "appraisal_forms_evaluation_type_enum",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Draft'::character varying"
+      },
+      {
+        "name": "department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "designation_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "version",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      }
+    ],
+    "appraisal_notifications": [
+      {
+        "name": "notification_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "recipient_user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "type",
+        "type": "varchar",
+        "len": 40,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "title",
+        "type": "varchar",
+        "len": 200,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "message",
+        "type": "text",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "related_review_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "dedupe_key",
+        "type": "varchar",
+        "len": 120,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_read",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "appraisal_question_options": [
+      {
+        "name": "option_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "option_text",
+        "type": "text",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "score",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "display_order",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "question_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "appraisal_questions": [
+      {
+        "name": "question_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "question_text",
+        "type": "text",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "question_type",
+        "type": "varchar",
+        "len": 30,
+        "nullable": false,
+        "default": "'rating'::character varying"
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "attendance": [
+      {
+        "name": "attendance_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "attendance_date",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "check_in",
+        "type": "time",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "check_out",
+        "type": "time",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "working_hours",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "attendance_status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "overtime_hours",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_overtime",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "shift_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "audit_logs": [
+      {
+        "name": "audit_log_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "actor_user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "actor_email",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "action",
+        "type": "varchar",
+        "len": 80,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "entity_type",
+        "type": "varchar",
+        "len": 80,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "entity_id",
+        "type": "varchar",
+        "len": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "before_state",
+        "type": "jsonb",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "after_state",
+        "type": "jsonb",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ip_address",
+        "type": "varchar",
+        "len": 64,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "user_agent",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "company_settings": [
+      {
+        "name": "id",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "legal_company_name",
+        "type": "varchar",
+        "len": 200,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "registration_number",
+        "type": "varchar",
+        "len": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "industry",
+        "type": "varchar",
+        "len": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "timezone",
+        "type": "varchar",
+        "len": 50,
+        "nullable": false,
+        "default": "'UTC'::character varying"
+      },
+      {
+        "name": "currency",
+        "type": "varchar",
+        "len": 10,
+        "nullable": false,
+        "default": "'USD'::character varying"
+      },
+      {
+        "name": "working_days",
+        "type": "varchar",
+        "len": 50,
+        "nullable": false,
+        "default": "'Mon-Fri'::character varying"
+      },
+      {
+        "name": "company_name",
+        "type": "varchar",
+        "len": 200,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "logo_url",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "logo_collapsed_url",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "favicon_url",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "email",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "phone",
+        "type": "varchar",
+        "len": 50,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "address",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "website",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "primary_color",
+        "type": "varchar",
+        "len": 20,
+        "nullable": true,
+        "default": "'#F1B344'::character varying"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "ceo_name",
+        "type": "varchar",
+        "len": 150,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "ceo_signature_url",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "cofounder_name",
+        "type": "varchar",
+        "len": 150,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "cofounder_signature_url",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "departments": [
+      {
+        "name": "department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "department_name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "designations": [
+      {
+        "name": "designation_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "title",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "email_queue": [
+      {
+        "name": "email_queue_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "template_key",
+        "type": "varchar",
+        "len": 60,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "to_email",
+        "type": "varchar",
+        "len": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "to_name",
+        "type": "varchar",
+        "len": 200,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "subject",
+        "type": "varchar",
+        "len": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "body_html",
+        "type": "text",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'pending'::character varying"
+      },
+      {
+        "name": "attempts",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "max_attempts",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "5"
+      },
+      {
+        "name": "next_attempt_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "last_error",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "sent_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "related_user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "email_template_versions": [
+      {
+        "name": "email_template_version_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "email_template_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "version",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "subject",
+        "type": "varchar",
+        "len": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "body_html",
+        "type": "text",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "changed_by_user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "changed_by_email",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "email_templates": [
+      {
+        "name": "email_template_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "template_key",
+        "type": "varchar",
+        "len": 60,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 150,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "subject",
+        "type": "varchar",
+        "len": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "body_html",
+        "type": "text",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "enabled",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "version",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "updated_by_user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "employee_component_overrides": [
+      {
+        "name": "override_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "component_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "override_calculation_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "override_amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "override_formula",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "effective_from",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "effective_to",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "employee_documents": [
+      {
+        "name": "document_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "employeeId",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "category",
+        "type": "varchar",
+        "len": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "original_name",
+        "type": "varchar",
+        "len": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "stored_name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "mime_type",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "size_bytes",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "uploaded_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "uploaded_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "employee_loans": [
+      {
+        "name": "loan_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 120,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "principal",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "outstanding",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "installment_amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "start_period_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'active'::character varying"
+      },
+      {
+        "name": "remarks",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "requested_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "decided_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "decided_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "decision_note",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "holidays": [
+      {
+        "name": "holiday_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 150,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "holiday_date",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_recurring",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "event_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Holiday'::character varying"
+      },
+      {
+        "name": "notify",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "notified_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "job_categories": [
+      {
+        "name": "job_category_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "job_category_name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "leave_entitlements": [
+      {
+        "name": "leave_entitlement_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "leave_type_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "year",
+        "type": "int2",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "entitled_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "carried_forward_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "adjusted_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "expired_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "leave_history": [
+      {
+        "name": "leave_history_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "leave_type_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "year",
+        "type": "int2",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "balance_after",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "note",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "reference_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "reference_type",
+        "type": "varchar",
+        "len": 40,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "performed_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "leave_requests": [
+      {
+        "name": "leave_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "leave_type",
+        "type": "varchar",
+        "len": 30,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "start_date",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "end_date",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "reason",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Pending'::character varying"
+      },
+      {
+        "name": "applied_date",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "approved_date",
+        "type": "timestamp",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "approved_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "leave_type_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_half_day",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "days_count",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "duration_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Full Day'::character varying"
+      },
+      {
+        "name": "attachment_path",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "attachment_name",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "approval_reason",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "rejection_reason",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "cancellation_reason",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "leave_types": [
+      {
+        "name": "leave_type_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_paid",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "max_days_per_year",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "carry_forward_allowed",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "max_carry_forward_days",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "loan_installments": [
+      {
+        "name": "installment_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "loan_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "period_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "sequence",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'scheduled'::character varying"
+      },
+      {
+        "name": "balance_after",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "deducted_on",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "meeting_participants": [
+      {
+        "name": "meeting_participant_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "meeting_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "meetings": [
+      {
+        "name": "meeting_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "title",
+        "type": "varchar",
+        "len": 200,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "scheduled_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "location",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "agenda",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "audience_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Specific'::character varying"
+      },
+      {
+        "name": "audience_department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "notify_email",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "notify_in_app",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Scheduled'::character varying"
+      },
+      {
+        "name": "cancellation_reason",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "organizer_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "migrations": [
+      {
+        "name": "id",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "nextval('migrations_id_seq'::regclass)"
+      },
+      {
+        "name": "timestamp",
+        "type": "int8",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": null,
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "notifications": [
+      {
+        "name": "notification_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "title",
+        "type": "varchar",
+        "len": 200,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "message",
+        "type": "text",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "category",
+        "type": "varchar",
+        "len": 40,
+        "nullable": false,
+        "default": "'General'::character varying"
+      },
+      {
+        "name": "recipient_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "read_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "link",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "reference_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "reference_type",
+        "type": "varchar",
+        "len": 40,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "batch_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "audience_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'All'::character varying"
+      },
+      {
+        "name": "audience_department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "attachment_url",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "attachment_name",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "attachment_mime",
+        "type": "varchar",
+        "len": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "attachment_size",
+        "type": "int4",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "password_history": [
+      {
+        "name": "password_history_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "password_hash",
+        "type": "varchar",
+        "len": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "password_reset_tokens": [
+      {
+        "name": "password_reset_token_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "token_hash",
+        "type": "varchar",
+        "len": 64,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "delivery_email",
+        "type": "varchar",
+        "len": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "used_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "invalidated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_by_user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_ip",
+        "type": "varchar",
+        "len": 64,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "payroll": [
+      {
+        "name": "payroll_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "payroll_month",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "basic_salary",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "allowance",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "bonus",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "deduction",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "tax",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "net_salary",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "payment_date",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      }
+    ],
+    "payroll_periods": [
+      {
+        "name": "period_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "frequency",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'monthly'::character varying"
+      },
+      {
+        "name": "period_start",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "period_end",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "pay_date",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "working_days",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'draft'::character varying"
+      },
+      {
+        "name": "prepared_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "approved_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "processed_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "approved_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "locked_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "notes",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "payroll_rules": [
+      {
+        "name": "rule_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "rule_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "scope_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'company'::character varying"
+      },
+      {
+        "name": "scope_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "config",
+        "type": "jsonb",
+        "len": null,
+        "nullable": false,
+        "default": "'{}'::jsonb"
+      },
+      {
+        "name": "priority",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "effective_from",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "effective_to",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "version",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "superseded_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "payroll_settings": [
+      {
+        "name": "id",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "frequency",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'monthly'::character varying"
+      },
+      {
+        "name": "period_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'calendar'::character varying"
+      },
+      {
+        "name": "currency",
+        "type": "varchar",
+        "len": 10,
+        "nullable": false,
+        "default": "'PKR'::character varying"
+      },
+      {
+        "name": "working_days_source",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'attendance'::character varying"
+      },
+      {
+        "name": "fixed_working_days",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "26"
+      },
+      {
+        "name": "working_hours_per_day",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "8"
+      },
+      {
+        "name": "approval_enabled",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "auto_generate_payslip",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "employee_self_service",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "payroll_locking_enabled",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "payslip_close_day",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "20"
+      },
+      {
+        "name": "overtime_enabled",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "rounding",
+        "type": "varchar",
+        "len": 10,
+        "nullable": false,
+        "default": "'nearest'::character varying"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "payslip_lines": [
+      {
+        "name": "line_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "payslip_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "component_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "label",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "calc_note",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "display_order",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      }
+    ],
+    "payslips": [
+      {
+        "name": "payslip_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "period_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "structure_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "basic_salary",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "gross_salary",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "total_earnings",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "total_deductions",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "net_salary",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "working_days",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "present_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "absent_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "paid_leave_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "unpaid_leave_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "late_count",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "overtime_hours",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "overtime_amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'generated'::character varying"
+      },
+      {
+        "name": "calculation_json",
+        "type": "jsonb",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "payment_date",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "performance_review_answers": [
+      {
+        "name": "answer_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "answer_comment",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "answered_percentage",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "review_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "selected_option_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_absent_auto_zero",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "form_question_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "performance_reviews": [
+      {
+        "name": "review_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "review_period",
+        "type": "varchar",
+        "len": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "review_date",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "total_score_percentage",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "comments",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "reviewer_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "reviewee_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "evaluation_type",
+        "type": "performance_reviews_evaluation_type_enum",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Draft'::character varying"
+      },
+      {
+        "name": "form_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "attendance_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "recommendation",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "submitted_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "locked_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "approved_by_user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "approved_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_auto_generated",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "form_version",
+        "type": "int4",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "permissions": [
+      {
+        "name": "permission_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "permission_name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "refresh_tokens": [
+      {
+        "name": "refresh_token_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "token_hash",
+        "type": "varchar",
+        "len": 64,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "revoked_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "reimbursements": [
+      {
+        "name": "reimbursement_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "title",
+        "type": "varchar",
+        "len": 160,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "category",
+        "type": "varchar",
+        "len": 60,
+        "nullable": false,
+        "default": "'Other'::character varying"
+      },
+      {
+        "name": "amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "expense_date",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "receipt_url",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'pending'::character varying"
+      },
+      {
+        "name": "decided_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "decided_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "decision_note",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "paid_period_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "paid_payslip_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "review_approvals": [
+      {
+        "name": "approval_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "review_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "action",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "actor_user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "comment",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "role_permissions": [
+      {
+        "name": "role_permission_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "role_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "permission_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "roles": [
+      {
+        "name": "role_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "role_name",
+        "type": "varchar",
+        "len": 50,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "salary_components": [
+      {
+        "name": "component_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "code",
+        "type": "varchar",
+        "len": 40,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "calculation_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "formula",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_recurring",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "is_taxable",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "include_in_gross",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "include_in_overtime",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "include_in_leave_deduction",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "include_in_bonus",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "display_order",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "effective_from",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "effective_to",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "salary_structure_assignments": [
+      {
+        "name": "assignment_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "structure_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "scope_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "scope_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "base_salary",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "effective_from",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "effective_to",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "salary_structure_components": [
+      {
+        "name": "structure_component_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "structure_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "component_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "override_calculation_type",
+        "type": "varchar",
+        "len": 20,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "override_amount",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "override_formula",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "display_order",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      }
+    ],
+    "salary_structures": [
+      {
+        "name": "structure_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "shifts": [
+      {
+        "name": "shift_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "shift_name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "start_time",
+        "type": "time",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "end_time",
+        "type": "time",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "grace_period_minutes",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Active'::character varying"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "break_duration_minutes",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      }
+    ],
+    "smtp_settings": [
+      {
+        "name": "id",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "host",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "port",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "587"
+      },
+      {
+        "name": "username",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "password_encrypted",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "encryption",
+        "type": "varchar",
+        "len": 10,
+        "nullable": false,
+        "default": "'tls'::character varying"
+      },
+      {
+        "name": "from_name",
+        "type": "varchar",
+        "len": 150,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "from_email",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "reply_to",
+        "type": "varchar",
+        "len": 255,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "enabled",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "last_test_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "last_test_ok",
+        "type": "bool",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "last_test_error",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "tax_configs": [
+      {
+        "name": "tax_config_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "regime",
+        "type": "varchar",
+        "len": 60,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "currency",
+        "type": "varchar",
+        "len": 3,
+        "nullable": false,
+        "default": "'PKR'::character varying"
+      },
+      {
+        "name": "annualize",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "is_active",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "effective_from",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "effective_to",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "version",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "1"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      }
+    ],
+    "tax_slabs": [
+      {
+        "name": "slab_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "tax_config_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "lower_bound",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "upper_bound",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "base_tax",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "rate_percent",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "display_order",
+        "type": "int4",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      }
+    ],
+    "team_lead_assignment_members": [
+      {
+        "name": "assignment_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "team_lead_assignments": [
+      {
+        "name": "assignment_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "team_lead_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "mode",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "user_leave_balances": [
+      {
+        "name": "user_leave_balance_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "leave_type_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "allocated_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "used_days",
+        "type": "numeric",
+        "len": null,
+        "nullable": false,
+        "default": "0"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ],
+    "users": [
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "gen_random_uuid()"
+      },
+      {
+        "name": "employee_code",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "first_name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "last_name",
+        "type": "varchar",
+        "len": 100,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "email",
+        "type": "varchar",
+        "len": 255,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "password",
+        "type": "varchar",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "phone",
+        "type": "varchar",
+        "len": 20,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "profile_image",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "date_of_birth",
+        "type": "date",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "gender",
+        "type": "varchar",
+        "len": 10,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "address",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "employee_type",
+        "type": "varchar",
+        "len": 30,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "designation_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "joining_date",
+        "type": "date",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "salary",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "status",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "working_hours",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "overtime_hours",
+        "type": "numeric",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "is_overtime",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "attendance_status",
+        "type": "varchar",
+        "len": 20,
+        "nullable": false,
+        "default": "'Absent'::character varying"
+      },
+      {
+        "name": "role_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "shift_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "job_category_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "len": null,
+        "nullable": false,
+        "default": "CURRENT_TIMESTAMP"
+      },
+      {
+        "name": "street_address",
+        "type": "text",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "city",
+        "type": "varchar",
+        "len": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "state_province",
+        "type": "varchar",
+        "len": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "postal_code",
+        "type": "varchar",
+        "len": 20,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "country",
+        "type": "varchar",
+        "len": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "emergency_contact_name",
+        "type": "varchar",
+        "len": 150,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "emergency_contact_relationship",
+        "type": "varchar",
+        "len": 60,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "emergency_contact_phone",
+        "type": "varchar",
+        "len": 20,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "bank_name",
+        "type": "varchar",
+        "len": 150,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "bank_account_number",
+        "type": "varchar",
+        "len": 40,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "bank_routing_code",
+        "type": "varchar",
+        "len": 34,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "blood_group",
+        "type": "varchar",
+        "len": 5,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "login_enabled",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "password_reset_allowed",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "web_login_allowed",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "mobile_login_allowed",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "api_access_allowed",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "multi_device_login_allowed",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "remote_attendance_allowed",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "biometric_attendance_allowed",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "false"
+      },
+      {
+        "name": "team_lead_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "profile_image_thumb",
+        "type": "varchar",
+        "len": 500,
+        "nullable": true,
+        "default": null
+      }
+    ],
+    "working_day_schedules": [
+      {
+        "name": "schedule_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": false,
+        "default": "uuid_generate_v4()"
+      },
+      {
+        "name": "department_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "designation_id",
+        "type": "uuid",
+        "len": null,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "name": "day_of_week",
+        "type": "int2",
+        "len": null,
+        "nullable": false,
+        "default": null
+      },
+      {
+        "name": "is_working",
+        "type": "bool",
+        "len": null,
+        "nullable": false,
+        "default": "true"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamptz",
+        "len": null,
+        "nullable": false,
+        "default": "now()"
+      }
+    ]
+  },
+  "checkConstraints": {
+    "appraisal_form_questions": [
+      "(rating_min < rating_scale)",
+      "((rating_scale >= 2) AND (rating_scale <= 100))",
+      "(rating_min = ANY (ARRAY[0, 1]))"
+    ],
+    "appraisal_notifications": [
+      "((type)::text = ANY ((ARRAY['SHIFT_REMINDER'::character varying, 'PENDING_DIGEST'::character varying, 'REVIEW_REOPENED'::character varying, 'REVIEW_APPROVED'::character varying])::text[]))"
+    ],
+    "appraisal_question_options": [
+      "(score >= (0)::numeric)"
+    ],
+    "appraisal_questions": [
+      "((question_type)::text = ANY ((ARRAY['rating'::character varying, 'yes_no'::character varying, 'multiple_choice'::character varying, 'dropdown'::character varying, 'text_feedback'::character varying])::text[]))"
+    ],
+    "company_settings": [
+      "(id = 1)"
+    ],
+    "email_queue": [
+      "((status)::text = ANY ((ARRAY['pending'::character varying, 'sending'::character varying, 'sent'::character varying, 'failed'::character varying, 'cancelled'::character varying])::text[]))"
+    ],
+    "employee_loans": [
+      "((status)::text = ANY ((ARRAY['pending'::character varying, 'active'::character varying, 'closed'::character varying, 'paused'::character varying, 'rejected'::character varying])::text[]))"
+    ],
+    "holidays": [
+      "((event_type)::text = ANY ((ARRAY['Holiday'::character varying, 'Event'::character varying])::text[]))"
+    ],
+    "leave_types": [
+      "(max_carry_forward_days >= 0)",
+      "(max_days_per_year >= 0)",
+      "(carry_forward_allowed OR (max_carry_forward_days = 0))"
+    ],
+    "loan_installments": [
+      "((status)::text = ANY ((ARRAY['scheduled'::character varying, 'deducted'::character varying, 'skipped'::character varying])::text[]))"
+    ],
+    "payroll_periods": [
+      "((status)::text = ANY ((ARRAY['draft'::character varying, 'processing'::character varying, 'pending_approval'::character varying, 'approved'::character varying, 'locked'::character varying, 'paid'::character varying])::text[]))"
+    ],
+    "payroll_rules": [
+      "((scope_type)::text = ANY ((ARRAY['company'::character varying, 'job_category'::character varying, 'department'::character varying, 'designation'::character varying, 'employee'::character varying])::text[]))",
+      "((rule_type)::text = ANY ((ARRAY['absent'::character varying, 'late'::character varying, 'repeated_late'::character varying, 'leave'::character varying, 'overtime'::character varying, 'bonus'::character varying, 'appraisal'::character varying])::text[]))"
+    ],
+    "payroll_settings": [
+      "(id = 1)"
+    ],
+    "payslip_lines": [
+      "((type)::text = ANY ((ARRAY['earning'::character varying, 'deduction'::character varying])::text[]))"
+    ],
+    "performance_reviews": [
+      "((status)::text = ANY ((ARRAY['Draft'::character varying, 'Submitted'::character varying, 'Approved'::character varying, 'Rejected'::character varying])::text[]))"
+    ],
+    "reimbursements": [
+      "((status)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'paid'::character varying])::text[]))",
+      "(amount > (0)::numeric)"
+    ],
+    "review_approvals": [
+      "((action)::text = ANY ((ARRAY['SUBMIT'::character varying, 'APPROVE'::character varying, 'REJECT'::character varying, 'REOPEN'::character varying])::text[]))"
+    ],
+    "salary_components": [
+      "((calculation_type)::text = ANY ((ARRAY['fixed'::character varying, 'percent_basic'::character varying, 'percent_gross'::character varying, 'per_day'::character varying, 'per_hour'::character varying, 'formula'::character varying])::text[]))",
+      "((type)::text = ANY ((ARRAY['earning'::character varying, 'deduction'::character varying])::text[]))"
+    ],
+    "salary_structure_assignments": [
+      "((scope_type)::text = ANY ((ARRAY['company'::character varying, 'job_category'::character varying, 'department'::character varying, 'designation'::character varying, 'employee'::character varying])::text[]))"
+    ],
+    "shifts": [
+      "(break_duration_minutes >= 0)"
+    ],
+    "smtp_settings": [
+      "((encryption)::text = ANY ((ARRAY['none'::character varying, 'tls'::character varying, 'ssl'::character varying])::text[]))",
+      "(id = 1)"
+    ],
+    "team_lead_assignments": [
+      "((mode)::text = ANY ((ARRAY['DEPARTMENT'::character varying, 'MEMBERS'::character varying])::text[]))"
+    ],
+    "user_leave_balances": [
+      "(used_days >= (0)::numeric)",
+      "(allocated_days >= (0)::numeric)"
+    ],
+    "users": [
+      "((team_lead_id IS NULL) OR (team_lead_id <> user_id))"
+    ],
+    "working_day_schedules": [
+      "((day_of_week >= 1) AND (day_of_week <= 7))"
+    ]
+  },
+  "enumTypes": {
+    "appraisal_forms_evaluation_type_enum": [
+      "Daily",
+      "Weekly",
+      "Monthly"
+    ],
+    "performance_reviews_evaluation_type_enum": [
+      "Daily",
+      "Weekly",
+      "Monthly"
+    ]
+  },
+  "fks": [
+    {
+      "child": "appraisal_form_assignments",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "appraisal_form_assignments",
+      "child_col": "form_id",
+      "parent": "appraisal_forms",
+      "parent_col": "form_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "appraisal_form_assignments",
+      "child_col": "department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "appraisal_form_assignments",
+      "child_col": "designation_id",
+      "parent": "designations",
+      "parent_col": "designation_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "appraisal_form_questions",
+      "child_col": "question_id",
+      "parent": "appraisal_questions",
+      "parent_col": "question_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "appraisal_form_questions",
+      "child_col": "form_id",
+      "parent": "appraisal_forms",
+      "parent_col": "form_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "appraisal_forms",
+      "child_col": "created_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "appraisal_forms",
+      "child_col": "department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "appraisal_forms",
+      "child_col": "designation_id",
+      "parent": "designations",
+      "parent_col": "designation_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "appraisal_notifications",
+      "child_col": "related_review_id",
+      "parent": "performance_reviews",
+      "parent_col": "review_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "appraisal_notifications",
+      "child_col": "recipient_user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "appraisal_question_options",
+      "child_col": "question_id",
+      "parent": "appraisal_questions",
+      "parent_col": "question_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "attendance",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "attendance",
+      "child_col": "shift_id",
+      "parent": "shifts",
+      "parent_col": "shift_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "audit_logs",
+      "child_col": "actor_user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "designations",
+      "child_col": "department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "email_queue",
+      "child_col": "related_user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "email_template_versions",
+      "child_col": "changed_by_user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "email_template_versions",
+      "child_col": "email_template_id",
+      "parent": "email_templates",
+      "parent_col": "email_template_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "email_templates",
+      "child_col": "updated_by_user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "employee_component_overrides",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "employee_component_overrides",
+      "child_col": "component_id",
+      "parent": "salary_components",
+      "parent_col": "component_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "employee_documents",
+      "child_col": "employeeId",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "employee_loans",
+      "child_col": "decided_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "employee_loans",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "holidays",
+      "child_col": "department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "leave_entitlements",
+      "child_col": "created_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "leave_entitlements",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "leave_entitlements",
+      "child_col": "leave_type_id",
+      "parent": "leave_types",
+      "parent_col": "leave_type_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "leave_history",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "leave_history",
+      "child_col": "leave_type_id",
+      "parent": "leave_types",
+      "parent_col": "leave_type_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "leave_history",
+      "child_col": "performed_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "leave_requests",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "leave_requests",
+      "child_col": "leave_type_id",
+      "parent": "leave_types",
+      "parent_col": "leave_type_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "leave_requests",
+      "child_col": "approved_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "loan_installments",
+      "child_col": "loan_id",
+      "parent": "employee_loans",
+      "parent_col": "loan_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "meeting_participants",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "meeting_participants",
+      "child_col": "meeting_id",
+      "parent": "meetings",
+      "parent_col": "meeting_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "meetings",
+      "child_col": "organizer_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "meetings",
+      "child_col": "audience_department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "notifications",
+      "child_col": "created_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "notifications",
+      "child_col": "recipient_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "notifications",
+      "child_col": "audience_department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "password_history",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "password_reset_tokens",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "password_reset_tokens",
+      "child_col": "created_by_user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "payroll",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "payroll_periods",
+      "child_col": "approved_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "payroll_periods",
+      "child_col": "prepared_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "payslip_lines",
+      "child_col": "payslip_id",
+      "parent": "payslips",
+      "parent_col": "payslip_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "payslips",
+      "child_col": "period_id",
+      "parent": "payroll_periods",
+      "parent_col": "period_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "payslips",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "performance_review_answers",
+      "child_col": "selected_option_id",
+      "parent": "appraisal_question_options",
+      "parent_col": "option_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "performance_review_answers",
+      "child_col": "form_question_id",
+      "parent": "appraisal_form_questions",
+      "parent_col": "form_question_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "performance_review_answers",
+      "child_col": "review_id",
+      "parent": "performance_reviews",
+      "parent_col": "review_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "performance_reviews",
+      "child_col": "reviewer_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "performance_reviews",
+      "child_col": "reviewee_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "performance_reviews",
+      "child_col": "form_id",
+      "parent": "appraisal_forms",
+      "parent_col": "form_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "performance_reviews",
+      "child_col": "attendance_id",
+      "parent": "attendance",
+      "parent_col": "attendance_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "performance_reviews",
+      "child_col": "approved_by_user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "refresh_tokens",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "reimbursements",
+      "child_col": "decided_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "reimbursements",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "reimbursements",
+      "child_col": "paid_payslip_id",
+      "parent": "payslips",
+      "parent_col": "payslip_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "reimbursements",
+      "child_col": "paid_period_id",
+      "parent": "payroll_periods",
+      "parent_col": "period_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "review_approvals",
+      "child_col": "actor_user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "review_approvals",
+      "child_col": "review_id",
+      "parent": "performance_reviews",
+      "parent_col": "review_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "role_permissions",
+      "child_col": "permission_id",
+      "parent": "permissions",
+      "parent_col": "permission_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "role_permissions",
+      "child_col": "role_id",
+      "parent": "roles",
+      "parent_col": "role_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "salary_structure_assignments",
+      "child_col": "structure_id",
+      "parent": "salary_structures",
+      "parent_col": "structure_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "salary_structure_components",
+      "child_col": "structure_id",
+      "parent": "salary_structures",
+      "parent_col": "structure_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "salary_structure_components",
+      "child_col": "component_id",
+      "parent": "salary_components",
+      "parent_col": "component_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "tax_slabs",
+      "child_col": "tax_config_id",
+      "parent": "tax_configs",
+      "parent_col": "tax_config_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "team_lead_assignment_members",
+      "child_col": "assignment_id",
+      "parent": "team_lead_assignments",
+      "parent_col": "assignment_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "team_lead_assignment_members",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "team_lead_assignments",
+      "child_col": "created_by",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "team_lead_assignments",
+      "child_col": "department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "team_lead_assignments",
+      "child_col": "team_lead_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "user_leave_balances",
+      "child_col": "user_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "user_leave_balances",
+      "child_col": "leave_type_id",
+      "parent": "leave_types",
+      "parent_col": "leave_type_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "users",
+      "child_col": "team_lead_id",
+      "parent": "users",
+      "parent_col": "user_id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "child": "users",
+      "child_col": "shift_id",
+      "parent": "shifts",
+      "parent_col": "shift_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "users",
+      "child_col": "job_category_id",
+      "parent": "job_categories",
+      "parent_col": "job_category_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "users",
+      "child_col": "role_id",
+      "parent": "roles",
+      "parent_col": "role_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "users",
+      "child_col": "designation_id",
+      "parent": "designations",
+      "parent_col": "designation_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "users",
+      "child_col": "department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "NO ACTION"
+    },
+    {
+      "child": "working_day_schedules",
+      "child_col": "department_id",
+      "parent": "departments",
+      "parent_col": "department_id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "child": "working_day_schedules",
+      "child_col": "designation_id",
+      "parent": "designations",
+      "parent_col": "designation_id",
+      "delete_rule": "CASCADE"
+    }
+  ],
+  "uniques": [
+    {
+      "table_name": "appraisal_form_assignments",
+      "index_name": "PK_appraisal_form_assignments",
+      "cols": "{assignment_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_form_assignments",
+      "index_name": "UQ_afa_form_department",
+      "cols": "{form_id,department_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_form_assignments",
+      "index_name": "UQ_afa_form_designation",
+      "cols": "{form_id,designation_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_form_assignments",
+      "index_name": "UQ_afa_form_user",
+      "cols": "{form_id,user_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_form_questions",
+      "index_name": "PK_appraisal_form_questions",
+      "cols": "{form_question_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_forms",
+      "index_name": "PK_appraisal_forms",
+      "cols": "{form_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_forms",
+      "index_name": "UQ_appraisal_forms_name",
+      "cols": "{form_name}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_notifications",
+      "index_name": "PK_appraisal_notifications",
+      "cols": "{notification_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_notifications",
+      "index_name": "UQ_an_dedupe_key",
+      "cols": "{dedupe_key}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_question_options",
+      "index_name": "PK_appraisal_question_options",
+      "cols": "{option_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "appraisal_questions",
+      "index_name": "PK_appraisal_questions",
+      "cols": "{question_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "attendance",
+      "index_name": "attendance_pkey",
+      "cols": "{attendance_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "audit_logs",
+      "index_name": "PK_audit_logs",
+      "cols": "{audit_log_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "company_settings",
+      "index_name": "PK_company_settings",
+      "cols": "{id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "departments",
+      "index_name": "departments_department_name_key",
+      "cols": "{department_name}",
+      "is_unique": true
+    },
+    {
+      "table_name": "departments",
+      "index_name": "departments_pkey",
+      "cols": "{department_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "designations",
+      "index_name": "designations_pkey",
+      "cols": "{designation_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "designations",
+      "index_name": "designations_title_key",
+      "cols": "{title}",
+      "is_unique": true
+    },
+    {
+      "table_name": "email_queue",
+      "index_name": "PK_email_queue",
+      "cols": "{email_queue_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "email_template_versions",
+      "index_name": "PK_email_template_versions",
+      "cols": "{email_template_version_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "email_template_versions",
+      "index_name": "UQ_email_template_versions_number",
+      "cols": "{email_template_id,version}",
+      "is_unique": true
+    },
+    {
+      "table_name": "email_templates",
+      "index_name": "PK_email_templates",
+      "cols": "{email_template_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "email_templates",
+      "index_name": "UQ_email_templates_key",
+      "cols": "{template_key}",
+      "is_unique": true
+    },
+    {
+      "table_name": "employee_component_overrides",
+      "index_name": "pk_employee_component_overrides",
+      "cols": "{override_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "employee_documents",
+      "index_name": "PK_04033eeb8f6e7d57aece4ec4930",
+      "cols": "{document_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "employee_loans",
+      "index_name": "pk_employee_loans",
+      "cols": "{loan_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "holidays",
+      "index_name": "PK_holidays",
+      "cols": "{holiday_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "job_categories",
+      "index_name": "job_categories_job_category_name_key",
+      "cols": "{job_category_name}",
+      "is_unique": true
+    },
+    {
+      "table_name": "job_categories",
+      "index_name": "job_categories_pkey",
+      "cols": "{job_category_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "leave_entitlements",
+      "index_name": "PK_leave_entitlements",
+      "cols": "{leave_entitlement_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "leave_entitlements",
+      "index_name": "UQ_leave_entitlements_user_type_year",
+      "cols": "{user_id,leave_type_id,year}",
+      "is_unique": true
+    },
+    {
+      "table_name": "leave_history",
+      "index_name": "PK_leave_history",
+      "cols": "{leave_history_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "leave_requests",
+      "index_name": "leave_requests_pkey",
+      "cols": "{leave_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "leave_types",
+      "index_name": "PK_leave_types",
+      "cols": "{leave_type_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "leave_types",
+      "index_name": "UQ_leave_types_name",
+      "cols": "{name}",
+      "is_unique": true
+    },
+    {
+      "table_name": "loan_installments",
+      "index_name": "pk_loan_installments",
+      "cols": "{installment_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "meeting_participants",
+      "index_name": "pk_meeting_participants",
+      "cols": "{meeting_participant_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "meeting_participants",
+      "index_name": "uq_meeting_participant",
+      "cols": "{meeting_id,user_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "meetings",
+      "index_name": "pk_meetings",
+      "cols": "{meeting_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "migrations",
+      "index_name": "PK_8c82d7f526340ab734260ea46be",
+      "cols": "{id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "notifications",
+      "index_name": "notifications_pkey",
+      "cols": "{notification_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "password_history",
+      "index_name": "PK_password_history",
+      "cols": "{password_history_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "password_reset_tokens",
+      "index_name": "PK_password_reset_tokens",
+      "cols": "{password_reset_token_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "password_reset_tokens",
+      "index_name": "UQ_password_reset_tokens_hash",
+      "cols": "{token_hash}",
+      "is_unique": true
+    },
+    {
+      "table_name": "payroll",
+      "index_name": "payroll_pkey",
+      "cols": "{payroll_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "payroll_periods",
+      "index_name": "pk_payroll_periods",
+      "cols": "{period_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "payroll_rules",
+      "index_name": "pk_payroll_rules",
+      "cols": "{rule_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "payroll_settings",
+      "index_name": "pk_payroll_settings",
+      "cols": "{id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "payslip_lines",
+      "index_name": "pk_payslip_lines",
+      "cols": "{line_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "payslips",
+      "index_name": "pk_payslips",
+      "cols": "{payslip_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "payslips",
+      "index_name": "uq_payslip_period_user",
+      "cols": "{period_id,user_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "performance_review_answers",
+      "index_name": "PK_performance_review_answers",
+      "cols": "{answer_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "performance_reviews",
+      "index_name": "PK_performance_reviews",
+      "cols": "{review_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "performance_reviews",
+      "index_name": "UQ_pr_reviewee_form_period",
+      "cols": "{reviewee_id,form_id,review_period}",
+      "is_unique": true
+    },
+    {
+      "table_name": "permissions",
+      "index_name": "permissions_permission_name_key",
+      "cols": "{permission_name}",
+      "is_unique": true
+    },
+    {
+      "table_name": "permissions",
+      "index_name": "permissions_pkey",
+      "cols": "{permission_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "refresh_tokens",
+      "index_name": "PK_refresh_tokens",
+      "cols": "{refresh_token_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "refresh_tokens",
+      "index_name": "UQ_refresh_tokens_token_hash",
+      "cols": "{token_hash}",
+      "is_unique": true
+    },
+    {
+      "table_name": "reimbursements",
+      "index_name": "pk_reimbursements",
+      "cols": "{reimbursement_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "review_approvals",
+      "index_name": "PK_review_approvals",
+      "cols": "{approval_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "role_permissions",
+      "index_name": "role_permissions_pkey",
+      "cols": "{role_permission_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "roles",
+      "index_name": "roles_pkey",
+      "cols": "{role_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "roles",
+      "index_name": "roles_role_name_key",
+      "cols": "{role_name}",
+      "is_unique": true
+    },
+    {
+      "table_name": "salary_components",
+      "index_name": "pk_salary_components",
+      "cols": "{component_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "salary_components",
+      "index_name": "uq_salary_components_code",
+      "cols": "{code}",
+      "is_unique": true
+    },
+    {
+      "table_name": "salary_structure_assignments",
+      "index_name": "pk_salary_structure_assignments",
+      "cols": "{assignment_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "salary_structure_components",
+      "index_name": "pk_salary_structure_components",
+      "cols": "{structure_component_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "salary_structure_components",
+      "index_name": "uq_structure_component",
+      "cols": "{structure_id,component_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "salary_structures",
+      "index_name": "pk_salary_structures",
+      "cols": "{structure_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "salary_structures",
+      "index_name": "uq_salary_structures_name",
+      "cols": "{name}",
+      "is_unique": true
+    },
+    {
+      "table_name": "shifts",
+      "index_name": "shifts_pkey",
+      "cols": "{shift_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "shifts",
+      "index_name": "shifts_shift_name_key",
+      "cols": "{shift_name}",
+      "is_unique": true
+    },
+    {
+      "table_name": "smtp_settings",
+      "index_name": "PK_smtp_settings",
+      "cols": "{id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "tax_configs",
+      "index_name": "pk_tax_configs",
+      "cols": "{tax_config_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "tax_slabs",
+      "index_name": "pk_tax_slabs",
+      "cols": "{slab_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "team_lead_assignment_members",
+      "index_name": "PK_team_lead_assignment_members",
+      "cols": "{assignment_id,user_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "team_lead_assignments",
+      "index_name": "PK_team_lead_assignments",
+      "cols": "{assignment_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "team_lead_assignments",
+      "index_name": "UQ_tla_lead_department_mode",
+      "cols": "{team_lead_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "user_leave_balances",
+      "index_name": "PK_user_leave_balances",
+      "cols": "{user_leave_balance_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "user_leave_balances",
+      "index_name": "UQ_user_leave_balances_user_type",
+      "cols": "{user_id,leave_type_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "users",
+      "index_name": "users_email_key",
+      "cols": "{email}",
+      "is_unique": true
+    },
+    {
+      "table_name": "users",
+      "index_name": "users_employee_code_key",
+      "cols": "{employee_code}",
+      "is_unique": true
+    },
+    {
+      "table_name": "users",
+      "index_name": "users_pkey",
+      "cols": "{user_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "working_day_schedules",
+      "index_name": "PK_working_day_schedules",
+      "cols": "{schedule_id}",
+      "is_unique": true
+    },
+    {
+      "table_name": "working_day_schedules",
+      "index_name": "UQ_wds_department",
+      "cols": "{department_id,day_of_week}",
+      "is_unique": true
+    },
+    {
+      "table_name": "working_day_schedules",
+      "index_name": "UQ_wds_designation",
+      "cols": "{department_id,designation_id,day_of_week}",
+      "is_unique": true
+    },
+    {
+      "table_name": "working_day_schedules",
+      "index_name": "UQ_wds_global",
+      "cols": "{day_of_week}",
+      "is_unique": true
+    }
+  ],
+  "roles": [
+    {
+      "role_id": "53cd533c-13a9-400f-93f5-2fb207239874",
+      "role_name": "Admin",
+      "users": 2
+    },
+    {
+      "role_id": "b1370815-7b78-49bd-b3f6-ca765d129abe",
+      "role_name": "Employee",
+      "users": 1
+    },
+    {
+      "role_id": "1667f328-bf5d-45e2-8de5-a0f7e9e3e5a3",
+      "role_name": "Finance",
+      "users": 0
+    },
+    {
+      "role_id": "562a8e2c-35be-4ea6-9fa8-48db5dc36606",
+      "role_name": "HR Admin",
+      "users": 0
+    },
+    {
+      "role_id": "e2b8726d-107c-4504-b98d-835515772a26",
+      "role_name": "HR Manager",
+      "users": 0
+    },
+    {
+      "role_id": "1974e6ed-0de8-40e9-b951-f3e76208abea",
+      "role_name": "Team Lead",
+      "users": 1
+    }
+  ],
+  "permCount": 163,
+  "rolePermCount": 962,
+  "leaveTypes": [
+    {
+      "leave_type_id": "42d6822e-d8fa-4801-a9ec-70f25a39aab5",
+      "name": "Unpaid Leave",
+      "description": "Approved absence without pay",
+      "is_paid": false,
+      "max_days_per_year": 0,
+      "carry_forward_allowed": false,
+      "max_carry_forward_days": 0,
+      "is_active": true,
+      "created_at": "2026-08-01T11:07:51.898Z",
+      "updated_at": "2026-08-01T11:07:51.898Z"
+    },
+    {
+      "leave_type_id": "588ad7bd-2e0c-40bd-bd0b-d4618b340e5c",
+      "name": "Casual Leave",
+      "description": "Short-notice paid leave for personal matters",
+      "is_paid": true,
+      "max_days_per_year": 10,
+      "carry_forward_allowed": false,
+      "max_carry_forward_days": 0,
+      "is_active": true,
+      "created_at": "2026-08-01T11:07:51.898Z",
+      "updated_at": "2026-08-01T11:07:51.898Z"
+    },
+    {
+      "leave_type_id": "a27de783-fc24-4e40-a56c-9d88bd2149d0",
+      "name": "Bereavement Leave",
+      "description": "Paid leave following the death of a family member",
+      "is_paid": true,
+      "max_days_per_year": 5,
+      "carry_forward_allowed": false,
+      "max_carry_forward_days": 0,
+      "is_active": true,
+      "created_at": "2026-08-01T11:07:51.898Z",
+      "updated_at": "2026-08-01T11:07:51.898Z"
+    },
+    {
+      "leave_type_id": "d13488b5-e96b-4e1c-8407-66086af68c00",
+      "name": "Annual Leave",
+      "description": "Paid annual vacation entitlement",
+      "is_paid": true,
+      "max_days_per_year": 20,
+      "carry_forward_allowed": true,
+      "max_carry_forward_days": 5,
+      "is_active": true,
+      "created_at": "2026-08-01T11:07:51.898Z",
+      "updated_at": "2026-08-01T11:07:51.898Z"
+    },
+    {
+      "leave_type_id": "ea84a0d7-bc22-44c2-8c9f-701ea0dd087d",
+      "name": "Paternity Leave",
+      "description": "Paid leave following the birth of a child",
+      "is_paid": true,
+      "max_days_per_year": 14,
+      "carry_forward_allowed": false,
+      "max_carry_forward_days": 0,
+      "is_active": true,
+      "created_at": "2026-08-01T11:07:51.898Z",
+      "updated_at": "2026-08-01T11:07:51.898Z"
+    },
+    {
+      "leave_type_id": "f9142969-dfb1-4670-a3fe-43177f6941cf",
+      "name": "Sick Leave",
+      "description": "Paid leave for illness or medical appointments",
+      "is_paid": true,
+      "max_days_per_year": 10,
+      "carry_forward_allowed": false,
+      "max_carry_forward_days": 0,
+      "is_active": true,
+      "created_at": "2026-08-01T11:07:51.898Z",
+      "updated_at": "2026-08-01T11:07:51.898Z"
+    }
+  ],
+  "workingDays": [
+    {
+      "schedule_id": "1d177fbf-ca88-482a-b07a-45428eefe11a",
+      "department_id": null,
+      "designation_id": null,
+      "day_of_week": 4,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:41.731Z",
+      "updated_at": "2026-08-11T14:41:41.731Z"
+    },
+    {
+      "schedule_id": "3162b044-2a93-49c7-a246-ca1fa9b20fe1",
+      "department_id": null,
+      "designation_id": null,
+      "day_of_week": 6,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:41.731Z",
+      "updated_at": "2026-08-11T14:41:41.731Z"
+    },
+    {
+      "schedule_id": "37cd844b-b717-4669-8953-fa934f40d4f2",
+      "department_id": null,
+      "designation_id": null,
+      "day_of_week": 3,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:41.731Z",
+      "updated_at": "2026-08-11T14:41:41.731Z"
+    },
+    {
+      "schedule_id": "57f04b59-8004-4671-a0db-0e824968a4ff",
+      "department_id": null,
+      "designation_id": null,
+      "day_of_week": 1,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:41.731Z",
+      "updated_at": "2026-08-11T14:41:41.731Z"
+    },
+    {
+      "schedule_id": "5fddb54b-065d-446c-8d90-d33f95fe465b",
+      "department_id": "f04f68cc-db96-4411-926a-ce34cfc41fa0",
+      "designation_id": null,
+      "day_of_week": 5,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:47.933Z",
+      "updated_at": "2026-08-11T14:41:47.933Z"
+    },
+    {
+      "schedule_id": "7b00a1c2-3c5f-4914-a8a1-16bb888f9537",
+      "department_id": "f04f68cc-db96-4411-926a-ce34cfc41fa0",
+      "designation_id": null,
+      "day_of_week": 3,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:47.933Z",
+      "updated_at": "2026-08-11T14:41:47.933Z"
+    },
+    {
+      "schedule_id": "802ed2a9-aeb8-4637-9d8b-31354fcf9858",
+      "department_id": "f04f68cc-db96-4411-926a-ce34cfc41fa0",
+      "designation_id": null,
+      "day_of_week": 1,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:47.933Z",
+      "updated_at": "2026-08-11T14:41:47.933Z"
+    },
+    {
+      "schedule_id": "96acd343-6f43-4145-84e1-274337e4a136",
+      "department_id": null,
+      "designation_id": null,
+      "day_of_week": 2,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:41.731Z",
+      "updated_at": "2026-08-11T14:41:41.731Z"
+    },
+    {
+      "schedule_id": "a65538a4-6cc0-46bf-92f3-ebe534da1380",
+      "department_id": "f04f68cc-db96-4411-926a-ce34cfc41fa0",
+      "designation_id": null,
+      "day_of_week": 2,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:47.933Z",
+      "updated_at": "2026-08-11T14:41:47.933Z"
+    },
+    {
+      "schedule_id": "b7a4b584-bf1b-4c2d-bfb2-73af7dba9976",
+      "department_id": null,
+      "designation_id": null,
+      "day_of_week": 5,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:41.731Z",
+      "updated_at": "2026-08-11T14:41:41.731Z"
+    },
+    {
+      "schedule_id": "ed3bc46e-414e-4194-8710-36a9c1737bbe",
+      "department_id": "f04f68cc-db96-4411-926a-ce34cfc41fa0",
+      "designation_id": null,
+      "day_of_week": 6,
+      "is_working": true,
+      "created_at": "2026-08-11T14:41:47.933Z",
+      "updated_at": "2026-08-11T14:41:47.933Z"
+    }
+  ]
+}

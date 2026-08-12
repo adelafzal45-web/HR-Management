@@ -61,7 +61,7 @@ export function getLeaveTabs(role: Role | undefined): SectionTab[] {
       });
       tabs.push({
         key: "public-holidays",
-        label: "Public Holidays",
+        label: "Holidays & Events",
         icon: CalendarDays,
         path: "/leave/public-holidays",
       });

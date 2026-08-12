@@ -17,7 +17,7 @@ import {
  * Which field carries the answer depends on the question's type, and the service
  * validates the pairing rather than guessing:
  *
- *  - `rating`                          → `score`, 0..ratingScale
+ *  - `rating`                          → `score`, ratingMin..ratingScale
  *  - `yes_no` / `multiple_choice`
  *    / `dropdown`                      → `selectedOptionId`
  *  - `text_feedback`                   → `remarks` only; unscored
@@ -37,8 +37,8 @@ export class EvaluationScoreInputDto {
     minimum: 0,
     description:
       "Rating questions only. Raw rating on the question's own scale " +
-      '(0..ratingScale). The upper bound is validated server-side against that ' +
-      'question, since each question defines its own scale.',
+      '(ratingMin..ratingScale). Both bounds are validated server-side ' +
+      'against that question, since each question defines its own scale.',
   })
   @IsOptional()
   @Type(() => Number)

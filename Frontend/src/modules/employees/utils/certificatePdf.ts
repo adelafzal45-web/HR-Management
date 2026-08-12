@@ -17,6 +17,11 @@ import { jsPDF } from "jspdf";
 import { fullName, type Employee } from "@/modules/employees/types/employee.types";
 import { signatoriesApi, type BrandingSettings } from "@/modules/settings/api/settingsApi";
 import { fetchAsDataUrl, resolveLogoDataUrl } from "@/modules/payroll/utils/payslipPdf";
+import playfairBoldFontUrl from "@/assets/fonts/PlayfairDisplay-Bold.ttf";
+import garamondRegularFontUrl from "@/assets/fonts/EBGaramond-Regular.ttf";
+import garamondItalicFontUrl from "@/assets/fonts/EBGaramond-Italic.ttf";
+import garamondBoldFontUrl from "@/assets/fonts/EBGaramond-Bold.ttf";
+import garamondBoldItalicFontUrl from "@/assets/fonts/EBGaramond-BoldItalic.ttf";
 
 export type CertificateType = "completion" | "experience" | "employment";
 
@@ -218,8 +223,110 @@ const setDraw = (doc: jsPDF, c: { r: number; g: number; b: number }) => doc.setD
 
 // The certificate is the one document in the app set in a serif face. A letter
 // carrying a company's signature reads as a formal document rather than a UI
-// screenshot, and `times` is a jsPDF built-in — no font to embed, no bundle cost.
-const SERIF = "times";
+// screenshot.
+//
+// The body copy is set in EB Garamond and the headline in Playfair Display —
+// an embedded display/text serif pairing common on printed certificates —
+// falling back to jsPDF's built-in `times` if the font files can't be
+// fetched (offline, blocked asset host, etc.). A certificate that renders in
+// Times is strictly better than one that fails to render at all.
+const FALLBACK_SERIF = "times";
+const TITLE_FAMILY = "PlayfairDisplay";
+const BODY_FAMILY = "EBGaramond";
+
+/** Which embedded font families are actually available on this `jsPDF` doc. */
+type CertificateFonts = {
+  title: string;
+  body: string;
+};
+
+type FontBase64Set = {
+  playfairBold?: string;
+  garamondRegular?: string;
+  garamondItalic?: string;
+  garamondBold?: string;
+  garamondBoldItalic?: string;
+};
+
+/** Fetch a bundled font asset and return its raw base64 payload (no `data:` prefix). */
+async function fetchFontBase64(url: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return undefined;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let binary = "";
+    const chunkSize = 0x8000; // avoid blowing the call stack on String.fromCharCode(...bytes)
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  } catch {
+    return undefined;
+  }
+}
+
+// The font *files* never change, so they're fetched once per session and
+// reused — only the (cheap, local) VFS registration happens per `jsPDF`
+// instance, since jsPDF keeps its embedded-font table on the document.
+let fontBase64Promise: Promise<FontBase64Set> | null = null;
+function loadFontBase64(): Promise<FontBase64Set> {
+  if (!fontBase64Promise) {
+    fontBase64Promise = Promise.all([
+      fetchFontBase64(playfairBoldFontUrl),
+      fetchFontBase64(garamondRegularFontUrl),
+      fetchFontBase64(garamondItalicFontUrl),
+      fetchFontBase64(garamondBoldFontUrl),
+      fetchFontBase64(garamondBoldItalicFontUrl),
+    ]).then(([playfairBold, garamondRegular, garamondItalic, garamondBold, garamondBoldItalic]) => ({
+      playfairBold,
+      garamondRegular,
+      garamondItalic,
+      garamondBold,
+      garamondBoldItalic,
+    }));
+  }
+  return fontBase64Promise;
+}
+
+/**
+ * Resolves the embedded certificate fonts (fetching + caching the .ttf files
+ * on first use). Call before `buildCertificatePdf`, which needs the base64
+ * synchronously to register fonts on the document.
+ */
+export async function loadCertificateFonts(): Promise<FontBase64Set> {
+  return loadFontBase64();
+}
+
+/**
+ * Registers whichever embedded fonts loaded successfully onto this specific
+ * `jsPDF` instance (font registration is per-document, not global) and
+ * returns the family names to use — the real ones where available, `times`
+ * for any that failed to fetch.
+ */
+function registerCertificateFonts(doc: jsPDF, base64: FontBase64Set): CertificateFonts {
+  let title = FALLBACK_SERIF;
+  let body = FALLBACK_SERIF;
+
+  if (base64.playfairBold) {
+    doc.addFileToVFS("PlayfairDisplay-Bold.ttf", base64.playfairBold);
+    doc.addFont("PlayfairDisplay-Bold.ttf", TITLE_FAMILY, "bold");
+    title = TITLE_FAMILY;
+  }
+
+  if (base64.garamondRegular && base64.garamondBold && base64.garamondItalic && base64.garamondBoldItalic) {
+    doc.addFileToVFS("EBGaramond-Regular.ttf", base64.garamondRegular);
+    doc.addFont("EBGaramond-Regular.ttf", BODY_FAMILY, "normal");
+    doc.addFileToVFS("EBGaramond-Bold.ttf", base64.garamondBold);
+    doc.addFont("EBGaramond-Bold.ttf", BODY_FAMILY, "bold");
+    doc.addFileToVFS("EBGaramond-Italic.ttf", base64.garamondItalic);
+    doc.addFont("EBGaramond-Italic.ttf", BODY_FAMILY, "italic");
+    doc.addFileToVFS("EBGaramond-BoldItalic.ttf", base64.garamondBoldItalic);
+    doc.addFont("EBGaramond-BoldItalic.ttf", BODY_FAMILY, "bolditalic");
+    body = BODY_FAMILY;
+  }
+
+  return { title, body };
+}
 
 function imageFormatFromDataUrl(dataUrl: string): "PNG" | "JPEG" | "WEBP" {
   if (dataUrl.startsWith("data:image/jpeg")) return "JPEG";
@@ -246,9 +353,10 @@ function drawSignatureBlock(
     baseline: number;
     align: "left" | "right";
     company?: string;
+    bodyFont: string;
   },
 ): void {
-  const { left, baseline, align, company } = options;
+  const { left, baseline, align, company, bodyFont } = options;
   const right = left + SIGNATURE_COLUMN_WIDTH;
   const textX = align === "right" ? right : left;
 
@@ -289,21 +397,22 @@ function drawSignatureBlock(
   doc.setLineWidth(0.4);
   doc.line(left, baseline, right, baseline);
 
-  doc.setFont(SERIF, "bold");
+  doc.setFont(bodyFont, "bold");
   doc.setFontSize(10);
   setText(doc, INK);
   doc.text(signatory.name, textX, baseline + 5, { align });
 
-  doc.setFont(SERIF, "normal");
+  doc.setFont(bodyFont, "normal");
   doc.setFontSize(9);
   setText(doc, MUTED);
   doc.text(signatory.title, textX, baseline + 10, { align });
   if (company) doc.text(company, textX, baseline + 14.5, { align });
 }
 
-export function buildCertificatePdf(input: CertificateInput): jsPDF {
+export function buildCertificatePdf(input: CertificateInput, fontBase64?: FontBase64Set): jsPDF {
   const def = CERTIFICATE_TYPES[input.type];
   const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const fonts = registerCertificateFonts(doc, fontBase64 ?? {});
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const marginX = 20;
@@ -349,19 +458,38 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
   let y = 26;
 
   // ---- Letterhead ---------------------------------------------------------
+  // Fitted inside a 22mm box rather than forced to fill it — most company
+  // marks (this one included) are a wide wordmark, not a square icon, and
+  // stretching one to fill a square distorts it into an unreadable smear.
   if (input.company.logoDataUrl) {
     try {
+      const maxBox = 22;
+      let drawWidth = maxBox;
+      let drawHeight = maxBox;
+
+      const props = doc.getImageProperties(input.company.logoDataUrl);
+      const ratio = props.width / props.height;
+      if (Number.isFinite(ratio) && ratio > 0) {
+        if (ratio >= 1) {
+          drawWidth = maxBox;
+          drawHeight = maxBox / ratio;
+        } else {
+          drawHeight = maxBox;
+          drawWidth = maxBox * ratio;
+        }
+      }
+
       doc.addImage(
         input.company.logoDataUrl,
         imageFormatFromDataUrl(input.company.logoDataUrl),
-        pageWidth / 2 - 11,
-        y,
-        22,
-        22,
+        pageWidth / 2 - drawWidth / 2,
+        y + (maxBox - drawHeight) / 2,
+        drawWidth,
+        drawHeight,
         undefined,
         "FAST",
       );
-      y += 26;
+      y += maxBox + 4;
     } catch {
       // A logo that jsPDF can't decode shouldn't cost the certificate.
     }
@@ -371,7 +499,7 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
   // above it. With a logo, the mark carries the name and printing it again
   // immediately underneath said the same thing twice.
   if (!input.company.logoDataUrl) {
-    doc.setFont(SERIF, "bold");
+    doc.setFont(fonts.body, "bold");
     doc.setFontSize(15);
     setText(doc, INK);
     doc.text(input.company.name.toUpperCase(), pageWidth / 2, y, { align: "center" });
@@ -382,7 +510,7 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
     .filter(Boolean)
     .join("  ·  ");
   if (contactLine) {
-    doc.setFont(SERIF, "normal");
+    doc.setFont(fonts.body, "normal");
     doc.setFontSize(8);
     setText(doc, MUTED);
     for (const line of doc.splitTextToSize(contactLine, contentWidth) as string[]) {
@@ -398,13 +526,13 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
 
   // ---- Title --------------------------------------------------------------
   y += 16;
-  doc.setFont(SERIF, "bold");
-  doc.setFontSize(24);
+  doc.setFont(fonts.title, "bold");
+  doc.setFontSize(25);
   setText(doc, BRAND_DARK);
-  doc.text(def.title.toUpperCase(), pageWidth / 2, y, { align: "center" });
+  doc.text(def.title.toUpperCase(), pageWidth / 2, y, { align: "center", charSpace: 0.6 });
 
   y += 7;
-  doc.setFont(SERIF, "italic");
+  doc.setFont(fonts.body, "italic");
   doc.setFontSize(10);
   setText(doc, MUTED);
   doc.text(def.subtitle, pageWidth / 2, y, { align: "center" });
@@ -417,7 +545,7 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
 
   // ---- Reference / date row ----------------------------------------------
   y += 12;
-  doc.setFont(SERIF, "normal");
+  doc.setFont(fonts.body, "normal");
   doc.setFontSize(9);
   setText(doc, MUTED);
   doc.text(`Ref: ${input.referenceNo}`, marginX, y);
@@ -425,7 +553,7 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
 
   // ---- Body ---------------------------------------------------------------
   y += 14;
-  doc.setFont(SERIF, "normal");
+  doc.setFont(fonts.body, "normal");
   doc.setFontSize(11.5);
   setText(doc, INK);
 
@@ -453,7 +581,7 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
     const remarkLines = doc.splitTextToSize(input.remarks, contentWidth - 10) as string[];
     const boxHeight = remarkLines.length * 5.6 + 9;
     doc.roundedRect(marginX, y - 5, contentWidth, boxHeight, 2, 2, "F");
-    doc.setFont(SERIF, "italic");
+    doc.setFont(fonts.body, "italic");
     doc.setFontSize(10.5);
     let ry = y + 1.5;
     for (const line of remarkLines) {
@@ -479,17 +607,20 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
       left: marginX,
       baseline: signY,
       align: "left",
+      bodyFont: fonts.body,
     });
     drawSignatureBlock(doc, signatories[1], {
       left: pageWidth - marginX - SIGNATURE_COLUMN_WIDTH,
       baseline: signY,
       align: "right",
+      bodyFont: fonts.body,
     });
   } else if (signatories.length === 1) {
     drawSignatureBlock(doc, signatories[0], {
       left: pageWidth - marginX - SIGNATURE_COLUMN_WIDTH,
       baseline: signY,
       align: "right",
+      bodyFont: fonts.body,
     });
   } else {
     drawSignatureBlock(
@@ -500,6 +631,7 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
         baseline: signY,
         align: "right",
         company: input.company.name,
+        bodyFont: fonts.body,
       },
     );
   }
@@ -508,7 +640,7 @@ export function buildCertificatePdf(input: CertificateInput): jsPDF {
   setDraw(doc, LINE);
   doc.setLineWidth(0.3);
   doc.line(marginX, pageHeight - 24, pageWidth - marginX, pageHeight - 24);
-  doc.setFont(SERIF, "normal");
+  doc.setFont(fonts.body, "normal");
   doc.setFontSize(7.5);
   setText(doc, MUTED);
   doc.text(
@@ -625,15 +757,16 @@ async function resolveSignatories(): Promise<CertificateSignatory[]> {
   }
 }
 
-/** Resolves logo, watermark and signatories, then saves the certificate. */
+/** Resolves logo, watermark, signatories and the embedded certificate fonts, then saves the certificate. */
 export async function downloadCertificatePdf(
   input: CertificateInput,
   branding: BrandingSettings | undefined,
   filename: string,
 ): Promise<void> {
-  const [logoDataUrl, signatories] = await Promise.all([
+  const [logoDataUrl, signatories, fontBase64] = await Promise.all([
     resolveLogoDataUrl(branding?.logoUrl || undefined),
     resolveSignatories(),
+    loadCertificateFonts(),
   ]);
 
   // Faded from whatever the letterhead ended up using, including the bundled
@@ -641,12 +774,13 @@ export async function downloadCertificatePdf(
   // a bare page.
   const watermark = logoDataUrl ? await fadeImageForWatermark(logoDataUrl) : undefined;
 
-  const doc = buildCertificatePdf({
-    ...input,
-    company: { ...input.company, logoDataUrl, watermark },
-    signatories,
-  });
+  const doc = buildCertificatePdf(
+    {
+      ...input,
+      company: { ...input.company, logoDataUrl, watermark },
+      signatories,
+    },
+    fontBase64,
+  );
   doc.save(filename);
 }
-
-

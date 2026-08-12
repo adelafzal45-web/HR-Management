@@ -112,6 +112,15 @@ type DataTableProps<T> = {
  extraFilterCount?: number;
  /** Reset handler for `extraFilters`, invoked by "Clear all". */
  onClearExtraFilters?: () => void;
+ /**
+  * When rows come pre-sorted so that related rows sit next to each other
+  * (e.g. several leave-balance rows for the same employee), returning that
+  * shared key here switches zebra striping from per-row to per-group and
+  * adds a divider above each new group — so a repeated value the caller has
+  * blanked out in its own `render` (see the "employee" column pattern) still
+  * reads as one visual block instead of a run of empty cells.
+  */
+ rowGroupKey?: (row: T) => string;
 };
 
 const HIDE_CLASS: Record<NonNullable<DataTableColumn<unknown>["hideBelow"]>, string> = {
@@ -242,6 +251,7 @@ export default function DataTable<T>({
  extraFilters,
  extraFilterCount = 0,
  onClearExtraFilters,
+ rowGroupKey,
 }: DataTableProps<T>) {
  const [panelOpen, setPanelOpen] = useState(false);
  const panelAnchorRef = useRef<HTMLDivElement>(null);
@@ -265,6 +275,25 @@ export default function DataTable<T>({
    document.removeEventListener("keydown", onKey);
   };
  }, [panelOpen]);
+
+ // Group index per row (increments each time rowGroupKey changes from the
+ // previous row) — drives per-group zebra striping and the divider above
+ // each new group, instead of the plain per-row alternation used otherwise.
+ const groupIndexes = useMemo(() => {
+  if (!rowGroupKey) return null;
+  const indexes: number[] = [];
+  let current = -1;
+  let lastKey: string | null = null;
+  for (const row of rows) {
+   const key = rowGroupKey(row);
+   if (key !== lastKey) {
+    current += 1;
+    lastKey = key;
+   }
+   indexes.push(current);
+  }
+  return indexes;
+ }, [rows, rowGroupKey]);
 
  const totalPages = Math.max(1, Math.ceil(total / pageSize));
  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -593,12 +622,15 @@ export default function DataTable<T>({
  </tr>
  </thead>
  <tbody>
- {rows.map((row, i) => (
+ {rows.map((row, i) => {
+ const groupIndex = groupIndexes ? groupIndexes[i] : i;
+ const isNewGroup = groupIndexes ? i > 0 && groupIndexes[i] !== groupIndexes[i - 1] : false;
+ return (
  <tr
  key={rowKey(row)}
  className={`border-b border-gray-50 transition-colors last:border-0 hover:bg-brand-light/20 ${
- i % 2 === 1 ? "bg-gray-50/40" : "bg-white"
- }`}
+ groupIndex % 2 === 1 ? "bg-gray-50/40" : "bg-white"
+ } ${isNewGroup ? "border-t-2 border-t-gray-200" : ""}`}
  >
  {columns.map((col) => (
  <td
@@ -610,15 +642,20 @@ export default function DataTable<T>({
  ))}
  {actions && <td className="px-4 py-3.5 text-right">{actions(row)}</td>}
  </tr>
- ))}
+ );
+ })}
  </tbody>
  </table>
  </div>
 
- {/* Mobile — stacked cards (never overflow the viewport) */}
+ {/* Mobile — stacked cards (never overflow the viewport). Groups get the
+ same divider treatment as the desktop table, via a top border on the
+ card instead of the row. */}
  <div className="divide-y divide-gray-50 sm:hidden">
- {rows.map((row) => (
- <div key={rowKey(row)} className="p-4">
+ {rows.map((row, i) => {
+ const isNewGroup = groupIndexes ? i > 0 && groupIndexes[i] !== groupIndexes[i - 1] : false;
+ return (
+ <div key={rowKey(row)} className={`p-4 ${isNewGroup ? "border-t-2 border-t-gray-200" : ""}`}>
  <div className="space-y-1.5">
  {columns.map((col) => (
  <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
@@ -629,7 +666,8 @@ export default function DataTable<T>({
  </div>
  {actions && <div className="mt-3 flex justify-end gap-2 border-t border-gray-50 pt-3">{actions(row)}</div>}
  </div>
- ))}
+ );
+ })}
  </div>
  </>
  )}

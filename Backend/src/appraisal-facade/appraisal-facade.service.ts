@@ -80,6 +80,8 @@ export interface FormQuestionDto {
   weightage: number;
   isActive: boolean;
   ratingScale: number;
+  /** Lower bound of the rating scale — 0 or 1. Always 1 for non-rating types. */
+  ratingMin: number;
   minLabel: string | null;
   maxLabel: string | null;
   displayOrder: number;
@@ -196,6 +198,8 @@ export interface EvaluationScoreDto {
   questionType: QuestionType;
   weightage: number;
   ratingScale: number;
+  /** Lower bound of the rating scale — 0 or 1. Always 1 for non-rating types. */
+  ratingMin: number;
   /** Raw rating on the question's own scale. Always 0 for non-rating types. */
   score: number;
   /** Normalised 0–100, which is what aggregates are computed from. */
@@ -392,9 +396,10 @@ export class AppraisalFacadeService {
         throw new BadRequestException(`"${label}" needs a score.`);
       }
       const scale = fq.rating_scale ?? 10;
-      if (input.score < 0 || input.score > scale) {
+      const min = fq.rating_min ?? 1;
+      if (input.score < min || input.score > scale) {
         throw new BadRequestException(
-          `Score for "${label}" must be between 0 and ${scale}.`,
+          `Score for "${label}" must be between ${min} and ${scale}.`,
         );
       }
       return {
@@ -906,6 +911,7 @@ export class AppraisalFacadeService {
             is_active: fq.is_active,
             description: fq.description ?? null,
             rating_scale: fq.rating_scale,
+            rating_min: fq.rating_min,
             min_label: fq.min_label ?? null,
             max_label: fq.max_label ?? null,
           }),
@@ -996,6 +1002,7 @@ export class AppraisalFacadeService {
             is_active: fq.is_active,
             description: fq.description ?? null,
             rating_scale: fq.rating_scale,
+            rating_min: fq.rating_min,
             min_label: fq.min_label ?? null,
             max_label: fq.max_label ?? null,
             /*
@@ -1477,6 +1484,7 @@ export class AppraisalFacadeService {
         link.question = question;
         link.weight_percentage = Number(item.weightage);
         link.rating_scale = item.ratingScale ?? link.rating_scale ?? 10;
+        link.rating_min = item.ratingMin ?? link.rating_min ?? 1;
         link.min_label = item.minLabel?.trim() || null;
         link.max_label = item.maxLabel?.trim() || null;
         link.description = item.description?.trim() || null;
@@ -3218,6 +3226,7 @@ export class AppraisalFacadeService {
       weightage: Number(fq.weight_percentage),
       isActive: this.isLinkActive(fq),
       ratingScale: fq.rating_scale ?? 10,
+      ratingMin: fq.rating_min ?? 1,
       minLabel: fq.min_label ?? null,
       maxLabel: fq.max_label ?? null,
       displayOrder: fq.display_order,
@@ -3264,6 +3273,7 @@ export class AppraisalFacadeService {
       (answer) => {
         const fq = answer.formQuestion;
         const scale = fq?.rating_scale ?? 10;
+        const min = fq?.rating_min ?? 1;
         const percentage = Number(answer.answered_percentage);
         const type = fq ? this.linkType(fq) : QuestionType.RATING;
 
@@ -3274,6 +3284,7 @@ export class AppraisalFacadeService {
           questionType: type,
           weightage: Number(fq?.weight_percentage ?? 0),
           ratingScale: scale,
+          ratingMin: min,
           // Only a rating answer came from a point on a scale, so only a rating
           // answer can be put back onto one. Denormalising an option choice or a
           // comment would invent a number the reviewer never gave.

@@ -37,12 +37,7 @@ export default function Login() {
     <AuthLayout heading={"Good\nto see you"}>
       <LoadingOverlay show={loading} label="Signing you in…" />
       <h2 className="mb-1 text-[26px] xs:text-[28px] sm:text-[32px] font-bold text-gray-900">Login</h2>
-      <p className="mb-8 text-[15px] text-gray-500">
-        Don't have an account?{" "}
-        <Link to="/signup" className="font-medium text-brand-dark">
-          Register Now!
-        </Link>
-      </p>
+      <p className="mb-8 text-[15px] text-gray-500">Welcome back — enter your details to sign in.</p>
 
       <BackendStatusBanner status={status} />
 

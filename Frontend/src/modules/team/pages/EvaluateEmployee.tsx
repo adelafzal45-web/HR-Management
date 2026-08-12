@@ -308,10 +308,10 @@ export default function EvaluateEmployee() {
                             <div className="mt-3 flex items-center gap-3">
                               <input
                                 type="range"
-                                min={1}
+                                min={q.ratingMin}
                                 max={q.ratingScale}
                                 step={1}
-                                value={answer?.score ?? Math.ceil(q.ratingScale / 2)}
+                                value={answer?.score ?? Math.ceil((q.ratingMin + q.ratingScale) / 2)}
                                 disabled={!canSubmit}
                                 onChange={(e) =>
                                   setAnswer(q.questionId, { score: Number(e.target.value) })
@@ -329,7 +329,7 @@ export default function EvaluateEmployee() {
                             </div>
                             {(q.minLabel || q.maxLabel) && (
                               <div className="mt-1 flex justify-between text-xs text-gray-400">
-                                <span>{q.minLabel ?? "1"}</span>
+                                <span>{q.minLabel ?? String(q.ratingMin)}</span>
                                 <span>{q.maxLabel ?? q.ratingScale}</span>
                               </div>
                             )}

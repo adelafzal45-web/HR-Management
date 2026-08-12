@@ -75,8 +75,12 @@ export class PayrollLoansService {
     const where: Record<string, unknown> = {};
     if (userId) where.user_id = userId;
     if (status) where.status = status;
+    // Hydrate installments so the returned rows honour the EmployeeLoan
+    // contract (every other finder does). Callers such as the Run Payroll
+    // review grid read `installments` directly and would otherwise crash.
     return this.loanRepository.find({
       where,
+      relations: { installments: true },
       order: { created_at: 'DESC' },
     });
   }

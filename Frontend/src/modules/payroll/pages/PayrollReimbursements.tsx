@@ -13,12 +13,12 @@
 // total from the filtered length (same as PayrollLoans).
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Receipt, Check, X, ExternalLink, Trash2, Inbox } from "lucide-react";
+import { Receipt, Check, X, ExternalLink, Trash2, Pencil, Inbox } from "lucide-react";
 import PayrollLayout from "./PayrollLayout";
 import DataTable, { type DataTableColumn } from "@/components/tables/DataTable";
 import Modal from "@/components/dialogs/Modal";
 import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
-import { PrimaryButton } from "@/components/forms/FormField";
+import { FormField, PrimaryButton } from "@/components/forms/FormField";
 import StatusBadge from "@/components/common/StatusBadge";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
@@ -26,6 +26,7 @@ import { useToast } from "@/app/providers/ToastContext";
 import {
   reimbursementsApi,
   REIMBURSEMENT_STATUSES,
+  REIMBURSEMENT_CATEGORIES,
   type Reimbursement,
   type ReimbursementStatus,
 } from "@/modules/payroll/api/reimbursementsApi";
@@ -34,6 +35,33 @@ import { money, shortDate, humanize } from "@/modules/payroll/utils/format";
 
 const selectClass =
   "min-h-10 rounded-full bg-gray-100 px-4 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60";
+
+// The modal form uses the taller, block-style select the employee-facing
+// "Submit Claim" form uses — distinct from the pill filter select above.
+const formSelectClass =
+  "w-full rounded-lg bg-gray-100 px-4 py-3.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60";
+
+type EditFormState = {
+  title: string;
+  category: string;
+  amount: string;
+  expense_date: string;
+  description: string;
+  receipt_url: string;
+};
+
+const toEditForm = (c: Reimbursement): EditFormState => ({
+  title: c.title,
+  category: c.category,
+  amount: String(c.amount),
+  expense_date: c.expense_date.slice(0, 10),
+  description: c.description ?? "",
+  receipt_url: c.receipt_url ?? "",
+});
+
+/** Once a claim is paid it's stamped onto a payslip — editing or deleting it
+ *  afterwards would leave that payslip referencing a changed or missing row. */
+const isLocked = (c: Reimbursement) => c.status === "paid";
 
 export default function PayrollReimbursementsPage() {
   const status = useBackendStatus();
@@ -54,6 +82,11 @@ export default function PayrollReimbursementsPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<Reimbursement | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [editTarget, setEditTarget] = useState<Reimbursement | null>(null);
+  const [editForm, setEditForm] = useState<EditFormState | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const nameOf = useMemo(() => {
     const map = new Map(
@@ -143,6 +176,50 @@ export default function PayrollReimbursementsPage() {
       toast.showError(err instanceof Error ? err.message : "Couldn't record the decision.");
     } finally {
       setDeciding(false);
+    }
+  };
+
+  const openEdit = (c: Reimbursement) => {
+    setEditError(null);
+    setEditTarget(c);
+    setEditForm(toEditForm(c));
+  };
+
+  const submitEdit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editTarget || !editForm) return;
+    const amount = Number(editForm.amount);
+    if (!editForm.title.trim()) {
+      setEditError("Give the claim a short title.");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      setEditError("Enter an amount greater than 0.");
+      return;
+    }
+    if (!editForm.expense_date) {
+      setEditError("When was the expense?");
+      return;
+    }
+    setEditError(null);
+    setSaving(true);
+    try {
+      await reimbursementsApi.update(editTarget.reimbursement_id, {
+        title: editForm.title.trim(),
+        category: editForm.category,
+        amount,
+        expense_date: editForm.expense_date,
+        description: editForm.description.trim() || undefined,
+        receipt_url: editForm.receipt_url.trim() || undefined,
+      });
+      toast.showSuccess("Claim updated.");
+      setEditTarget(null);
+      setEditForm(null);
+      load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Couldn't update the claim.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -360,17 +437,27 @@ export default function PayrollReimbursementsPage() {
                 </button>
               </>
             )}
-            {/* A paid claim is already on a payslip — deleting it would leave the
-                payslip referencing a row that no longer exists. */}
-            {c.status !== "paid" && (
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(c)}
-                aria-label={`Delete ${c.title}`}
-                className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
-              >
-                <Trash2 size={15} />
-              </button>
+            {/* A paid claim is already on a payslip — editing or deleting it
+                would leave that payslip referencing a changed or missing row. */}
+            {!isLocked(c) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => openEdit(c)}
+                  aria-label={`Edit ${c.title}`}
+                  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(c)}
+                  aria-label={`Delete ${c.title}`}
+                  className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </>
             )}
           </div>
         )}
@@ -445,6 +532,104 @@ export default function PayrollReimbursementsPage() {
             </div>
           </div>
         </form>
+      </Modal>
+
+      {/* Edit — the same fields the employee submits with, editable by HR up
+          until the claim is paid. */}
+      <Modal
+        open={!!editTarget && !!editForm}
+        onClose={() => {
+          setEditTarget(null);
+          setEditForm(null);
+        }}
+        title="Edit Expense Claim"
+        description={editTarget ? `${employeeLabel(editTarget)} — filed ${shortDate(editTarget.created_at)}` : ""}
+      >
+        {editForm && (
+          <form onSubmit={submitEdit}>
+            {editError && (
+              <p className="mb-4 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600">
+                {editError}
+              </p>
+            )}
+            <FormField
+              label="Title"
+              value={editForm.title}
+              onChange={(e) => setEditForm((f) => (f ? { ...f, title: e.target.value } : f))}
+            />
+            <label className="mb-5 block">
+              <span className="mb-2 block text-[15px] font-medium text-gray-900">Category</span>
+              <select
+                className={formSelectClass}
+                value={editForm.category}
+                onChange={(e) => setEditForm((f) => (f ? { ...f, category: e.target.value } : f))}
+              >
+                {REIMBURSEMENT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField
+                label="Amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={editForm.amount}
+                onChange={(e) => setEditForm((f) => (f ? { ...f, amount: e.target.value } : f))}
+              />
+              <FormField
+                label="Expense date"
+                type="date"
+                value={editForm.expense_date}
+                onChange={(e) => setEditForm((f) => (f ? { ...f, expense_date: e.target.value } : f))}
+              />
+            </div>
+            <FormField
+              label={<>Receipt URL <span className="font-normal text-gray-400">(optional)</span></>}
+              value={editForm.receipt_url}
+              onChange={(e) => setEditForm((f) => (f ? { ...f, receipt_url: e.target.value } : f))}
+            />
+            <label className="mb-5 block">
+              <span className="mb-2 block text-[15px] font-medium text-gray-900">
+                Description <span className="font-normal text-gray-400">(optional)</span>
+              </span>
+              <textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm((f) => (f ? { ...f, description: e.target.value } : f))}
+                rows={3}
+                className="w-full resize-none rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
+              />
+            </label>
+
+            {editTarget && editTarget.status !== "pending" && (
+              <p className="mb-5 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                This claim is already {editTarget.status} — changing it here does not undo that
+                decision. Reject and ask the employee to resubmit if the amount needs HR review again.
+              </p>
+            )}
+
+            <div className="flex flex-col-reverse gap-2.5 xs:flex-row">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditTarget(null);
+                  setEditForm(null);
+                }}
+                className="min-h-11 flex-1 rounded-full border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <div className="flex-1">
+                <PrimaryButton type="submit" loading={saving}>
+                  Save Changes
+                </PrimaryButton>
+              </div>
+            </div>
+          </form>
+        )}
       </Modal>
 
       <ConfirmDialog

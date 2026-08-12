@@ -130,6 +130,7 @@ export const leavePlannerApi = {
       // default (10 rows) — the calendar needs the whole year at once.
       holidaysApi.list({
         year: params.year,
+        eventType: "Holiday",
         pageSize: 0,
         departmentId: params.departmentId || undefined,
       }),

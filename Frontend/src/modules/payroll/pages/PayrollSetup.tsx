@@ -210,10 +210,10 @@ export default function PayrollSetupPage() {
 
                   {data.ready && (
                     <Link
-                      to="/payroll/periods"
+                      to="/payroll/run"
                       className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-4 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
                     >
-                      Go to Pay Periods <ArrowRight size={15} />
+                      Run Payroll <ArrowRight size={15} />
                     </Link>
                   )}
                 </div>

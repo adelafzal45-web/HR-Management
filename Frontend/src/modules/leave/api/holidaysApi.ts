@@ -20,10 +20,16 @@
 
 import { apiRequest, withDemoFallback } from "@/api/client";
 import { ENDPOINTS } from "@/app/config/endpoints";
+import { mockNotificationApi } from "@/mocks/hrMockData";
+
+/** `Holiday` is excluded from leave/attendance day counts; `Event` (a team
+ * dinner, a town hall) is calendar-and-notification only. */
+export type HolidayEventType = "Holiday" | "Event";
 
 export type Holiday = {
   holidayId: string;
   name: string;
+  eventType: HolidayEventType;
   /** ISO calendar date, `YYYY-MM-DD` (no time component). */
   holidayDate: string;
   description: string;
@@ -31,21 +37,29 @@ export type Holiday = {
   departmentId: string | null;
   departmentName: string;
   isRecurring: boolean;
+  /** Whether an announcement was requested when this was created/edited. */
+  notify: boolean;
+  /** Set once the announcement actually went out; null if never sent. */
+  notifiedAt: string | null;
 };
 
 export type HolidayPayload = {
   name: string;
+  eventType?: HolidayEventType;
   holidayDate: string;
   description?: string;
   /** null / omitted = company-wide. */
   departmentId?: string | null;
   isRecurring?: boolean;
+  /** Send an in-app notification to every active employee about this entry. */
+  notify?: boolean;
 };
 
 export type HolidayListParams = {
   search?: string;
   year?: number;
   departmentId?: string;
+  eventType?: HolidayEventType;
   page?: number;
   pageSize?: number;
 };
@@ -57,11 +71,14 @@ export type HolidayListResult = { data: Holiday[]; total: number };
 type ApiHoliday = {
   holiday_id: string;
   name: string;
+  event_type?: HolidayEventType;
   holiday_date: string;
   description?: string | null;
   department?: { department_id: string; department_name: string } | null;
   department_id?: string | null;
   is_recurring: boolean;
+  notify?: boolean;
+  notified_at?: string | null;
 };
 
 function adaptRow(raw: ApiHoliday): Holiday {
@@ -72,17 +89,21 @@ function adaptRow(raw: ApiHoliday): Holiday {
   return {
     holidayId: raw.holiday_id,
     name: raw.name,
+    eventType: raw.event_type ?? "Holiday",
     holidayDate: String(raw.holiday_date).slice(0, 10),
     description: raw.description ?? "",
     departmentId,
     departmentName,
     isRecurring: Boolean(raw.is_recurring),
+    notify: Boolean(raw.notify),
+    notifiedAt: raw.notified_at ? String(raw.notified_at) : null,
   };
 }
 
 function toApiPayload(payload: HolidayPayload): Record<string, unknown> {
   return {
     name: payload.name,
+    event_type: payload.eventType ?? "Holiday",
     holiday_date: payload.holidayDate,
     description: payload.description,
     // null (not "") tells the backend "company-wide". The DTO's @IsOptional()
@@ -91,6 +112,7 @@ function toApiPayload(payload: HolidayPayload): Record<string, unknown> {
     // reset) to company-wide scope.
     department_id: payload.departmentId ? payload.departmentId : null,
     is_recurring: payload.isRecurring ?? false,
+    notify: payload.notify ?? false,
   };
 }
 
@@ -98,6 +120,7 @@ function qs(params: HolidayListParams): string {
   const sp = new URLSearchParams();
   if (params.year) sp.set("year", String(params.year));
   if (params.departmentId) sp.set("department_id", params.departmentId);
+  if (params.eventType) sp.set("event_type", params.eventType);
   const str = sp.toString();
   return str ? `?${str}` : "";
 }
@@ -134,22 +157,27 @@ function makeId(): string {
 }
 
 const demoStore: Holiday[] = [
-  { holidayId: "demo-h1", name: "New Year's Day", holidayDate: "2026-01-01", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true },
-  { holidayId: "demo-h2", name: "Labour Day", holidayDate: "2026-05-01", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true },
-  { holidayId: "demo-h3", name: "Independence Day", holidayDate: "2026-08-14", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true },
-  { holidayId: "demo-h4", name: "Christmas Day", holidayDate: "2026-12-25", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true },
+  { holidayId: "demo-h1", name: "New Year's Day", eventType: "Holiday", holidayDate: "2026-01-01", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true, notify: false, notifiedAt: null },
+  { holidayId: "demo-h2", name: "Labour Day", eventType: "Holiday", holidayDate: "2026-05-01", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true, notify: false, notifiedAt: null },
+  { holidayId: "demo-h3", name: "Independence Day", eventType: "Holiday", holidayDate: "2026-08-14", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true, notify: false, notifiedAt: null },
+  { holidayId: "demo-h4", name: "Christmas Day", eventType: "Holiday", holidayDate: "2026-12-25", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true, notify: false, notifiedAt: null },
+  { holidayId: "demo-h5", name: "Eid-ul-Adha", eventType: "Holiday", holidayDate: "2026-08-16", description: "Public holiday for Eid-ul-Adha.", departmentId: null, departmentName: "Company-wide", isRecurring: false, notify: true, notifiedAt: "2026-07-01T09:00:00Z" },
+  { holidayId: "demo-h6", name: "Dinner", eventType: "Event", holidayDate: "2026-08-17", description: "Company dinner — everyone's invited.", departmentId: null, departmentName: "Company-wide", isRecurring: false, notify: true, notifiedAt: "2026-07-25T09:00:00Z" },
 ];
 
-// Mirror of HolidaysService.hasDuplicate: scope matched exactly; a recurring
-// holiday on either side collides on month+day across every year, two fixed
-// holidays collide only on the exact same date.
+// Mirror of HolidaysService.hasDuplicate: scope + event type matched exactly;
+// a recurring holiday on either side collides on month/day across every
+// year, two fixed entries collide only on the exact same date. A Holiday and
+// an Event on the same day never collide with each other.
 function demoCollides(payload: HolidayPayload, excludeId?: string): boolean {
   const scope = payload.departmentId ? payload.departmentId : null;
+  const type = payload.eventType ?? "Holiday";
   const [y, m, d] = payload.holidayDate.split("-");
   const recurring = payload.isRecurring ?? false;
   return demoStore.some((h) => {
     if (excludeId && h.holidayId === excludeId) return false;
     if ((h.departmentId ?? null) !== scope) return false;
+    if (h.eventType !== type) return false;
     const [ey, em, ed] = h.holidayDate.split("-");
     const sameMonthDay = em === m && ed === d;
     return recurring || h.isRecurring ? sameMonthDay : sameMonthDay && ey === y;
@@ -162,6 +190,26 @@ function demoDepartmentName(departmentId: string | null): string {
   return existing ? existing.departmentName : "Department";
 }
 
+// Fires the demo bell the same way the backend's `HolidaysService.announce`
+// does — best-effort, and never lets a notification hiccup fail the save
+// that already succeeded.
+function demoAnnounce(row: Holiday): void {
+  const dateLabel = new Date(`${row.holidayDate}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const isEvent = row.eventType === "Event";
+  mockNotificationApi
+    .create({
+      title: `${isEvent ? "New event" : "Upcoming holiday"}: ${row.name}`,
+      message: `${row.name} is scheduled on ${dateLabel}.${row.description ? ` ${row.description}` : ""}`,
+      type: "Announcement",
+    })
+    .catch(() => undefined);
+}
+
 const mockHolidaysApi = {
   list(params: HolidayListParams): HolidayListResult {
     let rows = demoStore;
@@ -171,20 +219,28 @@ const mockHolidaysApi = {
     if (params.departmentId) {
       rows = rows.filter((h) => h.departmentId === null || h.departmentId === params.departmentId);
     }
+    if (params.eventType) {
+      rows = rows.filter((h) => h.eventType === params.eventType);
+    }
     return applyClientFilters(rows, params);
   },
   create(payload: HolidayPayload): Holiday {
     if (demoCollides(payload)) throw new Error(DUPLICATE_MESSAGE);
+    const notify = payload.notify ?? false;
     const row: Holiday = {
       holidayId: makeId(),
       name: payload.name,
+      eventType: payload.eventType ?? "Holiday",
       holidayDate: payload.holidayDate,
       description: payload.description ?? "",
       departmentId: payload.departmentId ? payload.departmentId : null,
       departmentName: demoDepartmentName(payload.departmentId ? payload.departmentId : null),
       isRecurring: payload.isRecurring ?? false,
+      notify,
+      notifiedAt: notify ? new Date().toISOString() : null,
     };
     demoStore.push(row);
+    if (notify) demoAnnounce(row);
     return row;
   },
   update(id: string, payload: HolidayPayload): Holiday {
@@ -192,16 +248,23 @@ const mockHolidaysApi = {
     const idx = demoStore.findIndex((h) => h.holidayId === id);
     if (idx === -1) throw new Error("Holiday not found");
     const departmentId = payload.departmentId ? payload.departmentId : null;
+    const notify = payload.notify ?? false;
     const updated: Holiday = {
       ...demoStore[idx],
       name: payload.name,
+      eventType: payload.eventType ?? "Holiday",
       holidayDate: payload.holidayDate,
       description: payload.description ?? "",
       departmentId,
       departmentName: demoDepartmentName(departmentId),
       isRecurring: payload.isRecurring ?? false,
+      notify,
+      // A fresh notify request re-announces, mirroring the backend: editing
+      // and asking again is a deliberate re-send, not a no-op.
+      notifiedAt: notify ? new Date().toISOString() : demoStore[idx].notifiedAt,
     };
     demoStore[idx] = updated;
+    if (notify) demoAnnounce(updated);
     return updated;
   },
   remove(id: string): void {

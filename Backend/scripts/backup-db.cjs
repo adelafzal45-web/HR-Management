@@ -1,24 +1,21 @@
 // Full logical backup via pg_dump, taken before any destructive reset.
-// Connection settings are read from data-source.ts; the password is passed to
-// the child process through the environment so it never lands in a command
-// line, a log, or this repo.
+// Connection settings come from .env via dotenv, mirroring database.config.ts's
+// key names and dev fallbacks, so the backup targets exactly the database the
+// app serves. The password is passed to the child process through the
+// environment so it never lands in a command line, a log, or this repo.
+require('dotenv').config();
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 function readDataSourceConfig() {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'data-source.ts'), 'utf8');
-  const pick = (key) => {
-    const m = src.match(new RegExp(`${key}:\\s*'([^']*)'`));
-    return m ? m[1] : undefined;
-  };
-  const port = src.match(/port:\s*(\d+)/);
+  const s = (name, fallback) => process.env[name] || fallback;
   return {
-    host: pick('host'),
-    port: port ? port[1] : '5432',
-    user: pick('username'),
-    password: pick('password'),
-    database: pick('database'),
+    host: s('DB_HOST', 'localhost'),
+    port: s('DB_PORT', '5432'),
+    user: s('DB_USER', 'postgres'),
+    password: s('DB_PASSWORD', 'admin'),
+    database: s('DB_NAME', 'HR'),
   };
 }
 

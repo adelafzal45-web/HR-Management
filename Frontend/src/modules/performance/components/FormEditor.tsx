@@ -131,7 +131,7 @@ function toDraft(q: AppraisalFormDetail["questions"][number]): QuestionDraft {
     bankQuestionId: q.bankQuestionId,
     questionText: q.questionText,
     description: q.description ?? "",
-    kind: kindOf(q.questionType, q.ratingScale),
+    kind: kindOf(q.questionType, q.ratingScale, q.ratingMin),
     weightage: Number(q.weightage),
     isActive: q.isActive,
     isRequired: q.isRequired,
@@ -314,6 +314,7 @@ function toPayload(questions: QuestionDraft[]): FormQuestionInput[] {
       isActive: q.isActive,
       isRequired: q.isRequired,
       ratingScale: meta.ratingScale,
+      ratingMin: meta.ratingMin,
       minLabel: q.minLabel.trim() || undefined,
       maxLabel: q.maxLabel.trim() || undefined,
       options,
@@ -817,7 +818,7 @@ function QuestionCard({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-gray-700">
-                      Label for 1
+                      Label for {meta.ratingMin}
                     </span>
                     <input
                       type="text"

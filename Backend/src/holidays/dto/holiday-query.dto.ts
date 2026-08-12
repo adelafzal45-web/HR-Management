@@ -1,8 +1,18 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+
+import { HolidayEventType } from '../holiday.entity';
 
 export class HolidayQueryDto {
+  @ApiPropertyOptional({
+    enum: HolidayEventType,
+    description: 'Filter to just holidays or just events. Omit for both.',
+  })
+  @IsOptional()
+  @IsEnum(HolidayEventType)
+  event_type?: HolidayEventType;
+
   @ApiPropertyOptional({ description: 'Filter by calendar year' })
   @IsOptional()
   @Type(() => Number)

@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -119,7 +120,7 @@ export class FormQuestionInputDto {
     example: 10,
     minimum: 2,
     maximum: 100,
-    description: 'Reviewers rate 1..ratingScale. Defaults to 10.',
+    description: 'Reviewers rate ratingMin..ratingScale. Defaults to 10.',
   })
   @IsOptional()
   @Type(() => Number)
@@ -127,6 +128,19 @@ export class FormQuestionInputDto {
   @Min(2)
   @Max(100)
   ratingScale?: number;
+
+  @ApiPropertyOptional({
+    example: 1,
+    enum: [0, 1],
+    description:
+      'Lower bound of the rating scale. 1 (default) matches the classic ' +
+      '1–5 / 1–10 presets; 0 lets reviewers pick 0 as the lowest score.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([0, 1])
+  ratingMin?: number;
 
   @ApiPropertyOptional({ example: 'Needs improvement' })
   @IsOptional()

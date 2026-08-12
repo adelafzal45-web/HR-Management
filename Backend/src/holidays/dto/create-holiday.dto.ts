@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -9,12 +10,24 @@ import {
   MaxLength,
 } from 'class-validator';
 
+import { HolidayEventType } from '../holiday.entity';
+
 export class CreateHolidayDto {
   @ApiProperty({ example: 'New Year\u2019s Day' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
   name!: string;
+
+  @ApiPropertyOptional({
+    enum: HolidayEventType,
+    default: HolidayEventType.HOLIDAY,
+    description:
+      'Holiday = excluded from leave/attendance day counts. Event = calendar-only (e.g. a dinner, town hall) and never affects working-day counts.',
+  })
+  @IsOptional()
+  @IsEnum(HolidayEventType)
+  event_type?: HolidayEventType;
 
   @ApiProperty({ example: '2026-01-01' })
   @IsDateString()
@@ -39,4 +52,13 @@ export class CreateHolidayDto {
   @IsOptional()
   @IsBoolean()
   is_recurring?: boolean;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'When true, sends an in-app notification to every active employee announcing this holiday/event.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  notify?: boolean;
 }

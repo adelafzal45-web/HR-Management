@@ -16,7 +16,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { MailCheck, ExternalLink, RotateCcw } from "lucide-react";
+import { MailCheck, ExternalLink, RotateCcw, LogIn } from "lucide-react";
 import AuthLayout from "@/app/layouts/AuthLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import LoadingOverlay from "@/components/common/LoadingOverlay";
@@ -128,6 +128,13 @@ export default function ForgetPassword() {
  <RotateCcw size={16} />
  Use a different email
  </button>
+ <Link
+ to="/login"
+ className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-gray-200 py-3.5 text-[15px] font-medium text-gray-600 transition hover:bg-gray-50"
+ >
+ <LogIn size={16} />
+ Back to Login
+ </Link>
  </div>
 
  <p className="mt-8 text-[15px] text-gray-500">
@@ -177,9 +184,9 @@ export default function ForgetPassword() {
  </form>
 
  <p className="text-[15px] text-gray-500">
- Don't have an account?{" "}
- <Link to="/signup" className="font-medium text-brand-dark">
- Register Now!
+ Remembered your password?{" "}
+ <Link to="/login" className="font-medium text-brand-dark">
+ Back to Login
  </Link>
  </p>
  </AuthLayout>

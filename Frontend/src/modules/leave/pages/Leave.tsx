@@ -230,7 +230,7 @@ export default function Leave() {
  {(
  [
  { key: "requests", label: "My Requests" },
- { key: "ledger", label: "Balance Ledger" },
+ { key: "ledger", label: "Logs" },
  ] as const
  ).map((v) => (
  <button

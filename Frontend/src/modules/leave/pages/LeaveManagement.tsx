@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Pencil, Check, X, Download } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import DataTable, { type DataTableColumn, type SortDirection } from "@/components/tables/DataTable";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -15,6 +15,7 @@ import {
   type LeaveBalanceRow,
   type LeaveBalanceStatus,
 } from "@/modules/leave/api/leaveEntitlementsApi";
+import { leaveEntitlementAssignmentApi } from "@/modules/leave/api/leaveEntitlementAssignmentApi";
 import { departmentsApi, type Department } from "@/modules/settings/api/settingsApi";
 import { leaveTypesApi } from "@/modules/settings/api/settingsApi";
 import { employeesApi, type Employee } from "@/modules/employees/api/employeeApi";
@@ -73,6 +74,10 @@ function downloadCsv(filename: string, csv: string) {
 const EXPORT_PAGE_SIZE = 100;
 const EXPORT_MAX_PAGES = 50;
 
+// Inline edits (Total Entitlement / Status) always apply to the current
+// year's entitlement — matching the Leave Entitlements assignment page.
+const CURRENT_YEAR = new Date().getFullYear();
+
 export default function LeaveManagementPage() {
   const status = useBackendStatus();
   const toast = useToast();
@@ -99,6 +104,13 @@ export default function LeaveManagementPage() {
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [exporting, setExporting] = useState(false);
+
+  // Inline edit (Total Entitlement + Status) for a single row at a time —
+  // editingRowKey mirrors DataTable's rowKey (`${userId}:${leaveTypeId}`).
+  const [editingRowKey, setEditingRowKey] = useState<string | null>(null);
+  const [editEntitlement, setEditEntitlement] = useState("");
+  const [editStatus, setEditStatus] = useState<LeaveBalanceStatus>("active");
+  const [savingRowKey, setSavingRowKey] = useState<string | null>(null);
 
   const listParams = useMemo(
     () => ({
@@ -148,7 +160,7 @@ export default function LeaveManagementPage() {
 
   useEffect(() => {
     departmentsApi.listAll().then((res) => setDepartments(res.data)).catch(() => undefined);
-    leaveTypesApi.listAll().then(setLeaveTypes).catch(() => undefined);
+    leaveTypesApi.list({ pageSize: 1000 }).then((res) => setLeaveTypes(res.data)).catch(() => undefined);
     employeesApi.list({ pageSize: 1000 }).then((res) => setEmployees(res.data)).catch(() => undefined);
   }, []);
 
@@ -172,6 +184,73 @@ export default function LeaveManagementPage() {
   const handleSortChange = (key: string, dir: SortDirection) => {
     setSortKey(key);
     setSortDir(dir);
+  };
+
+  // Leaving a row mid-edit whenever the page/filters change under it — the
+  // row on screen may no longer be the one the inputs refer to.
+  useEffect(
+    () => setEditingRowKey(null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [search, page, pageSize, departmentFilter, leaveTypeFilter, employeeFilter, statusFilter, minRemaining, sortKey, sortDir],
+  );
+
+  const rowKeyOf = (r: LeaveBalanceRow) => `${r.userId}:${r.leaveTypeId}`;
+
+  const startEdit = (r: LeaveBalanceRow) => {
+    setEditingRowKey(rowKeyOf(r));
+    setEditEntitlement(String(r.totalEntitlement));
+    setEditStatus(r.status);
+  };
+
+  const cancelEdit = () => setEditingRowKey(null);
+
+  // Saves whichever of Total Entitlement / Status actually changed. The
+  // entitlement is written via the same "set" assignment the Leave
+  // Entitlements page uses (targeting this one employee), so it lands as a
+  // proper ledger entry rather than a silent overwrite; status is a plain
+  // employee-record update.
+  const handleSaveRow = async (r: LeaveBalanceRow) => {
+    const key = rowKeyOf(r);
+    const nextEntitlement = Number(editEntitlement);
+    if (!Number.isFinite(nextEntitlement) || nextEntitlement < 0) {
+      toast.showError("Enter a valid, non-negative entitlement.");
+      return;
+    }
+
+    const entitlementChanged = nextEntitlement !== r.totalEntitlement;
+    const statusChanged = editStatus !== r.status;
+    if (!entitlementChanged && !statusChanged) {
+      setEditingRowKey(null);
+      return;
+    }
+
+    setSavingRowKey(key);
+    try {
+      const tasks: Promise<unknown>[] = [];
+      if (entitlementChanged) {
+        tasks.push(
+          leaveEntitlementAssignmentApi.assign({
+            leaveTypeId: r.leaveTypeId,
+            year: CURRENT_YEAR,
+            target: { userId: r.userId },
+            mode: "set",
+            days: nextEntitlement,
+            note: "Updated from Employee Leaves table",
+          }),
+        );
+      }
+      if (statusChanged) {
+        tasks.push(employeesApi.setStatus(r.userId, editStatus));
+      }
+      await Promise.all(tasks);
+      toast.showSuccess("Leave balance updated.");
+      setEditingRowKey(null);
+      load();
+    } catch (err) {
+      toast.showError(err instanceof Error ? err.message : "Couldn't save changes.");
+    } finally {
+      setSavingRowKey(null);
+    }
   };
 
   // Pull every row matching the current filters (paging through the
@@ -218,18 +297,34 @@ export default function LeaveManagementPage() {
     }
   };
 
+  // Rows sort by employee name by default, so each employee's leave-type
+  // rows land contiguously — this marks only the first row per employee,
+  // which the "employee" column uses to blank out the repeats.
+  const firstRowKeyByEmployee = useMemo(() => {
+    const seenUsers = new Set<string>();
+    const firstKeys = new Set<string>();
+    for (const r of rows) {
+      if (!seenUsers.has(r.userId)) {
+        seenUsers.add(r.userId);
+        firstKeys.add(rowKeyOf(r));
+      }
+    }
+    return firstKeys;
+  }, [rows]);
+
   const columns: DataTableColumn<LeaveBalanceRow>[] = [
     {
       key: "employee",
       label: "Employee",
       sortable: true,
       sortKey: "employee_name",
-      render: (r) => (
-        <div className="min-w-0">
-          <p className="truncate font-medium text-gray-900">{r.employeeName}</p>
-          <p className="truncate text-xs text-gray-400">{r.employeeCode}</p>
-        </div>
-      ),
+      render: (r) =>
+        firstRowKeyByEmployee.has(rowKeyOf(r)) ? (
+          <div className="min-w-0">
+            <p className="truncate font-medium text-gray-900">{r.employeeName}</p>
+            <p className="truncate text-xs text-gray-400">{r.employeeCode}</p>
+          </div>
+        ) : null,
     },
     {
       key: "department",
@@ -256,8 +351,23 @@ export default function LeaveManagementPage() {
       key: "totalEntitlement",
       label: "Total Entitlement",
       align: "right",
-      hideBelow: "lg",
-      render: (r) => r.totalEntitlement,
+      // No hideBelow here (unlike the other secondary columns): this field
+      // is editable, so it needs to stay visible whenever a row is being
+      // edited, on every desktop width.
+      render: (r) =>
+        editingRowKey === rowKeyOf(r) ? (
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={editEntitlement}
+            onChange={(e) => setEditEntitlement(e.target.value)}
+            className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+            aria-label={`Total entitlement for ${r.employeeName}`}
+          />
+        ) : (
+          r.totalEntitlement
+        ),
     },
     { key: "usedLeave", label: "Used Leave", align: "right", hideBelow: "xl", render: (r) => r.usedLeave },
     {
@@ -286,7 +396,23 @@ export default function LeaveManagementPage() {
       key: "status",
       label: "Status",
       sortable: true,
-      render: (r) => <StatusBadge status={r.status} />,
+      render: (r) =>
+        editingRowKey === rowKeyOf(r) ? (
+          <select
+            value={editStatus}
+            onChange={(e) => setEditStatus(e.target.value as LeaveBalanceStatus)}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+            aria-label={`Status for ${r.employeeName}`}
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <StatusBadge status={r.status} />
+        ),
       filterable: true,
       filterOptions: STATUS_OPTIONS,
       filterPlaceholder: "All statuses",
@@ -302,6 +428,43 @@ export default function LeaveManagementPage() {
         columns={columns}
         rows={rows}
         rowKey={(r) => `${r.userId}:${r.leaveTypeId}`}
+        rowGroupKey={(r) => r.userId}
+        actions={(r) => {
+          const key = rowKeyOf(r);
+          const isEditing = editingRowKey === key;
+          const isSaving = savingRowKey === key;
+          if (!isEditing) {
+            return (
+              <button
+                type="button"
+                onClick={() => startEdit(r)}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 transition hover:border-brand/60 hover:text-brand-dark"
+              >
+                <Pencil size={13} /> Edit
+              </button>
+            );
+          }
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => handleSaveRow(r)}
+                className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand to-brand-dark px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm transition hover:brightness-95 disabled:opacity-50"
+              >
+                <Check size={13} /> {isSaving ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={cancelEdit}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                <X size={13} /> Cancel
+              </button>
+            </div>
+          );
+        }}
         loading={loading}
         search={search}
         onSearchChange={setSearch}
@@ -356,19 +519,16 @@ export default function LeaveManagementPage() {
           </div>
         }
         toolbarRight={
-          <div className="flex items-center gap-2">
-            {(["csv", "excel", "json"] as const).map((fmt) => (
-              <button
-                key={fmt}
-                type="button"
-                disabled={exporting}
-                onClick={() => handleExport(fmt, "all")}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:border-brand/60 hover:text-brand-dark disabled:opacity-50"
-              >
-                {exporting ? "Exporting…" : fmt === "excel" ? "Export Excel" : `Export ${fmt.toUpperCase()}`}
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => handleExport("csv", "all")}
+            title="Export CSV"
+            aria-label="Export CSV"
+            className="flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2.5 text-gray-600 transition hover:border-brand/60 hover:text-brand-dark disabled:opacity-50"
+          >
+            <Download size={16} />
+          </button>
         }
       />
     </DashboardLayout>

@@ -1,17 +1,20 @@
 // Grouped sub-navigation shell for the HR/Admin payroll workspace — the same
 // collapsible-sidebar pattern as SettingsLayout, so payroll reads as one
-// coherent surface (Overview / Runs / Configuration / Insights) rather than a
-// scatter of routes. Pages render themselves inside via `children`.
+// coherent surface rather than a scatter of routes. Pages render themselves
+// inside via `children`.
 //
-// Every leaf is now a live, RBAC-guarded route: Overview (Dashboard), Payroll
-// Runs (Periods, Process, Payslips, Claims, Approvals), Configuration (Activate
-// Payroll setup gate, Settings, Components, Structures, Rule Builder, Tax,
-// Loans, Bonuses) and Insights (Reports). The `soon` flag remains on the tab
-// type for any future roadmap leaf, but nothing carries it today.
+// Four groups, ordered by how often you touch them: Run (Dashboard, Run
+// Payroll), Records (Payslips, Reports), Requests (Loans, Expense Claims,
+// Approvals) and Configuration (Activate Payroll, Settings, Components,
+// Structures, Rule Builder, Tax, Bonuses). Configuration is "set up once", so
+// it sits at the bottom and starts collapsed. Pay Periods stays routed but off
+// the nav — Run Payroll is the way into a cycle — and is reachable from the
+// Dashboard. The `soon` flag remains on the tab type for any future roadmap
+// leaf, but nothing carries it today.
 //
 // Each group also carries a one-line `hint` — payroll has a lot of screens and
-// the group labels alone ("Runs", "Configuration") don't say which one to open
-// first. The hint answers "what is this section for?" in plain language.
+// the group labels alone don't say which one to open first. The hint answers
+// "what is this section for?" in plain language.
 
 import { useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
@@ -35,7 +38,8 @@ import {
   ChevronDown,
   Wallet,
   Cog,
-  LineChart,
+  Archive,
+  Inbox,
 } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 
@@ -58,21 +62,32 @@ type PayrollGroup = {
 
 const GROUPS: PayrollGroup[] = [
   {
-    key: "overview",
-    label: "Overview",
-    icon: LayoutDashboard,
-    hint: "Where payroll stands right now.",
-    items: [{ to: "/payroll/dashboard", label: "Dashboard", icon: LayoutDashboard }],
+    key: "run",
+    label: "Run",
+    icon: PlayCircle,
+    hint: "Start each pay cycle here.",
+    items: [
+      { to: "/payroll/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/payroll/run", label: "Run Payroll", icon: PlayCircle },
+    ],
   },
   {
-    key: "runs",
-    label: "Payroll Runs",
-    icon: PlayCircle,
-    hint: "Do this every month: open a period, process it, share payslips.",
+    key: "records",
+    label: "Records",
+    icon: Archive,
+    hint: "Payslips and cost reports for past runs.",
     items: [
-      { to: "/payroll/periods", label: "Pay Periods", icon: CalendarRange },
-      { to: "/payroll/run", label: "Process Payroll", icon: PlayCircle },
       { to: "/payroll/payslips", label: "Payslips", icon: ReceiptText },
+      { to: "/payroll/reports", label: "Reports", icon: BarChart3 },
+    ],
+  },
+  {
+    key: "requests",
+    label: "Requests",
+    icon: Inbox,
+    hint: "Employee loans, claims and sign-off.",
+    items: [
+      { to: "/payroll/loans", label: "Loans & Advances", icon: HandCoins },
       { to: "/payroll/reimbursements", label: "Expense Claims", icon: Receipt },
       { to: "/payroll/approvals", label: "Approvals", icon: CheckCheck },
     ],
@@ -81,7 +96,7 @@ const GROUPS: PayrollGroup[] = [
     key: "configuration",
     label: "Configuration",
     icon: Cog,
-    hint: "Set up once. Start with Activate Payroll — it can fill this in for you.",
+    hint: "Set up once. Start with Activate Payroll.",
     items: [
       { to: "/payroll/setup", label: "Activate Payroll", icon: ListChecks },
       { to: "/payroll/settings", label: "General Settings", icon: SlidersHorizontal },
@@ -89,27 +104,28 @@ const GROUPS: PayrollGroup[] = [
       { to: "/payroll/structures", label: "Salary Structures", icon: Layers },
       { to: "/payroll/rules", label: "Rule Builder", icon: Scale },
       { to: "/payroll/tax", label: "Tax & Statutory", icon: Landmark },
-      { to: "/payroll/loans", label: "Loans & Advances", icon: HandCoins },
       { to: "/payroll/bonuses", label: "Bonuses & Incentives", icon: Gift },
     ],
   },
-  {
-    key: "insights",
-    label: "Insights",
-    icon: LineChart,
-    hint: "What a run cost, per employee and per component.",
-    items: [{ to: "/payroll/reports", label: "Reports", icon: BarChart3 }],
-  },
 ];
 
-const ALL_TABS = GROUPS.flatMap((g) => g.items);
+// Routed payroll screens that intentionally aren't in the nav. Pay Periods is
+// reached through Run Payroll (and the Dashboard), but its breadcrumb still
+// needs a label, so it's merged into ALL_TABS — same pattern as SettingsLayout.
+const HIDDEN_TABS: PayrollTab[] = [
+  { to: "/payroll/periods", label: "Pay Periods", icon: CalendarRange },
+];
+
+const ALL_TABS = [...GROUPS.flatMap((g) => g.items), ...HIDDEN_TABS];
 
 // Remembers which groups are expanded across visits, same pattern as
 // SettingsLayout and the main Sidebar's fold state.
 const OPEN_GROUPS_STORAGE_KEY = "technocues:payroll-open-groups";
 
 function defaultOpenGroups(): Record<string, boolean> {
-  return Object.fromEntries(GROUPS.map((g) => [g.key, true]));
+  // Configuration is "set up once", so it starts collapsed — out of the way but
+  // one click open. Run / Records / Requests start expanded.
+  return Object.fromEntries(GROUPS.map((g) => [g.key, g.key !== "configuration"]));
 }
 
 function loadOpenGroups(): Record<string, boolean> {
@@ -160,8 +176,9 @@ export default function PayrollLayout({
       </nav>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
-        {/* Grouped nav — collapsible sections keep related screens (Runs /
-            Configuration / Insights) clustered as the payroll surface grows. */}
+        {/* Grouped nav — collapsible sections keep related screens (Run /
+            Records / Requests / Configuration) clustered as the payroll surface
+            grows. */}
         <div className="w-full shrink-0 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-gray-100 lg:w-64">
           <div className="flex flex-col gap-0.5">
             {GROUPS.map((group) => {
