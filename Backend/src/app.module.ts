@@ -52,6 +52,7 @@ import { PayrollTaxModule } from './payroll-tax/payroll-tax.module';
 import { PayrollLoansModule } from './payroll-loans/payroll-loans.module';
 import { ReimbursementsModule } from './reimbursements/reimbursements.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { BiometricModule } from './biometric/biometric.module';
 
 @Module({
   imports: [
@@ -218,6 +219,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     // so a dashboard tile always agrees with the screen it links to. Registered
     // last because it depends on those modules and nothing depends on it.
     DashboardModule,
+
+    BiometricModule,
   ],
 
   controllers: [AppController],

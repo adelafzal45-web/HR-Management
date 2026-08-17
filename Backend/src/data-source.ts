@@ -42,7 +42,7 @@ import { EmployeeDocument } from './employee-documents/employee-document.entity'
 import { Holiday } from './holidays/holiday.entity';
 import { LeaveEntitlement } from './leave-entitlements/leave-entitlement.entity';
 import { LeaveHistory } from './leave-entitlements/leave-history.entity';
-
+import { BiometricUser } from './biometric/biometric.entity';
 import { PayrollRule } from './payroll-rules/payroll-rules.entity';
 import { TaxConfig, TaxSlab } from './payroll-tax/payroll-tax.entity';
 import {
@@ -102,6 +102,7 @@ export const AppDataSource = new DataSource({
     EmployeeLoan,
     LoanInstallment,
     Reimbursement,
+    BiometricUser,
   ],
 
   migrations: ['src/migrations/*.ts'],

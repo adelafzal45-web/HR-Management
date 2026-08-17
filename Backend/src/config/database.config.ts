@@ -41,7 +41,7 @@ export const databaseConfig = {
   host: setting('DB_HOST', 'localhost'),
   port,
   username: setting('DB_USER', 'postgres'),
-  password: setting('DB_PASSWORD', 'admin'),
+  password: setting('DB_PASSWORD', '123454321'),
   database: setting('DB_NAME', 'HR'),
  
 
