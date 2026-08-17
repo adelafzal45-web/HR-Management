@@ -14,6 +14,7 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { ATTENDANCE_STATUSES } from '../attendance-status';
+import { ATTENDANCE_SOURCES } from '../attendance-source';
 
 /** "HH:mm:ss" on a 24-hour clock. */
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/;
@@ -117,6 +118,19 @@ export class CreateAttendanceDto {
     message: `attendance_status must be one of: ${ATTENDANCE_STATUSES.join(', ')}`,
   })
   attendance_status!: string;
+
+  @ApiPropertyOptional({
+    example: 'Online',
+    enum: ATTENDANCE_SOURCES,
+    description:
+      'Where the record came from: Device (a physical terminal) or Online ' +
+      '(self-service / remote manual entry). Defaults to Online when omitted.',
+  })
+  @IsOptional()
+  @IsIn(ATTENDANCE_SOURCES, {
+    message: `source must be one of: ${ATTENDANCE_SOURCES.join(', ')}`,
+  })
+  source?: string;
 }
 
 export { MAX_HOURS_PER_DAY };

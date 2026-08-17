@@ -17,13 +17,16 @@ import { PrimaryButton } from "@/components/forms/FormField";
 import { useToast } from "@/app/providers/ToastContext";
 import {
  adminAttendanceApi,
+ ATTENDANCE_SOURCES,
+ ATTENDANCE_STATUSES,
+ DEFAULT_ATTENDANCE_SOURCE,
  type AdminAttendanceStatus,
+ type AttendanceSource,
  type BulkMarkResult,
 } from "@/modules/settings/api/adminOpsApi";
 import type { Department } from "@/modules/settings/api/settingsApi";
 import type { Employee } from "@/modules/employees/api/employeeApi";
 
-const STATUS_OPTIONS: AdminAttendanceStatus[] = ["Present", "Late", "Half-Day", "Absent", "On Leave", "Holiday"];
 const WORKING_STATUSES: AdminAttendanceStatus[] = ["Present", "Late", "Half-Day"];
 
 type Mode = "single" | "bulk";
@@ -53,6 +56,7 @@ export default function MarkAttendanceModal({
  const [mode, setMode] = useState<Mode>("single");
  const [date, setDate] = useState(todayIso());
  const [status, setStatus] = useState<AdminAttendanceStatus>("Present");
+ const [source, setSource] = useState<AttendanceSource>(DEFAULT_ATTENDANCE_SOURCE);
  const [checkIn, setCheckIn] = useState("09:00");
  const [checkOut, setCheckOut] = useState("17:00");
 
@@ -107,6 +111,7 @@ export default function MarkAttendanceModal({
  await adminAttendanceApi.markFor(employeeId, {
  attendanceDate: date,
  status,
+ source,
  checkIn: needsTimes ? checkIn : null,
  checkOut: needsTimes ? checkOut : null,
  });
@@ -136,6 +141,7 @@ export default function MarkAttendanceModal({
  const res = await adminAttendanceApi.bulkMark({
  attendanceDate: date,
  status,
+ source,
  checkIn: needsTimes ? checkIn : null,
  checkOut: needsTimes ? checkOut : null,
  allActive: scope === "all",
@@ -279,13 +285,35 @@ export default function MarkAttendanceModal({
  <label className="block">
  <span className={labelClass}>Status</span>
  <select value={status} onChange={(e) => setStatus(e.target.value as AdminAttendanceStatus)} className={fieldClass}>
- {STATUS_OPTIONS.map((s) => (
+ {ATTENDANCE_STATUSES.map((s) => (
  <option key={s} value={s}>
  {s}
  </option>
  ))}
  </select>
  </label>
+ </div>
+
+ <div className="mt-4">
+ <span className={labelClass}>Source</span>
+ <div className="grid grid-cols-2 gap-2">
+ {ATTENDANCE_SOURCES.map((s) => (
+ <button
+ key={s}
+ type="button"
+ onClick={() => setSource(s)}
+ aria-pressed={source === s}
+ className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+ source === s ? "border-brand bg-brand-light/40 text-brand-dark" : "border-gray-200 text-gray-600 hover:border-brand/50"
+ }`}
+ >
+ {s}
+ </button>
+ ))}
+ </div>
+ <p className="mt-1.5 text-xs text-gray-400">
+ Online for remote or manual entries; Device for biometric or terminal punches.
+ </p>
  </div>
 
  {needsTimes && (

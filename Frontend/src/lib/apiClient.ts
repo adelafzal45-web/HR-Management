@@ -49,6 +49,46 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
 }
 
+/**
+ * Normalize whatever a list endpoint returns into the `{ data, total }` shape
+ * the frontend consumes. Real NestJS endpoints don't agree on one envelope: a
+ * bare array, `{ data, total }`, `{ items, count }`, `{ results, total }`,
+ * `{ rows, count }`, or a nested `{ data: { rows, count } }` all appear.
+ *
+ * An unrecognized shape THROWS rather than degrading to `{ data: [], total: 0 }`.
+ * A silent empty result would render as a legitimate "no records" state and
+ * bury a real backend/contract mismatch — exactly the fake-empty fallback this
+ * codebase is being cleaned of. The throw is an `ApiError`, so it lands in the
+ * same error/Retry path every screen already handles.
+ */
+export function normalizeListResult<T>(raw: unknown): { data: T[]; total: number } {
+  if (Array.isArray(raw)) {
+    return { data: raw as T[], total: raw.length };
+  }
+
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    const list = obj.data ?? obj.items ?? obj.results ?? obj.rows ?? obj.records;
+
+    if (Array.isArray(list)) {
+      const total = obj.total ?? obj.count ?? obj.totalCount ?? list.length;
+      return { data: list as T[], total: typeof total === "number" ? total : list.length };
+    }
+
+    // Nest-style nested envelope: { data: { rows, count } }
+    if (list && typeof list === "object") {
+      const nested = list as Record<string, unknown>;
+      const nestedList = nested.rows ?? nested.items ?? nested.data;
+      if (Array.isArray(nestedList)) {
+        const total = nested.count ?? nested.total ?? nestedList.length;
+        return { data: nestedList as T[], total: typeof total === "number" ? total : nestedList.length };
+      }
+    }
+  }
+
+  throw new ApiError(0, "The server returned data in an unexpected format.", raw);
+}
+
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
@@ -61,6 +101,52 @@ type RequestOptions = {
    */
   skipRefresh?: boolean;
 };
+
+// ============================================================================
+// Request timeout.
+//
+// A fetch with no deadline can hang indefinitely on a half-open connection —
+// the tab shows a spinner forever with nothing to react to. Every request
+// therefore runs against a combined AbortSignal: the caller's own signal (if
+// any) OR a default 30s deadline, whichever fires first. A timeout surfaces as
+// ApiError(0, "…timed out") — the same status as a network failure — so the
+// loading/error UI treats "server never answered" and "server unreachable"
+// identically, and never mistakes either for a real HTTP result.
+// ============================================================================
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * Bridges the caller's optional signal and a timeout into one signal for
+ * `fetch`, plus `didTimeout()` to tell the two abort causes apart and a
+ * `cleanup()` to clear the timer / detach the listener once the attempt
+ * settles. Created fresh per attempt so the 401 refresh-and-replay gets its
+ * own full budget.
+ */
+function withTimeout(callerSignal: AbortSignal | undefined, timeoutMs: number) {
+  const controller = new AbortController();
+  let timedOut = false;
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  const onCallerAbort = () => controller.abort();
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    else callerSignal.addEventListener("abort", onCallerAbort);
+  }
+
+  return {
+    signal: controller.signal,
+    didTimeout: () => timedOut,
+    cleanup: () => {
+      clearTimeout(timer);
+      callerSignal?.removeEventListener("abort", onCallerAbort);
+    },
+  };
+}
 
 // ============================================================================
 // Access-token refresh.
@@ -216,23 +302,33 @@ export async function apiRequest<T = unknown>(
       headers["Authorization"] = `Bearer ${token}`;
     }
 
+    const timeout = withTimeout(options.signal, DEFAULT_TIMEOUT_MS);
     try {
       return await fetch(`${API_BASE_URL}${path}`, {
         method: options.method ?? "GET",
         headers,
         body:
           options.body !== undefined ? JSON.stringify(options.body) : undefined,
-        signal: options.signal,
+        signal: timeout.signal,
         // Sends the httpOnly refresh cookie. Requires the backend to name an
         // explicit CORS origin with credentials: true — a wildcard origin is
         // rejected by the browser for credentialed requests.
         credentials: "include",
       });
-    } catch {
+    } catch (err) {
+      if (timeout.didTimeout()) {
+        throw new ApiError(0, `The request to ${path} timed out. Please try again.`);
+      }
+      // A caller-initiated abort (deps changed, component unmounted) propagates
+      // as-is, so callers keying off `signal.aborted` ignore it rather than
+      // seeing it mislabeled as the backend being down.
+      if (options.signal?.aborted) throw err;
       throw new ApiError(
         0,
         "Cannot reach the backend. Is it running at " + API_BASE_URL + "?",
       );
+    } finally {
+      timeout.cleanup();
     }
   };
 
@@ -267,7 +363,7 @@ export async function apiRequest<T = unknown>(
 
   if (!res.ok) {
     const message =
-      (data && typeof data === "object" && "message" in (data as any) && (data as any).message) ||
+      (data && typeof data === "object" && "message" in (data as Record<string, unknown>) && (data as Record<string, unknown>).message) ||
       `Request failed (${res.status})`;
     throw new ApiError(
       res.status,
@@ -303,19 +399,26 @@ export async function apiUpload<T = unknown>(
     const token = getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
+    const timeout = withTimeout(options.signal, DEFAULT_TIMEOUT_MS);
     try {
       return await fetch(`${API_BASE_URL}${path}`, {
         method: options.method ?? "POST",
         headers,
         body: formData,
-        signal: options.signal,
+        signal: timeout.signal,
         credentials: "include",
       });
-    } catch {
+    } catch (err) {
+      if (timeout.didTimeout()) {
+        throw new ApiError(0, `The upload to ${path} timed out. Please try again.`);
+      }
+      if (options.signal?.aborted) throw err;
       throw new ApiError(
         0,
         "Cannot reach the backend. Is it running at " + API_BASE_URL + "?",
       );
+    } finally {
+      timeout.cleanup();
     }
   };
 
@@ -345,7 +448,7 @@ export async function apiUpload<T = unknown>(
 
   if (!res.ok) {
     const message =
-      (data && typeof data === "object" && "message" in (data as any) && (data as any).message) ||
+      (data && typeof data === "object" && "message" in (data as Record<string, unknown>) && (data as Record<string, unknown>).message) ||
       `Upload failed (${res.status})`;
     throw new ApiError(
       res.status,
@@ -379,19 +482,26 @@ export async function apiDownload(
     // proxies, and there is nothing to describe.
     if (options.body) headers["Content-Type"] = "application/json";
 
+    const timeout = withTimeout(options.signal, DEFAULT_TIMEOUT_MS);
     try {
       return await fetch(`${API_BASE_URL}${path}`, {
         method: options.method ?? "GET",
         headers,
         body: options.body,
-        signal: options.signal,
+        signal: timeout.signal,
         credentials: "include",
       });
-    } catch {
+    } catch (err) {
+      if (timeout.didTimeout()) {
+        throw new ApiError(0, `The export from ${path} timed out. Please try again.`);
+      }
+      if (options.signal?.aborted) throw err;
       throw new ApiError(
         0,
         "Cannot reach the backend. Is it running at " + API_BASE_URL + "?",
       );
+    } finally {
+      timeout.cleanup();
     }
   };
 
@@ -517,6 +627,10 @@ export const ENDPOINTS = {
     // Working-day flags per calendar day, so reports can shade non-working
     // days instead of reimplementing the fallback ladder client-side.
     workingDayCalendar: "/attendance/working-day-calendar",
+    // HR/Admin marks many employees (or a whole department / all active) for a
+    // single day in one request. A literal path, declared before `:id`, so it
+    // is never parsed as an attendance id.
+    bulkMark: "/attendance/bulk-mark",
     // Self-service. The server takes the employee from the JWT, stamps its own
     // clock and decides Late from the assigned shift — none of which the
     // browser is allowed to supply. Declared before `:id` on the controller,
@@ -528,7 +642,51 @@ export const ENDPOINTS = {
       checkOut: "/attendance/check-out",
     },
   },
-  leaveRequests: { base: "/leave-requests", byId: (id: string) => `/leave-requests/${id}` },
+  leaveRequests: {
+    base: "/leave-requests",
+    byId: (id: string) => `/leave-requests/${id}`,
+    // Token-scoped self-service (GET my requests + POST create). `base` is
+    // org-wide and gated on leave-request.view/.create, which the Employee role
+    // does not hold; `me` needs only a valid JWT and resolves the employee from
+    // the token.
+    me: "/leave-requests/me",
+  },
+
+  // Meeting scheduling and invitations. POST resolves the invitee list from the
+  // chosen audience (specific people / a department / everyone); email and
+  // in-app delivery each follow the meeting's own notify_email / notify_in_app
+  // flag. `me` is token-scoped (the meetings the caller organizes or is invited
+  // to); `base` is org-wide and gated on meeting.view.
+  meetings: {
+    base: "/meetings",
+    byId: (id: string) => `/meetings/${id}`,
+    cancel: (id: string) => `/meetings/${id}/cancel`,
+    me: "/meetings/me",
+  },
+
+  // Admin/HR "Employee Leave Management": one row per (employee, leave type)
+  // with entitlement/used/remaining. `preview` (POST) resolves a target group
+  // and returns current balances before assigning; `base` (POST) bulk
+  // creates/increases/deducts; `adjust` (PATCH) moves a single entitlement.
+  // `me.*` are token-scoped self-service; the org-wide `balances`/`history`
+  // need leave-entitlement.view / leave-history.view.
+  leaveEntitlements: {
+    base: "/leave-entitlements",
+    balances: "/leave-entitlements/balances",
+    preview: "/leave-entitlements/preview",
+    adjust: (id: string) => `/leave-entitlements/${id}/adjust`,
+    history: "/leave-entitlements/history",
+    me: {
+      balances: "/leave-entitlements/me/balances",
+      history: "/leave-entitlements/me/history",
+    },
+  },
+
+  // Public Holidays calendar — company-wide or department-scoped, optionally
+  // recurring yearly. GET returns a plain array with the department relation
+  // joined; POST/PATCH enforce duplicate prevention via a 409.
+  holidays: { base: "/holidays", byId: (id: string) => `/holidays/${id}` },
+
   // Legacy flat payroll (basic/allowance/bonus/deduction/tax/net per month).
   // Kept read-only for history; superseded by `payrollEngine` below.
   payroll: { base: "/payroll", byId: (id: string) => `/payroll/${id}` },
@@ -680,12 +838,21 @@ export const ENDPOINTS = {
     me: "/notifications/me",
     markRead: (id: string) => `/notifications/me/${id}/read`,
     markAllRead: "/notifications/me/read-all",
+    // Staged before the send: the file is validated and stored first, and the
+    // JSON create then references the URL it returned — so a rejected file is
+    // reported before the sender commits to an audience.
+    attachment: "/notifications/attachment",
   },
 
   // Company details + branding. Single global row, so no :id — the backend
   // pins it to id = 1. `branding` is @Public(): the login screen renders the
   // logo and themes from primary_color before any token exists.
   companySettings: { base: "/company-settings", branding: "/company-settings/branding" },
+
+  // Which employee fields are required. Single global row (id=1), so no :id.
+  // GET is authentication-only (it drives both the admin employee form and the
+  // self-service profile edit); PATCH is gated on employee-fields.manage.
+  employeeFieldSettings: { base: "/employee-field-settings" },
 
   leaveTypes: { base: "/leave-types", byId: (id: string) => `/leave-types/${id}` },
 

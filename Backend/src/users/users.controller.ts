@@ -112,7 +112,7 @@ export class UserController {
   @ApiOperation({
     summary: 'Team Leads, optionally scoped to one department',
     description:
-      'Powers the Team Lead dropdown on the employee form. When department_id is supplied, only active Team Leads of that department are returned.',
+      'Powers the evaluator (Team Lead) dropdown on the employee form. Returns active Team Leads across all departments; pass department_id only to narrow the list.',
   })
   @ApiQuery({ name: 'department_id', required: false, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Matching Team Leads.' })

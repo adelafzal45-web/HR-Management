@@ -65,24 +65,25 @@ import {
   type UpdateEmployeePayload,
 } from "@/modules/employees/types/employee.types";
 import {
-  ADDRESS_REQUIRED_MESSAGE,
   compact,
-  hasAnyAddressField,
   validateAccountNumber,
   validateDate,
   validateDateOfBirth,
   validateEmail,
   validateEmployeeCode,
   validateName,
-  validateOptionalName,
   validateOptionalPhone,
-  validateOptionalPostalCode,
   validatePassword,
-  validatePhone,
   validateRoutingCode,
   validateSalary,
   type FieldError,
 } from "@/modules/employees/validation/employeeValidation";
+import {
+  employeeFieldSettingsApi,
+  DEFAULT_EMPLOYEE_FIELD_CONFIG,
+  type EmployeeFieldConfig,
+  type EmployeeFieldKey,
+} from "@/modules/settings/api/employeeFieldSettingsApi";
 
 import PhotoUpload from "@/modules/employees/components/PhotoUpload";
 import LeaveTypesPicker, {
@@ -100,17 +101,14 @@ import {
   SectionCard,
   Select,
   SubmitError,
+  Textarea,
   Toggle,
   ValidationSummary,
 } from "@/modules/employees/components/EmployeeFormShell";
 import {
-  COUNTRIES,
   DEFAULT_COUNTRY_CODE,
   countryByCode,
-  countryByName,
-  joinPhone,
   splitPhone,
-  statesForCountryName,
 } from "@/modules/employees/data/geo";
 
 // ---- Form state -------------------------------------------------------------
@@ -131,11 +129,7 @@ type FormState = {
   phone: string;
   password: string;
 
-  street_address: string;
-  city: string;
-  state_province: string;
-  postal_code: string;
-  country: string;
+  address: string;
 
   employee_code: string;
   joining_date: string;
@@ -162,9 +156,8 @@ type FormState = {
 /** The spec's stated default: 01-01-2000. */
 const DEFAULT_DOB = "2000-01-01";
 
-/** Address and phone both start on the company's home country. */
+/** The phone field starts on the company's home dial code. */
 const DEFAULT_COUNTRY = countryByCode(DEFAULT_COUNTRY_CODE);
-const DEFAULT_COUNTRY_NAME = DEFAULT_COUNTRY?.name ?? "Pakistan";
 const DEFAULT_DIAL = DEFAULT_COUNTRY?.dial ?? "+92";
 
 /**
@@ -190,11 +183,7 @@ const emptyForm = (): FormState => ({
   email: "",
   phone: "",
   password: "",
-  street_address: "",
-  city: "",
-  state_province: "",
-  postal_code: "",
-  country: DEFAULT_COUNTRY_NAME,
+  address: "",
   employee_code: "",
   joining_date: todayISO(),
   employee_type: DEFAULT_EMPLOYMENT_TYPE,
@@ -226,14 +215,7 @@ function formFromEmployee(e: Employee): FormState {
     email: e.email ?? "",
     phone: e.phone ?? "",
     password: "",
-    // Fall back to the legacy free-text `address` only when the structured
-    // column is empty, so an old record still shows something recognisable
-    // rather than a blank street field.
-    street_address: e.street_address ?? e.address ?? "",
-    city: e.city ?? "",
-    state_province: e.state_province ?? "",
-    postal_code: e.postal_code ?? "",
-    country: e.country ?? "",
+    address: e.address ?? "",
     employee_code: e.employee_code ?? "",
     joining_date: dateOnly(e.joining_date),
     employee_type: e.employee_type ?? DEFAULT_EMPLOYMENT_TYPE,
@@ -261,7 +243,7 @@ const SECTIONS = [
   { id: "contact", label: "Contact", icon: PhoneIcon },
   { id: "address", label: "Address", icon: MapPin },
   { id: "employment", label: "Employment Details", icon: Briefcase },
-  { id: "team", label: "Team Lead", icon: Users },
+  { id: "team", label: "Evaluator", icon: Users },
   { id: "leave", label: "Leave Types", icon: CalendarDays },
   { id: "payroll", label: "Payroll", icon: Wallet },
   { id: "documents", label: "Documents", icon: FileUp },
@@ -277,14 +259,11 @@ const FIELD_SECTION: Partial<Record<keyof FormState, SectionId>> = {
   last_name: "personal",
   date_of_birth: "personal",
   gender: "personal",
+  blood_group: "personal",
   email: "contact",
   phone: "contact",
   password: "contact",
-  street_address: "address",
-  city: "address",
-  state_province: "address",
-  postal_code: "address",
-  country: "address",
+  address: "address",
   employee_code: "employment",
   joining_date: "employment",
   department_id: "employment",
@@ -292,8 +271,11 @@ const FIELD_SECTION: Partial<Record<keyof FormState, SectionId>> = {
   job_category_id: "employment",
   shift_id: "employment",
   salary: "payroll",
+  bank_name: "payroll",
   bank_account_number: "payroll",
   bank_routing_code: "payroll",
+  emergency_contact_name: "emergency",
+  emergency_contact_relationship: "emergency",
   emergency_contact_phone: "emergency",
   role_id: "system",
 };
@@ -369,6 +351,13 @@ export default function EmployeeForm({
   const [teamLeads, setTeamLeads] = useState<Employee[]>([]);
   const [teamLeadsLoading, setTeamLeadsLoading] = useState(false);
 
+  // Which employee fields are Required vs Optional (Settings → Employee Fields).
+  // Seeded with the defaults so the required asterisks are right on first paint;
+  // the effective config replaces them once loaded.
+  const [fieldConfig, setFieldConfig] = useState<EmployeeFieldConfig>(
+    DEFAULT_EMPLOYEE_FIELD_CONFIG,
+  );
+
   const sectionRefs = useRef<Partial<Record<SectionId, HTMLDivElement | null>>>({});
 
   // ---- Reference data ------------------------------------------------------
@@ -403,6 +392,19 @@ export default function EmployeeForm({
         if (alive) setLookupsLoading(false);
       });
 
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Load the Required/Optional field configuration. Tolerant by design:
+  // getEffectiveOrDefaults() already falls back to the defaults on any failure,
+  // so a settings outage never blocks the form.
+  useEffect(() => {
+    let alive = true;
+    employeeFieldSettingsApi.getEffectiveOrDefaults().then((config) => {
+      if (alive) setFieldConfig(config);
+    });
     return () => {
       alive = false;
     };
@@ -460,36 +462,23 @@ export default function EmployeeForm({
   }, [isEdit, employee?.user_id]);
 
   /**
-   * Team leads for the selected department.
+   * Candidate evaluators (team leads), loaded org-wide.
    *
-   * The spec is explicit: "Automatically load only Team Leads of that
-   * department. Do NOT show employees from other departments." So this refetches
-   * on every department change and clears the current selection whenever it is
-   * no longer in the returned set — an employee must never be left pointing at
-   * a lead outside their own department.
+   * An evaluator keeps the Team Lead role requirement but may now be from any
+   * department, so this loads every team lead once rather than refetching per
+   * department. An employee still cannot evaluate themselves, so self is
+   * filtered out. The current selection is never cleared here — changing
+   * department no longer invalidates the evaluator.
    */
   useEffect(() => {
-    if (!form.department_id) {
-      setTeamLeads([]);
-      return;
-    }
-
     let alive = true;
     setTeamLeadsLoading(true);
 
     employeeService
-      .teamLeads(form.department_id)
+      .teamLeads()
       .then((leads) => {
         if (!alive) return;
-        // An employee cannot be their own team lead.
-        const eligible = leads.filter((l) => l.user_id !== employee?.user_id);
-        setTeamLeads(eligible);
-        setForm((prev) =>
-          prev.team_lead_id &&
-          !eligible.some((l) => l.user_id === prev.team_lead_id)
-            ? { ...prev, team_lead_id: "" }
-            : prev,
-        );
+        setTeamLeads(leads.filter((l) => l.user_id !== employee?.user_id));
       })
       .catch(() => {
         if (alive) setTeamLeads([]);
@@ -501,7 +490,7 @@ export default function EmployeeForm({
     return () => {
       alive = false;
     };
-  }, [form.department_id, employee?.user_id]);
+  }, [employee?.user_id]);
 
   // Offer to restore a saved draft. Read once per form identity, not merged
   // automatically — silently overwriting fields the user is looking at is
@@ -581,19 +570,6 @@ export default function EmployeeForm({
     [teamLeads],
   );
 
-  /**
-   * Country is the unit of state choice: picking one that has a curated list
-   * swaps the free-text state input for a dropdown, so a stale value from a
-   * previous country is reset rather than silently offered.
-   */
-  const stateOptions = useMemo(() => statesForCountryName(form.country), [form.country]);
-
-  /** The country the phone number belongs to, driving its default dial code. */
-  const selectedDial = useMemo(
-    () => countryByName(form.country)?.dial ?? DEFAULT_DIAL,
-    [form.country],
-  );
-
   const currentPhotoUrl = photoCleared
     ? undefined
     : photoUrl(employee?.profile_image, API_BASE_URL);
@@ -612,13 +588,13 @@ export default function EmployeeForm({
     [],
   );
 
-  /** Department drives designation and team lead, so both reset with it. */
+  /** Department drives designation, so that resets with it. The evaluator does
+   * not — an evaluator may be from any department. */
   const onDepartmentChange = useCallback((departmentId: string) => {
     setForm((prev) => ({
       ...prev,
       department_id: departmentId,
       designation_id: "",
-      team_lead_id: "",
     }));
     setDirty(true);
     setErrors((prev) => ({
@@ -626,34 +602,6 @@ export default function EmployeeForm({
       department_id: undefined,
       designation_id: undefined,
     }));
-  }, []);
-
-  /**
-   * Country drives the state list and the phone's dial code.
-   *
-   * The state value is only cleared when the new country has a curated list that
-   * doesn't contain it — moving between two free-text countries keeps whatever
-   * was typed. The dial code is only re-prefixed while the number is still
-   * empty; once digits exist they belong to a specific code and rewriting it
-   * would corrupt a number the user has already entered.
-   */
-  const onCountryChange = useCallback((countryName: string) => {
-    setForm((prev) => {
-      const states = statesForCountryName(countryName);
-      const keepState =
-        states.length === 0 || states.includes(prev.state_province) ? prev.state_province : "";
-      const dial = countryByName(countryName)?.dial ?? DEFAULT_DIAL;
-      const { national } = splitPhone(prev.phone, dial);
-
-      return {
-        ...prev,
-        country: countryName,
-        state_province: keepState,
-        phone: national ? prev.phone : joinPhone(dial, ""),
-      };
-    });
-    setDirty(true);
-    setErrors((prev) => ({ ...prev, country: undefined, state_province: undefined }));
   }, []);
 
   const scrollToSection = useCallback((id: SectionId) => {
@@ -666,18 +614,47 @@ export default function EmployeeForm({
   /**
    * Validates the whole form, mirroring the backend DTOs.
    *
-   * On edit, password is absent (credentials go through the reset endpoint) and
-   * `employee_code` becomes editable, so both are conditioned on mode.
+   * On edit, password is absent (credentials go through the reset endpoint), so
+   * it is conditioned on mode. Requiredness for the configurable fields comes
+   * from `fieldConfig` (Settings → Employee Fields), not from hard-coded rules —
+   * the same source the backend enforces against.
    */
   const validate = useCallback((): Partial<Record<keyof FormState, string>> => {
+    // A configurable field validates its format when a value is present, and is
+    // only *required* when the admin marked it so. Blank-but-optional passes;
+    // blank-but-required reports the standard "X is required." message.
+    const configurable = (
+      key: EmployeeFieldKey,
+      value: string,
+      label: string,
+      formatValidator?: (v: string) => FieldError,
+    ): FieldError => {
+      if (value.trim()) return formatValidator ? formatValidator(value) : undefined;
+      return fieldConfig[key] ? `${label} is required.` : undefined;
+    };
+
+    // The dial code alone (e.g. "+92") is not a real number, so a phone carrying
+    // only its prefix counts as blank for the required/optional decision.
+    const phoneNational = splitPhone(form.phone, DEFAULT_DIAL).national.trim();
+
     const raw: Record<string, FieldError> = {
       first_name: validateName(form.first_name, "First name"),
       last_name: validateName(form.last_name, "Last name"),
-      date_of_birth: validateDateOfBirth(form.date_of_birth),
-      gender: form.gender ? undefined : "Gender is required.",
+      date_of_birth: configurable(
+        "date_of_birth",
+        form.date_of_birth,
+        "Date of birth",
+        validateDateOfBirth,
+      ),
+      gender: configurable("gender", form.gender, "Gender"),
+      blood_group: configurable("blood_group", form.blood_group, "Blood group"),
 
       email: validateEmail(form.email),
-      phone: validatePhone(form.phone),
+      phone: phoneNational
+        ? validateOptionalPhone(form.phone, "Phone")
+        : fieldConfig.phone
+          ? "Phone is required."
+          : undefined,
       // On edit the password is optional — blank means "keep the existing one".
       // When something is typed it must still satisfy the policy, so validate it
       // only when non-empty. On create it is always required.
@@ -687,19 +664,13 @@ export default function EmployeeForm({
           : undefined
         : validatePassword(form.password),
 
-      // Address: each part optional, at least one required. The group message
-      // is reported on `street_address` so ValidationSummary counts it and the
-      // scroll-to-section jump lands on the address card; the individual fields
-      // only complain about their format.
-      street_address: hasAnyAddressField(form)
-        ? undefined
-        : ADDRESS_REQUIRED_MESSAGE,
-      city: validateOptionalName(form.city, "City"),
-      state_province: validateOptionalName(form.state_province, "State / province"),
-      postal_code: validateOptionalPostalCode(form.postal_code),
-      country: validateOptionalName(form.country, "Country"),
+      // Single free-text address; required only when configured so.
+      address: configurable("address", form.address, "Address"),
 
-      employee_code: isEdit ? validateEmployeeCode(form.employee_code) : undefined,
+      // Employee code is editable in both modes: type a custom code or leave it
+      // blank to auto-generate. Blank is always allowed (the server fills it in);
+      // a non-blank value must match the relaxed format.
+      employee_code: validateEmployeeCode(form.employee_code),
       joining_date: validateDate(form.joining_date, "Joining date"),
       department_id: form.department_id ? undefined : "Department is required.",
       designation_id: form.designation_id ? undefined : "Designation is required.",
@@ -709,22 +680,52 @@ export default function EmployeeForm({
       // Only validate salary when this user is allowed to set it; otherwise the
       // field is read-only and its value came from the server.
       salary: canEditSalary ? validateSalary(form.salary) : undefined,
-      bank_account_number: validateAccountNumber(form.bank_account_number),
-      bank_routing_code: validateRoutingCode(form.bank_routing_code),
-
-      emergency_contact_name: form.emergency_contact_name.trim()
-        ? validateName(form.emergency_contact_name, "Emergency contact name")
-        : undefined,
-      emergency_contact_phone: validateOptionalPhone(
-        form.emergency_contact_phone,
-        "Emergency contact phone",
+      bank_name: configurable("bank_name", form.bank_name, "Bank name"),
+      bank_account_number: configurable(
+        "bank_account_number",
+        form.bank_account_number,
+        "Account number",
+        validateAccountNumber,
       ),
+      bank_routing_code: configurable(
+        "bank_routing_code",
+        form.bank_routing_code,
+        "IBAN number",
+        validateRoutingCode,
+      ),
+
+      // Emergency fields are read-only for a user without the edit permission
+      // (edit mode only). Enforcing requiredness on a field they can't fill would
+      // trap them, so skip these checks entirely when the section is disabled.
+      emergency_contact_name: canEditEmergency
+        ? configurable(
+            "emergency_contact_name",
+            form.emergency_contact_name,
+            "Emergency contact name",
+            (v) => validateName(v, "Emergency contact name"),
+          )
+        : undefined,
+      emergency_contact_relationship: canEditEmergency
+        ? configurable(
+            "emergency_contact_relationship",
+            form.emergency_contact_relationship,
+            "Relationship",
+          )
+        : undefined,
+      emergency_contact_phone: canEditEmergency
+        ? configurable(
+            "emergency_contact_phone",
+            form.emergency_contact_phone,
+            "Emergency contact phone",
+            (v) => validateOptionalPhone(v, "Emergency contact phone"),
+          )
+        : undefined,
 
       role_id: form.role_id ? undefined : "Role is required.",
     };
 
     return compact<FormState>(raw);
-  }, [form, isEdit, canEditSalary]);
+  }, [form, isEdit, canEditSalary, canEditEmergency, fieldConfig]);
 
   // ---- Payload -------------------------------------------------------------
 
@@ -737,6 +738,7 @@ export default function EmployeeForm({
     };
 
     return {
+      employee_code: optional(form.employee_code),
       first_name: t(form.first_name),
       last_name: t(form.last_name),
       email: t(form.email),
@@ -746,14 +748,8 @@ export default function EmployeeForm({
       gender: form.gender,
       blood_group: optional(form.blood_group),
 
-      // Blank address parts are dropped like any other optional field. Sending
-      // "" instead would fail the format regexes server-side, telling the user
-      // their postal code is invalid for a field they deliberately left empty.
-      street_address: optional(form.street_address),
-      city: optional(form.city),
-      state_province: optional(form.state_province),
-      postal_code: optional(form.postal_code),
-      country: optional(form.country),
+      // Single free-text address; blank is dropped so the DTO sees "not provided".
+      address: optional(form.address),
 
       joining_date: form.joining_date,
       employee_type: form.employee_type || DEFAULT_EMPLOYMENT_TYPE,
@@ -876,12 +872,10 @@ export default function EmployeeForm({
       if (isEdit && employee) {
         // Password is not part of the update DTO — a credential change goes
         // through POST /users/:id/reset-password so it is separately
-        // permissioned and audited.
+        // permissioned and audited. `employee_code` rides along in `rest`
+        // (buildPayload includes it), editable the same as on create.
         const { password: _password, ...rest } = payload;
-        const updatePayload: UpdateEmployeePayload = {
-          ...rest,
-          employee_code: form.employee_code.trim() || undefined,
-        };
+        const updatePayload: UpdateEmployeePayload = { ...rest };
         // Don't send a salary this user isn't allowed to change; the backend
         // would reject it, and re-sending the server's own value is noise in the
         // audit log either way.
@@ -1148,14 +1142,14 @@ export default function EmployeeForm({
                 label="Date of Birth"
                 name="date_of_birth"
                 type="date"
-                requiredMark
+                requiredMark={fieldConfig.date_of_birth}
                 value={form.date_of_birth}
                 onChange={(e) => update("date_of_birth", e.target.value)}
                 error={errors.date_of_birth}
               />
               <Select
                 label="Gender"
-                requiredMark
+                requiredMark={fieldConfig.gender}
                 value={form.gender}
                 onChange={(v) => update("gender", v)}
                 options={GENDERS.map((g) => ({ value: g, label: g }))}
@@ -1164,10 +1158,12 @@ export default function EmployeeForm({
               />
               <Select
                 label="Blood Group"
+                requiredMark={fieldConfig.blood_group}
                 value={form.blood_group}
                 onChange={(v) => update("blood_group", v)}
                 options={BLOOD_GROUPS.map((b) => ({ value: b, label: b }))}
                 placeholder="Not specified"
+                error={errors.blood_group}
                 hint="Shown on the employee ID card when set."
               />
             </div>
@@ -1195,12 +1191,12 @@ export default function EmployeeForm({
               <PhoneField
                 label="Phone"
                 name="phone"
-                requiredMark
+                requiredMark={fieldConfig.phone}
                 value={form.phone}
                 onChange={(v) => update("phone", v)}
                 error={errors.phone}
-                defaultDial={selectedDial}
-                hint="The country code follows the selected country; change it here if this number is registered elsewhere."
+                defaultDial={DEFAULT_DIAL}
+                hint="Pick the country code from the flag menu, then type the rest of the number."
               />
               {isEdit && !canResetPassword ? (
                 <ReadOnlyField
@@ -1232,68 +1228,20 @@ export default function EmployeeForm({
           <SectionCard
             id="address"
             title="Address"
-            description="Fill in whichever parts apply — at least one is required."
+            description="The employee's full address, as a single field."
             icon={MapPin}
             sectionRef={setRef("address")}
           >
-            <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Field
-                  label="Street Address"
-                  name="street_address"
-                  placeholder="House / street / area"
-                  value={form.street_address}
-                  onChange={(e) => update("street_address", e.target.value)}
-                  error={errors.street_address}
-                  autoComplete="street-address"
-                />
-              </div>
-              <Field
-                label="City"
-                name="city"
-                value={form.city}
-                onChange={(e) => update("city", e.target.value)}
-                error={errors.city}
-                autoComplete="address-level2"
-              />
-              <Select
-                label="Country"
-                value={form.country}
-                onChange={onCountryChange}
-                options={COUNTRIES.map((c) => ({ value: c.name, label: c.name }))}
-                placeholder="Select country"
-                error={errors.country}
-              />
-              {stateOptions.length > 0 ? (
-                <Select
-                  label="State / Province"
-                  value={form.state_province}
-                  onChange={(v) => update("state_province", v)}
-                  options={stateOptions.map((s) => ({ value: s, label: s }))}
-                  placeholder="Select state / province"
-                  error={errors.state_province}
-                />
-              ) : (
-                // No curated list for this country — a text field beats a
-                // dropdown that can't contain the right answer.
-                <Field
-                  label="State / Province"
-                  name="state_province"
-                  value={form.state_province}
-                  onChange={(e) => update("state_province", e.target.value)}
-                  error={errors.state_province}
-                  autoComplete="address-level1"
-                />
-              )}
-              <Field
-                label="Postal Code"
-                name="postal_code"
-                value={form.postal_code}
-                onChange={(e) => update("postal_code", e.target.value)}
-                error={errors.postal_code}
-                autoComplete="postal-code"
-              />
-            </div>
+            <Textarea
+              label="Address"
+              name="address"
+              requiredMark={fieldConfig.address}
+              value={form.address}
+              onChange={(v) => update("address", v)}
+              error={errors.address}
+              rows={3}
+              placeholder="House / street / area, city, state, postal code, country"
+            />
           </SectionCard>
 
           {/* ---- Employment -------------------------------------------- */}
@@ -1304,26 +1252,20 @@ export default function EmployeeForm({
             sectionRef={setRef("employment")}
           >
             <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-              {isEdit ? (
-                <Field
-                  label="Employee Code"
-                  name="employee_code"
-                  requiredMark
-                  value={form.employee_code}
-                  onChange={(e) => update("employee_code", e.target.value)}
-                  error={errors.employee_code}
-                  hint="Format TC-EMP-001. Must stay unique across all employees."
-                />
-              ) : (
-                <ReadOnlyField
-                  label="Employee Code"
-                  value={<span className="italic">Generated on save</span>}
-                  // Generated server-side inside a locked transaction; letting
-                  // the form propose one would reintroduce the duplicate-code
-                  // race that lock exists to prevent.
-                  hint="The next code in sequence (TC-EMP-001, TC-EMP-002, …) is assigned automatically."
-                />
-              )}
+              <Field
+                label="Employee Code"
+                name="employee_code"
+                requiredMark={isEdit}
+                value={form.employee_code}
+                onChange={(e) => update("employee_code", e.target.value)}
+                error={errors.employee_code}
+                placeholder={isEdit ? undefined : "Leave blank to auto-generate"}
+                hint={
+                  isEdit
+                    ? "Letters, digits and hyphens (up to 20). Must stay unique across all employees."
+                    : "Type a custom code, or leave blank to auto-generate the next TC-EMP-NNN."
+                }
+              />
               <Field
                 label="Joining Date"
                 name="joining_date"
@@ -1391,43 +1333,41 @@ export default function EmployeeForm({
             </div>
           </SectionCard>
 
-          {/* ---- Team Lead --------------------------------------------- */}
+          {/* ---- Evaluator --------------------------------------------- */}
           <SectionCard
             id="team"
-            title="Team Lead"
-            description="Only team leads from the selected department are listed."
+            title="Evaluator"
+            description="The team lead who evaluates this employee. May be from any department."
             icon={Users}
             sectionRef={setRef("team")}
           >
             {canAssignTeamLead ? (
               <Select
-                label="Team Lead"
+                label="Evaluator"
                 value={form.team_lead_id}
                 onChange={(v) => update("team_lead_id", v)}
                 options={teamLeadOptions}
-                disabled={!form.department_id || teamLeadsLoading}
+                disabled={teamLeadsLoading}
                 placeholder={
-                  !form.department_id
-                    ? "Select a department first"
-                    : teamLeadsLoading
-                      ? "Loading team leads…"
-                      : teamLeadOptions.length > 0
-                        ? "No team lead"
-                        : "No team leads in this department yet"
+                  teamLeadsLoading
+                    ? "Loading team leads…"
+                    : teamLeadOptions.length > 0
+                      ? "No evaluator"
+                      : "No team leads available yet"
                 }
                 hint={
                   teamLeadOptions.length > 0
-                    ? "An employee reports to a single team lead. Changing the department clears this."
+                    ? "The employee is evaluated by this team lead, who may be from any department."
                     : undefined
                 }
               />
             ) : (
               <ReadOnlyField
-                label="Team Lead"
+                label="Evaluator"
                 value={
                   employee?.teamLead ? fullName(employee.teamLead) : "Not assigned"
                 }
-                hint="You don't have permission to change the team lead."
+                hint="You don't have permission to change the evaluator."
               />
             )}
           </SectionCard>
@@ -1498,14 +1438,15 @@ export default function EmployeeForm({
               <Field
                 label="Bank Name"
                 name="bank_name"
-                placeholder="Optional"
+                requiredMark={fieldConfig.bank_name}
                 value={form.bank_name}
                 onChange={(e) => update("bank_name", e.target.value)}
+                error={errors.bank_name}
               />
               <Field
                 label="Account Number"
                 name="bank_account_number"
-                placeholder="Optional"
+                requiredMark={fieldConfig.bank_account_number}
                 value={form.bank_account_number}
                 onChange={(e) => update("bank_account_number", e.target.value)}
                 error={errors.bank_account_number}
@@ -1513,7 +1454,7 @@ export default function EmployeeForm({
               <Field
                 label="IBAN Number"
                 name="bank_routing_code"
-                placeholder="Optional"
+                requiredMark={fieldConfig.bank_routing_code}
                 value={form.bank_routing_code}
                 onChange={(e) => update("bank_routing_code", e.target.value)}
                 error={errors.bank_routing_code}
@@ -1559,6 +1500,7 @@ export default function EmployeeForm({
               <Field
                 label="Full Name"
                 name="emergency_contact_name"
+                requiredMark={fieldConfig.emergency_contact_name}
                 value={form.emergency_contact_name}
                 onChange={(e) => update("emergency_contact_name", e.target.value)}
                 error={errors.emergency_contact_name}
@@ -1567,17 +1509,20 @@ export default function EmployeeForm({
               <Field
                 label="Relationship"
                 name="emergency_contact_relationship"
+                requiredMark={fieldConfig.emergency_contact_relationship}
                 placeholder="e.g. Spouse, Parent"
                 value={form.emergency_contact_relationship}
                 onChange={(e) =>
                   update("emergency_contact_relationship", e.target.value)
                 }
+                error={errors.emergency_contact_relationship}
                 disabled={!canEditEmergency}
               />
               <Field
                 label="Phone"
                 name="emergency_contact_phone"
                 type="tel"
+                requiredMark={fieldConfig.emergency_contact_phone}
                 value={form.emergency_contact_phone}
                 onChange={(e) => update("emergency_contact_phone", e.target.value)}
                 error={errors.emergency_contact_phone}

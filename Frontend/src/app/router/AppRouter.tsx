@@ -11,8 +11,6 @@ const RbacDashboard = lazy(() => import("@/modules/dashboard/pages/RbacDashboard
 
 // Auth
 const Login = lazy(() => import("@/modules/auth/pages/Login"));
-const SignUp = lazy(() => import("@/modules/auth/pages/SignUp"));
-const SignUpSuccess = lazy(() => import("@/modules/auth/pages/SignUpSuccess"));
 const ForgetPassword = lazy(() => import("@/modules/auth/pages/ForgetPassword"));
 const ResetPassword = lazy(() => import("@/modules/auth/pages/ResetPassword"));
 const ChangePassword = lazy(() => import("@/modules/auth/pages/ChangePassword"));
@@ -98,10 +96,10 @@ const JobCategoriesPage = lazy(() => import("@/modules/settings/pages/JobCategor
 const ShiftsPage = lazy(() => import("@/modules/settings/pages/Shifts"));
 const LeaveTypesPage = lazy(() => import("@/modules/settings/pages/LeaveTypes"));
 const WorkingDaysPage = lazy(() => import("@/modules/settings/pages/WorkingDays"));
+const EmployeeFieldsPage = lazy(() => import("@/modules/settings/pages/EmployeeFields"));
 const RolesPage = lazy(() => import("@/modules/settings/pages/Roles"));
 const RoleDetailPage = lazy(() => import("@/modules/settings/pages/RoleDetail"));
 const PermissionsPage = lazy(() => import("@/modules/settings/pages/Permissions"));
-const FilterPanelDemoPage = lazy(() => import("@/modules/settings/pages/FilterPanelDemo"));
 const BrandingPage = lazy(() => import("@/modules/settings/pages/Branding"));
 const CertificateSignaturesPage = lazy(
  () => import("@/modules/settings/pages/CertificateSignatures"),
@@ -135,8 +133,6 @@ export function AppRouter() {
             </ProtectedRoute>,
           )}
         />
- <Route path="/signup" element={withSuspense(<SignUp />)} />
- <Route path="/signup-success" element={withSuspense(<SignUpSuccess />)} />
  <Route path="/forget-password" element={withSuspense(<ForgetPassword />)} />
  <Route path="/reset-password" element={withSuspense(<ResetPassword />)} />
  <Route
@@ -638,6 +634,14 @@ export function AppRouter() {
  )}
  />
  <Route
+ path="/settings/employee-fields"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <EmployeeFieldsPage />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
  path="/settings/roles"
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
@@ -677,14 +681,6 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
  <PermissionsPage />
- </ProtectedRoute>,
- )}
- />
- <Route
- path="/settings/filter-demo"
- element={withSuspense(
- <ProtectedRoute roles={HR_ADMIN_ROLES}>
- <FilterPanelDemoPage />
  </ProtectedRoute>,
  )}
  />

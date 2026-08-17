@@ -1,62 +1,113 @@
 // API modules for the Team Lead workspace screens that are NOT part of the
 // appraisal flow: Team Attendance, Team Leave Requests, Team Reports.
 //
-// The appraisal screens (My Team, Evaluation Rubric, Evaluate Employee) moved to
-// modules/appraisal/api/appraisalApi.ts, which talks to the real
-// /appraisal/* facade with no demo fallback. The roster, criteria and evaluation
-// entries that used to live here pointed at /team/members and
-// /appraisal/criteria — both removed from the backend — so they silently served
-// mock data instead of failing. They have been deleted.
+// Talks to the real backend through the shared transport in lib/apiClient
+// (JWT bearer, refresh cookie, 401 replay, timeout). There is NO demo/mock
+// fallback — a backend error surfaces to the page as an `ApiError` and is
+// never swallowed into fabricated team data.
 //
-// Same contract as hrApi.ts: every call below tries the real NestJS backend
-// first (apiRequest, which pings /health and attaches the JWT) and only falls
-// back to hardcoded demo data when the backend is completely unreachable. Real
-// backend errors are never swallowed — only "can't reach the API at all"
-// triggers the fallback.
+// BACKEND GAP — the three routes below (`GET /team/attendance`,
+// `GET /team/leaves`, `GET /team/reports`) are NOT implemented: there is no
+// `@Controller('team')` anywhere in Backend/src, so every call here currently
+// 404s and these three screens will render their error state until the backend
+// adds them. They previously "worked" only because the mock fallback
+// fabricated data whenever the API was unreachable; that fallback is gone per
+// the no-fake-data rule.
+//
+// The team-lead data the backend DOES expose lives elsewhere and already has
+// real, no-fallback clients:
+//   • GET /appraisal/my-team  + /appraisal/my-team/stats  (modules/appraisal)
+//   • GET /dashboard/team                                 (modules/dashboard)
+//   • GET /users/me/team      (a lead's direct reports)
+// None of them return the per-day attendance, view-only leave, or aggregate
+// report shapes these three screens consume, so they can't be repointed
+// without a backend change — hence the gap is reported here rather than papered
+// over with a lookalike endpoint.
 
-import { apiRequest, withDemoFallback } from "@/api/client";
-import {
- mockTeamAttendanceApi,
- mockTeamLeaveApi,
- mockTeamReportsApi,
- type TeamMemberAttendance,
- type TeamLeaveRequest,
- type TeamReportData,
-} from "@/modules/team/mocks/teamMockData";
+import { apiRequest } from "@/lib/apiClient";
 
-// ---- Team Attendance — GET /team/attendance --------------------------------
+// ---- Domain model ----------------------------------------------------------
+// The camelCase shapes these three screens consume. They live here (not in a
+// mock) as this module's own contract — the pages import them from here.
+
+export type TeamAttendanceStatus = "Present" | "Late" | "Absent" | "Leave";
+
+export type TeamAttendanceDay = {
+ attendanceDate: string; // YYYY-MM-DD
+ checkIn: string | null;
+ checkOut: string | null;
+ workingHours: number | null;
+ shiftId: string;
+ shiftName: string;
+ overtimeHours: number | null;
+ isOvertime: boolean;
+ status: TeamAttendanceStatus;
+};
+
+export type TeamMemberAttendance = {
+ employeeId: string;
+ name: string;
+ designation: string;
+ shiftName: string;
+ overtimeAllowed: boolean;
+ today: TeamAttendanceDay | null;
+ presentDays: number;
+ lateDays: number;
+ absentDays: number;
+ leaveDays: number;
+ attendanceRate: number; // 0-100
+ totalOvertimeHours: number;
+ days: TeamAttendanceDay[];
+};
+
+export type TeamLeaveStatus = "Pending" | "Approved" | "Rejected";
+
+export type TeamLeaveRequest = {
+ leaveId: string;
+ employeeId: string;
+ employeeName: string;
+ leaveTypeName: string;
+ startDate: string;
+ endDate: string;
+ totalDays: number;
+ reason: string;
+ status: TeamLeaveStatus;
+ appliedOn: string;
+};
+
+export type TeamReportData = {
+ reviewPeriod: string;
+ teamSize: number;
+ avgAttendanceRate: number;
+ totalLeaveDaysTaken: number;
+ pendingLeaveRequests: number;
+ avgAppraisalScore: number;
+ evaluatedCount: number;
+ totalOvertimeHours: number;
+ topPerformers: { employeeId: string; name: string; score: number }[];
+ attendanceByMember: { employeeId: string; name: string; attendanceRate: number }[];
+};
+
+/** Current month/year — the Team Attendance month picker's initial state. */
+export function monthYearNow() {
+ const now = new Date();
+ return { month: now.getMonth() + 1, year: now.getFullYear() };
+}
+
+// ---- Team Attendance — GET /team/attendance (see BACKEND GAP above) --------
 export const teamAttendanceApi = {
- getTeamAttendance: (params: { month: number; year: number }) =>
- withDemoFallback<TeamMemberAttendance[]>(
- () => apiRequest<TeamMemberAttendance[]>(`/team/attendance?month=${params.month}&year=${params.year}`),
- () => mockTeamAttendanceApi.getTeamAttendance(params),
- ),
+ getTeamAttendance: (params: { month: number; year: number }): Promise<TeamMemberAttendance[]> =>
+ apiRequest<TeamMemberAttendance[]>(`/team/attendance?month=${params.month}&year=${params.year}`),
 };
 
-// ---- Team Leave Requests — GET /team/leaves (view-only) --------------------
+// ---- Team Leave Requests — GET /team/leaves (view-only; see BACKEND GAP) ---
 export const teamLeaveApi = {
- getTeamLeaveRequests: () =>
- withDemoFallback<TeamLeaveRequest[]>(
- () => apiRequest<TeamLeaveRequest[]>("/team/leaves"),
- () => mockTeamLeaveApi.getTeamLeaveRequests(),
- ),
+ getTeamLeaveRequests: (): Promise<TeamLeaveRequest[]> =>
+ apiRequest<TeamLeaveRequest[]>("/team/leaves"),
 };
 
-// ---- Team Reports — GET /team/reports --------------------------------------
+// ---- Team Reports — GET /team/reports (see BACKEND GAP above) --------------
 export const teamReportsApi = {
- getTeamReports: () =>
- withDemoFallback<TeamReportData>(
- () => apiRequest<TeamReportData>("/team/reports"),
- () => mockTeamReportsApi.getTeamReports(),
- ),
+ getTeamReports: (): Promise<TeamReportData> =>
+ apiRequest<TeamReportData>("/team/reports"),
 };
-
-export type {
- TeamMemberAttendance,
- TeamAttendanceDay,
- TeamAttendanceStatus,
- TeamLeaveRequest,
- TeamLeaveStatus,
- TeamReportData,
-} from "@/modules/team/mocks/teamMockData";
-export { monthYearNow } from "@/modules/team/mocks/teamMockData";

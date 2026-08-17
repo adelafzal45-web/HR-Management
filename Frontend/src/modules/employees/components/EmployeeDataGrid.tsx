@@ -19,6 +19,7 @@ import {
  Filter,
 } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
+import ErrorState from "@/components/common/ErrorState";
 import type { ExportFormat } from "@/utils/exportUtils";
 
 export type GridColumn<T> = {
@@ -67,6 +68,13 @@ type Props<T> = {
  rows: T[];
  rowKey: (row: T) => string;
  loading?: boolean;
+ /**
+  * A failed fetch. When set (and not loading), the grid shows an error + retry
+  * state in place of the empty state, so a backend failure is never rendered as
+  * "no rows". `onRetry` wires the Try-again button.
+  */
+ error?: unknown;
+ onRetry?: () => void;
  search: string;
  onSearchChange: (value: string) => void;
  searchPlaceholder?: string;
@@ -148,6 +156,8 @@ export default function EmployeeDataGrid<T>({
  rows,
  rowKey,
  loading,
+ error,
+ onRetry,
  search,
  onSearchChange,
  searchPlaceholder = "Search…",
@@ -519,6 +529,10 @@ export default function EmployeeDataGrid<T>({
  ))}
  </div>
  ))}
+ </div>
+ ) : error ? (
+ <div className="p-4">
+ <ErrorState error={error} onRetry={onRetry} />
  </div>
  ) : rows.length === 0 ? (
  <div className="p-4">

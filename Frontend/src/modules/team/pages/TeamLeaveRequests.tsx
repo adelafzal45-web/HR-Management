@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarX2 } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import EmptyState from "@/components/common/EmptyState";
+import ErrorState from "@/components/common/ErrorState";
 import StatusBadge from "@/components/common/StatusBadge";
 import SectionTabs from "@/components/common/SectionTabs";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
@@ -19,21 +20,28 @@ export default function TeamLeaveRequests() {
 
  const [requests, setRequests] = useState<TeamLeaveRequest[]>([]);
  const [loading, setLoading] = useState(true);
+ const [error, setError] = useState<unknown>(null);
  const [tab, setTab] = useState<FilterTab>("All");
 
- useEffect(() => {
- (async () => {
+ const load = useCallback(async () => {
  setLoading(true);
+ setError(null);
  try {
  const data = await teamLeaveApi.getTeamLeaveRequests();
  setRequests(data);
- } catch {
+ } catch (err) {
+ // Don't collapse a real failure (the /team/leaves route 404s until the
+ // backend adds a team controller) into an innocuous "no records" state.
+ setError(err);
  setRequests([]);
  } finally {
  setLoading(false);
  }
- })();
  }, []);
+
+ useEffect(() => {
+ load();
+ }, [load]);
 
  const filtered = useMemo(
  () => (tab === "All" ? requests : requests.filter((r) => r.status === tab)),
@@ -78,6 +86,8 @@ export default function TeamLeaveRequests() {
  <div key={i} className="h-11 animate-pulse rounded-lg bg-gray-100" />
  ))}
  </div>
+ ) : error ? (
+ <ErrorState error={error} title="Couldn't load leave requests" onRetry={load} />
  ) : filtered.length === 0 ? (
  <EmptyState icon={CalendarX2} title="No records found" description="No leave requests match this filter." />
  ) : (

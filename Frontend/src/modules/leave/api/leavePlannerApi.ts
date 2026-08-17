@@ -14,9 +14,10 @@
 //   • Holidays — `GET /holidays?year=`, gated on `holiday.view`, which every
 //     role including Employee holds (migration 1788300000000).
 //
-// Both go through withDemoFallback in their own modules, so the planner
-// inherits the same "real backend first, demo data only when unreachable"
-// contract as the rest of the app.
+// The planner owns no route and no error handling of its own — it just
+// composes those calls and normalizes them into one shape, so a backend
+// failure in either source propagates straight to the page rather than being
+// masked by fabricated data.
 
 import { holidaysApi, type Holiday } from "@/modules/leave/api/holidaysApi";
 import { adminLeaveApi } from "@/modules/settings/api/adminOpsApi";
@@ -162,13 +163,11 @@ async function loadOwnLeave(selfName?: string): Promise<PlannerLeave[]> {
 }
 
 async function loadOrganizationLeave(departmentId?: string): Promise<PlannerLeave[]> {
-  // `pageSize: 0` is the codebase's "all rows" convention (see `paginate` in
-  // adminOpsMockData) and has to be explicit here: the live adapter defaults an
-  // absent pageSize to the full row count, but the demo path falls back to 10,
-  // so omitting it would silently truncate the calendar to 10 requests
-  // whenever the backend is unreachable. The department filter is passed
-  // through rather than applied client-side so a large org isn't adapted and
-  // then thrown away.
+  // `pageSize: 0` is the codebase's "all rows" convention: adminLeaveApi's
+  // client-side paginator treats a 0 (or absent) pageSize as "return every
+  // matching row", which the calendar needs — a whole year of requests, not a
+  // single 10-row page. The department filter is passed through rather than
+  // applied client-side so a large org isn't adapted and then thrown away.
   const { data } = await adminLeaveApi.list({
     departmentId: departmentId || undefined,
     pageSize: 0,

@@ -12,8 +12,6 @@ import {
   NAME_MESSAGE,
   PHONE_REGEX,
   PHONE_MESSAGE,
-  POSTAL_CODE_REGEX,
-  POSTAL_CODE_MESSAGE,
   TrimOptional,
   NormalizeEmail,
 } from './validation.constants';
@@ -71,44 +69,14 @@ export class UpdateOwnProfileDto {
 
   // --- Address ---
 
-  @ApiPropertyOptional({ example: 'House 12, Street 4, Gulberg III' })
+  @ApiPropertyOptional({
+    example: 'House 12, Street 4, Gulberg III, Lahore, Punjab 54000, Pakistan',
+  })
   @IsOptional()
   @TrimOptional()
   @IsString()
   @MaxLength(500)
-  street_address?: string;
-
-  @ApiPropertyOptional({ example: 'Lahore' })
-  @IsOptional()
-  @TrimOptional()
-  @IsString()
-  @MaxLength(100)
-  @Matches(NAME_REGEX, { message: `City ${NAME_MESSAGE}` })
-  city?: string;
-
-  @ApiPropertyOptional({ example: 'Punjab' })
-  @IsOptional()
-  @TrimOptional()
-  @IsString()
-  @MaxLength(100)
-  @Matches(NAME_REGEX, { message: `State / province ${NAME_MESSAGE}` })
-  state_province?: string;
-
-  @ApiPropertyOptional({ example: '54000' })
-  @IsOptional()
-  @TrimOptional()
-  @IsString()
-  @MaxLength(20)
-  @Matches(POSTAL_CODE_REGEX, { message: `Postal code ${POSTAL_CODE_MESSAGE}` })
-  postal_code?: string;
-
-  @ApiPropertyOptional({ example: 'Pakistan' })
-  @IsOptional()
-  @TrimOptional()
-  @IsString()
-  @MaxLength(100)
-  @Matches(NAME_REGEX, { message: `Country ${NAME_MESSAGE}` })
-  country?: string;
+  address?: string;
 
   // --- Emergency contact ---
 
@@ -150,11 +118,7 @@ export const SELF_EDITABLE_FIELDS = [
   'email',
   'phone',
   'profile_image',
-  'street_address',
-  'city',
-  'state_province',
-  'postal_code',
-  'country',
+  'address',
   'emergency_contact_name',
   'emergency_contact_relationship',
   'emergency_contact_phone',

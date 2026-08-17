@@ -721,40 +721,40 @@ async function fadeImageForWatermark(
  * Signature images go through `fetchAsDataUrl` rather than `resolveLogoDataUrl`,
  * which falls back to the bundled app logo when its argument is empty — on a
  * signature line that would print the company logo where a person's signature
- * belongs. Here a missing image simply means an empty rule to sign by hand.
+ * belongs. A missing or unreachable image is not an error: `fetchAsDataUrl`
+ * returns `undefined`, so the name and title still print above an empty rule to
+ * sign by hand.
  *
- * A failed fetch is not an error: the settings endpoint needs
- * `employees.documents.view`, the same permission that gates generating the
- * certificate at all, but a network blip must not block the download. The
- * certificate falls back to the anonymous signatory block.
+ * A failure to fetch the signatory settings themselves, however, is NOT
+ * swallowed. Silently printing an official certificate without its required
+ * signatory blocks would be a fabricated success; the error propagates to
+ * `downloadCertificatePdf`'s caller, which surfaces it as a retryable toast. An
+ * unconfigured signatory is a *success* with empty names — filtered out below —
+ * so only a genuine backend failure throws.
  */
 async function resolveSignatories(): Promise<CertificateSignatory[]> {
-  try {
-    const settings = await signatoriesApi.get();
+  const settings = await signatoriesApi.get();
 
-    const configured = [
-      {
-        name: settings.ceoName.trim(),
-        title: "Chief Executive Officer",
-        url: settings.ceoSignatureUrl,
-      },
-      {
-        name: settings.cofounderName.trim(),
-        title: "Co-Founder",
-        url: settings.cofounderSignatureUrl,
-      },
-    ].filter((s) => s.name);
+  const configured = [
+    {
+      name: settings.ceoName.trim(),
+      title: "Chief Executive Officer",
+      url: settings.ceoSignatureUrl,
+    },
+    {
+      name: settings.cofounderName.trim(),
+      title: "Co-Founder",
+      url: settings.cofounderSignatureUrl,
+    },
+  ].filter((s) => s.name);
 
-    return await Promise.all(
-      configured.map(async ({ name, title, url }) => ({
-        name,
-        title,
-        signatureDataUrl: url ? await fetchAsDataUrl(url) : undefined,
-      })),
-    );
-  } catch {
-    return [];
-  }
+  return Promise.all(
+    configured.map(async ({ name, title, url }) => ({
+      name,
+      title,
+      signatureDataUrl: url ? await fetchAsDataUrl(url) : undefined,
+    })),
+  );
 }
 
 /** Resolves logo, watermark, signatories and the embedded certificate fonts, then saves the certificate. */

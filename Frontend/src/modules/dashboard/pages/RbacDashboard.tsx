@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
 import { useDevAuth } from "@/app/providers/DevAuthContext";
 import { useAuth } from "@/app/providers/AuthContext";
-import { api, ApiError, ENDPOINTS } from "@/lib/apiClient";
 import { ROLES } from "@/constants/roles";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import PeriodStatCards from "@/modules/dashboard/components/PeriodStatCards";
@@ -38,23 +36,6 @@ import SelfAttendanceTable from "@/modules/dashboard/components/SelfAttendanceTa
 export default function RbacDashboard() {
   const { session } = useDevAuth();
   const { user } = useAuth();
-
-  const [, setSelfProfileError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    api.get(ENDPOINTS.users.byId(session.userId)).catch((err) => {
-      if (!cancelled) {
-        setSelfProfileError(
-          err instanceof ApiError ? `${err.status === 403 ? "Access denied" : err.status}: ${err.message}` : "Failed to load profile",
-        );
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [session]);
 
   if (!session) return null;
 

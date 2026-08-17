@@ -1,11 +1,10 @@
 // API module for org-wide Employee Management (HR / Administrator).
 //
-// Same contract as authApi/hrApi/settingsApi: every call tries the real
-// NestJS backend first (apiRequest — pings the API root, attaches the JWT),
-// and only falls back to the in-memory mock store (employeeMockData.ts) when
-// the backend is completely unreachable. Real backend errors (validation,
-// duplicate email, etc.) are never swallowed — only "can't reach the API at
-// all" triggers the fallback.
+// Talks to the real backend through the shared transport in lib/apiClient
+// (JWT bearer, refresh cookie, 401 replay, timeout). There is NO demo/mock
+// fallback: real backend errors (validation, a duplicate email, a 403 from
+// the permission guard) surface to the page as an `ApiError`, never swallowed
+// into a synthesized employee list.
 //
 // Verified directly against the backend source
 // (Backend/src/users/{users.controller,users.service,user.entity}.ts and
@@ -48,27 +47,69 @@
 // this module's readers still expect the old camelCase names, so the
 // normalizers below keep reading them. Writes go through employeeService.
 
-import { apiRequest, withDemoFallback, normalizeListResult } from "@/api/client";
-import { ENDPOINTS } from "@/app/config/endpoints";
-import {
- mockEmployeesApi,
- type Employee,
- type EmployeePayload,
- type EmployeeCreatePayload,
- type ListParams,
- type ListResult,
-} from "@/modules/employees/mocks/employeeMockData";
+import { apiRequest, ENDPOINTS, normalizeListResult } from "@/lib/apiClient";
 
-export type {
+// ---- Domain model ---------------------------------------------------------
+// The camelCase shapes the UI consumes, translated to/from the /users wire
+// format by toApiBody/fromApiUser below. They live here (not in a mock) as
+// this module's own contract — five other modules import `Employee` from it.
+
+export type Gender = "male" | "female" | "other";
+export type EmploymentType = "full_time" | "part_time" | "contract" | "intern";
+export type EmployeeStatus = "active" | "inactive";
+
+export type Employee = {
+ employeeId: string;
+ employeeCode: string;
+ firstName: string;
+ lastName: string;
+ email: string;
+ phone: string;
+ profileImageUrl: string;
+ /** 128px derivative of `profileImageUrl`, for small renderings. */
+ profileImageThumbUrl?: string;
+ dateOfBirth: string; // YYYY-MM-DD
+ gender: Gender;
+ address: string;
+ joiningDate: string; // YYYY-MM-DD
+ employmentType: EmploymentType;
+ salary: number;
+ overtimeAllowed: boolean;
+ roleId: string;
+ roleName: string;
+ departmentId: string;
+ departmentName: string;
+ designationId: string;
+ designationName: string;
+ jobCategoryId: string;
+ jobCategoryName: string;
+ shiftId: string;
+ shiftName: string;
+ managerId: string;
+ managerName: string;
+ status: EmployeeStatus;
+ createdAt: string;
+};
+
+export type ListParams = {
+ search?: string;
+ page?: number;
+ pageSize?: number;
+ departmentId?: string;
+ status?: EmployeeStatus | "";
+};
+export type ListResult<T> = { data: T[]; total: number };
+
+export type EmployeePayload = Omit<
  Employee,
- EmployeePayload,
- EmployeeCreatePayload,
- Gender,
- EmploymentType,
- EmployeeStatus,
- ListParams,
- ListResult,
-} from "@/modules/employees/mocks/employeeMockData";
+ "employeeId" | "createdAt" | "roleName" | "departmentName" | "designationName" | "jobCategoryName" | "shiftName" | "managerName"
+>;
+
+// The backend's `POST /api/users` requires a `password` field that isn't
+// part of the persisted Employee record (and is never returned by GET).
+// Kept as a separate type so create() can require it without leaking it
+// into update()/the rest of the app.
+export type EmployeeCreatePayload = EmployeePayload & { password: string };
 
 const qs = (params: ListParams) => {
  const search = new URLSearchParams();
@@ -234,52 +275,31 @@ function fromApiUser(rawIn: Record<string, unknown> | null | undefined): Employe
 }
 
 export const employeesApi = {
- list: (params: ListParams = {}) =>
- withDemoFallback<ListResult<Employee>>(
- () =>
- apiRequest<unknown>(`${ENDPOINTS.employees.base}${qs(params)}`).then((raw) => {
+ list: (params: ListParams = {}): Promise<ListResult<Employee>> =>
+ apiRequest<unknown>(`${ENDPOINTS.users.base}${qs(params)}`).then((raw) => {
  const normalized = normalizeListResult<Record<string, unknown>>(raw);
  return { data: normalized.data.map(fromApiUser), total: normalized.total };
  }),
- () => mockEmployeesApi.list(params),
- ),
 
- getById: (id: string) =>
- withDemoFallback<Employee>(
- () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id)).then(fromApiUser),
- () => mockEmployeesApi.getById(id),
- ),
+ getById: (id: string): Promise<Employee> =>
+ apiRequest<Record<string, unknown>>(ENDPOINTS.users.byId(id)).then(fromApiUser),
 
- create: (payload: EmployeeCreatePayload) =>
- withDemoFallback<Employee>(
- () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.base, { method: "POST", body: toApiBody(payload) }).then(fromApiUser),
- () => mockEmployeesApi.create(payload),
- ),
+ create: (payload: EmployeeCreatePayload): Promise<Employee> =>
+ apiRequest<Record<string, unknown>>(ENDPOINTS.users.base, { method: "POST", body: toApiBody(payload) }).then(fromApiUser),
 
- update: (id: string, payload: EmployeePayload) =>
- withDemoFallback<Employee>(
- () => apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id), { method: "PATCH", body: toApiBody(payload) }).then(fromApiUser),
- () => mockEmployeesApi.update(id, payload),
- ),
+ update: (id: string, payload: EmployeePayload): Promise<Employee> =>
+ apiRequest<Record<string, unknown>>(ENDPOINTS.users.byId(id), { method: "PATCH", body: toApiBody(payload) }).then(fromApiUser),
 
- setStatus: (id: string, status: "active" | "inactive") =>
- withDemoFallback<Employee>(
- () =>
- apiRequest<Record<string, unknown>>(ENDPOINTS.employees.byId(id), { method: "PATCH", body: { status: status === "active" } }).then(
+ setStatus: (id: string, status: "active" | "inactive"): Promise<Employee> =>
+ apiRequest<Record<string, unknown>>(ENDPOINTS.users.byId(id), { method: "PATCH", body: { status: status === "active" } }).then(
  fromApiUser,
  ),
- () => mockEmployeesApi.setStatus(id, status),
- ),
 
- remove: (id: string) =>
- withDemoFallback<{ employeeId: string }>(
- () =>
- apiRequest<Record<string, unknown> | null>(ENDPOINTS.employees.byId(id), { method: "DELETE" }).then((raw) => ({
+ remove: (id: string): Promise<{ employeeId: string }> =>
+ apiRequest<Record<string, unknown> | null>(ENDPOINTS.users.byId(id), { method: "DELETE" }).then((raw) => ({
  // A 204/empty body, `{ employeeId }`, `{ user_id }`, or the full
  // deleted user object should all resolve correctly — fall back to
  // the id we requested deletion of if the body doesn't echo one.
  employeeId: str(pick(raw?.employeeId, raw?.id, raw?.user_id), id),
  })),
- () => mockEmployeesApi.remove(id),
- ),
 };

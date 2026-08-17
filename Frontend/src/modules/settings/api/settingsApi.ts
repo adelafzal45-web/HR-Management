@@ -2,25 +2,17 @@
 // Departments, Designations, Job Categories, Shifts, Leave Types, Working Days,
 // Roles, Permissions.
 //
-// Two contracts live here, deliberately:
-//
-// 1. Modules backed by routes that have existed for a while (departments,
-//    designations, job categories, shifts, roles, permissions) still wrap calls
-//    in withDemoFallback — the real backend first, the in-memory mock store
-//    only when the backend is completely unreachable. Real backend errors
-//    (validation, conflicts, 403s) are never swallowed; only "can't reach the
-//    API at all" triggers the fallback.
-//
-// 2. Modules added alongside their backend tables (company settings, branding,
-//    leave types, working days) have NO fallback. Those routes exist, so a
-//    failure is a real failure and the screen must show it. Falling back would
-//    reproduce exactly the bug this work set out to fix: a screen quietly
-//    showing invented rows while the actual request was 403ing.
+// Every module here talks to the real backend through the shared transport in
+// lib/apiClient (JWT bearer, refresh cookie, single-flight 401 replay, request
+// timeout). There is NO demo/mock fallback anywhere in this file: a failed
+// request surfaces to the page as an `ApiError` carrying the server's status
+// and message, and the screen renders its own error state. Falling back to
+// invented rows would reproduce exactly the bug this work set out to fix — a
+// screen quietly showing fabricated data while the actual request was 403ing.
 //
 // Route inventory, verified against the controllers (not just Swagger):
-//   full CRUD  /designations, /job-categories, /shifts, /leave-requests,
-//              /attendance, /leave-types, /roles, /permissions
-//   no PATCH   /departments  (see notes below)
+//   full CRUD  /departments, /designations, /job-categories, /shifts,
+//              /leave-requests, /attendance, /leave-types, /roles, /permissions
 //   join table /role-permissions — POST/GET/DELETE :id only
 //   singleton  /company-settings — GET, GET /branding (@Public), PATCH. No :id:
 //              one global row pinned to id = 1, no multi-tenancy.
@@ -60,37 +52,74 @@
 // - /working-days: days are ISO-8601 numbered (1 = Mon ... 7 = Sun), matching
 // Postgres EXTRACT(ISODOW FROM date), so no day-number conversion is needed.
 
-import { apiRequest, withDemoFallback, normalizeListResult, API_ORIGIN } from "@/api/client";
-import { apiUpload } from "@/lib/apiClient";
-import {
- mockDepartmentsApi,
- mockDesignationsApi,
- mockJobCategoriesApi,
- mockShiftsApi,
- mockPermissionsApi,
- mockRolesApi,
- type EntityStatus,
- type Department,
- type Designation,
- type JobCategory,
- type Shift,
- type Permission,
- type Role,
- type ListParams,
- type ListResult,
-} from "@/modules/settings/mocks/settingsMockData";
+import { apiRequest, apiUpload, normalizeListResult } from "@/lib/apiClient";
+import { API_ORIGIN } from "@/lib/apiBaseUrl";
 
-export type {
- Department,
- Designation,
- JobCategory,
- Shift,
- Permission,
- Role,
- ListParams,
- ListResult,
- EntityStatus,
-} from "@/modules/settings/mocks/settingsMockData";
+// ---- Shared entity types ---------------------------------------------------
+// These used to be defined in (and re-exported from) the settings demo store.
+// They live here now — next to the adapters that build them from the wire
+// shape — so the mock module can be retired without stranding the many screens
+// that import these types from this API surface.
+
+export type EntityStatus = "active" | "inactive";
+
+export type Department = {
+ departmentId: string;
+ name: string;
+ description: string;
+ status: EntityStatus;
+ createdAt: string;
+};
+
+export type Designation = {
+ designationId: string;
+ name: string;
+ departmentId: string;
+ departmentName: string;
+ description: string;
+ status: EntityStatus;
+ createdAt: string;
+};
+
+export type Permission = {
+ permissionId: string;
+ name: string;
+ module: string;
+ description: string;
+};
+
+export type Role = {
+ roleId: string;
+ name: string;
+ description: string;
+ permissionIds: string[];
+ status: EntityStatus;
+ createdAt: string;
+};
+
+export type JobCategory = {
+ jobCategoryId: string;
+ name: string;
+ description: string;
+ status: EntityStatus;
+ createdAt: string;
+};
+
+export type Shift = {
+ shiftId: string;
+ name: string;
+ /** "HH:mm", 24h */
+ startTime: string;
+ /** "HH:mm", 24h */
+ endTime: string;
+ gracePeriodMinutes: number;
+ breakDurationMinutes: number;
+ status: EntityStatus;
+ createdAt: string;
+};
+
+export type ListParams = { search?: string; page?: number; pageSize?: number };
+export type ListResult<T> = { data: T[]; total: number };
 
 // Company Details, Branding and Leave Types are defined here rather than
 // re-exported from the mock store: all three are backed by real tables now, and
@@ -169,11 +198,14 @@ const qs = (params: ListParams) => {
  return str ? `?${str}` : "";
 };
 
-// ---- Departments — GET/POST/GET :id/DELETE /departments -------------------
-// Confirmed live Swagger DTO: { department_name, description } — snake_case,
-// and no PATCH route is documented (list only shows POST / GET / GET :id /
-// DELETE), so update() below is expected to 404 → gracefully falls back to
-// the mock store until the backend adds a PATCH controller method.
+// ---- Departments — GET/POST/GET :id/PATCH/DELETE /departments -------------
+// Confirmed against DepartmentsController: POST / GET / GET :id / PATCH :id /
+// DELETE :id, plus GET :id/delete-impact and POST :id/reassign-and-delete.
+// Create and update send snake_case { department_name, description }
+// (Create/UpdateDepartmentDto). An earlier note here claimed there was no
+// PATCH and let update() fall back to an in-memory store, so a rename reported
+// success and changed nothing; the route exists (behind departments.update),
+// so a failed rename now surfaces as an error instead.
 type ApiDepartment = {
  department_id?: string;
  id?: string;
@@ -228,46 +260,31 @@ export type ReassignResult = {
 
 export const departmentsApi = {
  list: (params: ListParams = {}) =>
- withDemoFallback<ListResult<Department>>(
- () =>
  apiRequest<unknown>(`/departments${qs(params)}`).then((raw) => {
  const normalized = normalizeListResult<ApiDepartment>(raw);
  return { data: normalized.data.map(fromApiDepartment), total: normalized.total };
  }),
- () => mockDepartmentsApi.list(params),
- ),
 
  create: (payload: Pick<Department, "name" | "description" | "status">) =>
- withDemoFallback<Department>(
- () =>
  apiRequest<ApiDepartment>("/departments", {
  method: "POST",
  body: toApiDepartmentPayload(payload),
  }).then(fromApiDepartment),
- () => mockDepartmentsApi.create(payload),
- ),
 
  update: (id: string, payload: Pick<Department, "name" | "description" | "status">) =>
- withDemoFallback<Department>(
- () =>
  apiRequest<ApiDepartment>(`/departments/${id}`, {
  method: "PATCH",
  body: toApiDepartmentPayload(payload),
  }).then(fromApiDepartment),
- () => mockDepartmentsApi.update(id, payload),
- ),
 
  remove: (id: string) =>
- withDemoFallback<{ departmentId: string }>(
- () => apiRequest<{ departmentId: string }>(`/departments/${id}`, { method: "DELETE" }),
- () => mockDepartmentsApi.remove(id),
- ),
+ apiRequest<{ departmentId: string }>(`/departments/${id}`, { method: "DELETE" }),
 
- // No withDemoFallback on the next two: the mock store has no notion of an
- // employee or a designation, so it could only ever answer "nothing is
- // blocking you" — the one answer that would make the dialog lie. The
- // Departments screen treats a failure here as "impact unknown" and falls
- // back to the plain confirm, which the server still guards with its 409.
+ // The mock store had no notion of an employee or a designation, so it could
+ // only ever answer "nothing is blocking you" — the one answer that would
+ // make the delete dialog lie. The Departments screen treats a failure here
+ // as "impact unknown" and falls back to the plain confirm, which the server
+ // still guards with its 409.
  deleteImpact: (id: string) => apiRequest<DepartmentDeleteImpact>(`/departments/${id}/delete-impact`),
 
  reassignAndDelete: (id: string, targetDepartmentId: string) =>
@@ -279,14 +296,10 @@ export const departmentsApi = {
  // Lightweight lookup used to populate the "Department" dropdown on the
  // Designation form — always resolves from the currently-known list.
  listAll: () =>
- withDemoFallback<ListResult<Department>>(
- () =>
  apiRequest<unknown>(`/departments?pageSize=1000`).then((raw) => {
  const normalized = normalizeListResult<ApiDepartment>(raw);
  return { data: normalized.data.map(fromApiDepartment), total: normalized.total };
  }),
- () => Promise.resolve({ data: mockDepartmentsApi.listAll(), total: mockDepartmentsApi.listAll().length }),
- ),
 };
 
 // ---- Designations — GET/POST/PATCH/DELETE /designations -------------------
@@ -351,30 +364,20 @@ const departmentLookup = () =>
 
 export const designationsApi = {
  list: (params: ListParams = {}) =>
- withDemoFallback<ListResult<Designation>>(
- () =>
  Promise.all([apiRequest<unknown>(`/designations${qs(params)}`), departmentLookup()]).then(
  ([raw, deptMap]) => {
  const normalized = normalizeListResult<ApiDesignation>(raw);
  return { data: normalized.data.map((d) => fromApiDesignation(d, deptMap)), total: normalized.total };
  },
  ),
- () => mockDesignationsApi.list(params),
- ),
 
  create: (payload: Pick<Designation, "name" | "departmentId" | "description" | "status">) =>
- withDemoFallback<Designation>(
- () =>
  Promise.all([
  apiRequest<ApiDesignation>("/designations", { method: "POST", body: toApiDesignationPayload(payload) }),
  departmentLookup(),
  ]).then(([raw, deptMap]) => fromApiDesignation(raw, deptMap)),
- () => mockDesignationsApi.create(payload),
- ),
 
  update: (id: string, payload: Pick<Designation, "name" | "departmentId" | "description" | "status">) =>
- withDemoFallback<Designation>(
- () =>
  Promise.all([
  apiRequest<ApiDesignation>(`/designations/${id}`, {
  method: "PATCH",
@@ -382,16 +385,10 @@ export const designationsApi = {
  }),
  departmentLookup(),
  ]).then(([raw, deptMap]) => fromApiDesignation(raw, deptMap)),
- () => mockDesignationsApi.update(id, payload),
- ),
 
  remove: (id: string) =>
- withDemoFallback<{ designationId: string }>(
- () => apiRequest<{ designationId: string }>(`/designations/${id}`, { method: "DELETE" }),
- () => mockDesignationsApi.remove(id),
- ),
+ apiRequest<{ designationId: string }>(`/designations/${id}`, { method: "DELETE" }),
 
- // Unwrapped for the same reason as the department pair above.
  deleteImpact: (id: string) => apiRequest<DesignationDeleteImpact>(`/designations/${id}/delete-impact`),
 
  reassignAndDelete: (id: string, targetDesignationId: string) =>
@@ -429,40 +426,25 @@ const fromApiJobCategory = (raw: ApiJobCategory): JobCategory => ({
 
 export const jobCategoriesApi = {
  list: (params: ListParams = {}) =>
- withDemoFallback<ListResult<JobCategory>>(
- () =>
  apiRequest<unknown>(`/job-categories${qs(params)}`).then((raw) => {
  const normalized = normalizeListResult<ApiJobCategory>(raw);
  return { data: normalized.data.map(fromApiJobCategory), total: normalized.total };
  }),
- () => mockJobCategoriesApi.list(params),
- ),
 
  create: (payload: Pick<JobCategory, "name" | "description" | "status">) =>
- withDemoFallback<JobCategory>(
- () =>
  apiRequest<ApiJobCategory>("/job-categories", {
  method: "POST",
  body: toApiJobCategoryPayload(payload),
  }).then(fromApiJobCategory),
- () => mockJobCategoriesApi.create(payload),
- ),
 
  update: (id: string, payload: Pick<JobCategory, "name" | "description" | "status">) =>
- withDemoFallback<JobCategory>(
- () =>
  apiRequest<ApiJobCategory>(`/job-categories/${id}`, {
  method: "PATCH",
  body: toApiJobCategoryPayload(payload),
  }).then(fromApiJobCategory),
- () => mockJobCategoriesApi.update(id, payload),
- ),
 
  remove: (id: string) =>
- withDemoFallback<{ jobCategoryId: string }>(
- () => apiRequest<{ jobCategoryId: string }>(`/job-categories/${id}`, { method: "DELETE" }),
- () => mockJobCategoriesApi.remove(id),
- ),
+ apiRequest<{ jobCategoryId: string }>(`/job-categories/${id}`, { method: "DELETE" }),
 };
 
 // ---- Shifts — GET/POST/PATCH/DELETE /shifts --------------------------------
@@ -534,37 +516,22 @@ const fromApiShift = (raw: ApiShift): Shift => ({
 
 export const shiftsApi = {
  list: (params: ListParams = {}) =>
- withDemoFallback<ListResult<Shift>>(
- () =>
  apiRequest<{ data: ApiShift[]; total: number } | ApiShift[]>(`/shifts${qs(params)}`).then((r) =>
  Array.isArray(r)
  ? { data: r.map(fromApiShift), total: r.length }
  : { data: r.data.map(fromApiShift), total: r.total },
  ),
- () => mockShiftsApi.list(params),
- ),
 
  create: (payload: ShiftPayload) =>
- withDemoFallback<Shift>(
- () =>
  apiRequest<ApiShift>("/shifts", { method: "POST", body: toApiShiftPayload(payload) }).then(fromApiShift),
- () => mockShiftsApi.create(payload),
- ),
 
  update: (id: string, payload: ShiftPayload) =>
- withDemoFallback<Shift>(
- () =>
  apiRequest<ApiShift>(`/shifts/${id}`, { method: "PATCH", body: toApiShiftPayload(payload) }).then(
  fromApiShift,
  ),
- () => mockShiftsApi.update(id, payload),
- ),
 
  remove: (id: string) =>
- withDemoFallback<{ shiftId: string }>(
- () => apiRequest<{ shiftId: string }>(`/shifts/${id}`, { method: "DELETE" }),
- () => mockShiftsApi.remove(id),
- ),
+ apiRequest<{ shiftId: string }>(`/shifts/${id}`, { method: "DELETE" }),
 };
 
 // ---- Permissions — GET/POST/GET :id/DELETE /permissions --------------------
@@ -615,49 +582,30 @@ const fromApiPermission = (raw: ApiPermission): Permission => ({
 
 export const permissionsApi = {
  list: (params: ListParams = {}) =>
- withDemoFallback<ListResult<Permission>>(
- () =>
  apiRequest<unknown>(`/permissions${qs(params)}`).then((raw) => {
  const normalized = normalizeListResult<ApiPermission>(raw);
  return { data: normalized.data.map(fromApiPermission), total: normalized.total };
  }),
- () => mockPermissionsApi.list(params),
- ),
 
  listAll: () =>
- withDemoFallback<Permission[]>(
- () =>
  apiRequest<unknown>(`/permissions?pageSize=1000`).then(
  (raw) => normalizeListResult<ApiPermission>(raw).data.map(fromApiPermission),
  ),
- () => mockPermissionsApi.listAll(),
- ),
 
  create: (payload: Pick<Permission, "name" | "description">) =>
- withDemoFallback<Permission>(
- () =>
  apiRequest<ApiPermission>("/permissions", {
  method: "POST",
  body: toApiPermissionPayload(payload),
  }).then(fromApiPermission),
- () => mockPermissionsApi.create({ ...payload, module: deriveModule(payload.name) }),
- ),
 
  update: (id: string, payload: Pick<Permission, "name" | "description">) =>
- withDemoFallback<Permission>(
- () =>
  apiRequest<ApiPermission>(`/permissions/${id}`, {
  method: "PATCH",
  body: toApiPermissionPayload(payload),
  }).then(fromApiPermission),
- () => mockPermissionsApi.update(id, { ...payload, module: deriveModule(payload.name) }),
- ),
 
  remove: (id: string) =>
- withDemoFallback<{ permissionId: string }>(
- () => apiRequest<{ permissionId: string }>(`/permissions/${id}`, { method: "DELETE" }),
- () => mockPermissionsApi.remove(id),
- ),
+ apiRequest<{ permissionId: string }>(`/permissions/${id}`, { method: "DELETE" }),
 };
 
 // ---- Roles + Role-Permissions — /roles, /role-permissions ------------------
@@ -738,9 +686,7 @@ const fetchRolePermissions = () =>
  .catch(() => [] as ApiRolePermission[]);
 
 export const rolesApi = {
- list: (params: ListParams = {}) =>
- withDemoFallback<ListResult<Role>>(
- async () => {
+ list: async (params: ListParams = {}): Promise<ListResult<Role>> => {
  const [raw, rolePermissions] = await Promise.all([apiRequest<unknown>(`/roles${qs(params)}`), fetchRolePermissions()]);
  const normalized = normalizeListResult<ApiRole>(raw);
  const data = normalized.data.map((r) => {
@@ -750,22 +696,14 @@ export const rolesApi = {
  });
  return { data, total: normalized.total };
  },
- () => mockRolesApi.list(params),
- ),
 
- getById: (id: string) =>
- withDemoFallback<Role>(
- async () => {
+ getById: async (id: string): Promise<Role> => {
  const [role, rolePermissions] = await Promise.all([apiRequest<ApiRole>(`/roles/${id}`), fetchRolePermissions()]);
  const permissionIds = rolePermissions.filter((rp) => rpRoleId(rp) === id).map(rpPermissionId);
  return fromApiRole(role, permissionIds);
  },
- () => mockRolesApi.getById(id),
- ),
 
- create: (payload: Pick<Role, "name" | "description" | "status" | "permissionIds">) =>
- withDemoFallback<Role>(
- async () => {
+ create: async (payload: Pick<Role, "name" | "description" | "status" | "permissionIds">): Promise<Role> => {
  const role = await apiRequest<ApiRole>("/roles", { method: "POST", body: toApiRolePayload(payload) });
  const roleId = role.role_id ?? role.id ?? "";
  await Promise.all(
@@ -775,8 +713,6 @@ export const rolesApi = {
  );
  return fromApiRole(role, payload.permissionIds);
  },
- () => mockRolesApi.create(payload),
- ),
 
  // The role row and its permission grants are two different resources, so this
  // is two requests: PATCH /roles/:id for the name and description, then a diff
@@ -787,9 +723,10 @@ export const rolesApi = {
  // (RoleController.update, `roles.update`), so renaming a role or editing its
  // description silently did nothing: the modal closed, the toast said "Role
  // updated", and the table reloaded the unchanged row.
- update: (id: string, payload: Pick<Role, "name" | "description" | "status" | "permissionIds">) =>
- withDemoFallback<Role>(
- async () => {
+ update: async (
+ id: string,
+ payload: Pick<Role, "name" | "description" | "status" | "permissionIds">,
+ ): Promise<Role> => {
  const [role, rolePermissions] = await Promise.all([
  apiRequest<ApiRole>(`/roles/${id}`, { method: "PATCH", body: toApiRolePayload(payload) }),
  fetchRolePermissions(),
@@ -804,12 +741,8 @@ export const rolesApi = {
  ]);
  return fromApiRole(role, payload.permissionIds);
  },
- () => mockRolesApi.update(id, payload),
- ),
 
- remove: (id: string) =>
- withDemoFallback<{ roleId: string }>(
- async () => {
+ remove: async (id: string): Promise<{ roleId: string }> => {
  // No documented cascade — best-effort clean up this role's
  // role-permission mappings first so they don't dangle.
  const rolePermissions = await fetchRolePermissions();
@@ -817,8 +750,6 @@ export const rolesApi = {
  await Promise.all(toRemove.map((rp) => apiRequest(`/role-permissions/${rpId(rp)}`, { method: "DELETE" }).catch(() => undefined)));
  return apiRequest<{ roleId: string }>(`/roles/${id}`, { method: "DELETE" });
  },
- () => mockRolesApi.remove(id),
- ),
 };
 
 // ---- Company Details + Branding — GET/PATCH /company-settings --------------

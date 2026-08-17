@@ -11,14 +11,13 @@ import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useToast } from "@/app/providers/ToastContext";
 import { useAuth } from "@/app/providers/AuthContext";
 import { getAttendanceTabs } from "@/config/featureTabs";
-import { adminAttendanceApi, type AdminAttendanceRecord, type AdminAttendanceStatus } from "@/modules/settings/api/adminOpsApi";
+import { adminAttendanceApi, ATTENDANCE_STATUSES, type AdminAttendanceRecord, type AdminAttendanceStatus } from "@/modules/settings/api/adminOpsApi";
 import { departmentsApi, type Department } from "@/modules/settings/api/settingsApi";
 import { employeesApi, type Employee } from "@/modules/employees/api/employeeApi";
 import AttendanceSummaryCards from "@/modules/attendance/components/AttendanceSummaryCards";
 import MarkAttendanceModal from "@/modules/attendance/components/MarkAttendanceModal";
 import { punctualityBadges, punctualityText } from "@/modules/attendance/utils/punctuality";
 
-const STATUS_OPTIONS: AdminAttendanceStatus[] = ["Present", "Late", "Half-Day", "Absent", "On Leave", "Leave", "Holiday"];
 const WORKING_STATUSES: AdminAttendanceStatus[] = ["Present", "Late", "Half-Day"];
 
 type FormState = { checkIn: string; checkOut: string; status: AdminAttendanceStatus };
@@ -68,7 +67,8 @@ export default function AttendanceRecordsPage() {
  const [departmentFilter, setDepartmentFilter] = useState("");
  const [employeeFilter, setEmployeeFilter] = useState("");
  const [statusFilter, setStatusFilter] = useState<AdminAttendanceStatus | "">("");
- const [dateFilter, setDateFilter] = useState("");
+ const [fromDate, setFromDate] = useState("");
+ const [toDate, setToDate] = useState("");
 
  const [departments, setDepartments] = useState<Department[]>([]);
  const [employees, setEmployees] = useState<Employee[]>([]);
@@ -87,9 +87,10 @@ export default function AttendanceRecordsPage() {
  departmentId: departmentFilter,
  employeeId: employeeFilter,
  status: statusFilter,
- date: dateFilter,
+ from: fromDate,
+ to: toDate,
  }),
- [search, departmentFilter, employeeFilter, statusFilter, dateFilter],
+ [search, departmentFilter, employeeFilter, statusFilter, fromDate, toDate],
  );
 
  const load = () => {
@@ -107,9 +108,9 @@ export default function AttendanceRecordsPage() {
  useEffect(() => {
  load();
  // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [search, page, pageSize, departmentFilter, employeeFilter, statusFilter, dateFilter]);
+ }, [search, page, pageSize, departmentFilter, employeeFilter, statusFilter, fromDate, toDate]);
 
- useEffect(() => setPage(1), [search, pageSize, departmentFilter, employeeFilter, statusFilter, dateFilter]);
+ useEffect(() => setPage(1), [search, pageSize, departmentFilter, employeeFilter, statusFilter, fromDate, toDate]);
 
  useEffect(() => {
  departmentsApi.listAll().then((res) => setDepartments(res.data)).catch(() => undefined);
@@ -129,8 +130,11 @@ export default function AttendanceRecordsPage() {
  setStatusFilter((next.status ?? "") as AdminAttendanceStatus | "");
  };
 
- const clearExtraFilters = () => setDateFilter("");
- const extraFilterCount = dateFilter ? 1 : 0;
+ const clearExtraFilters = () => {
+ setFromDate("");
+ setToDate("");
+ };
+ const extraFilterCount = (fromDate ? 1 : 0) + (toDate ? 1 : 0);
 
  const openCorrect = (record: AdminAttendanceRecord) => {
  setEditing(record);
@@ -315,11 +319,37 @@ export default function AttendanceRecordsPage() {
  </select>
  </label>
  <label className="block">
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">Date</span>
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">Status</span>
+ <select
+ value={statusFilter}
+ onChange={(e) => setStatusFilter(e.target.value as AdminAttendanceStatus | "")}
+ className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ >
+ <option value="">All statuses</option>
+ {ATTENDANCE_STATUSES.map((s) => (
+ <option key={s} value={s}>
+ {s}
+ </option>
+ ))}
+ </select>
+ </label>
+ <label className="block">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">From date</span>
  <input
  type="date"
- value={dateFilter}
- onChange={(e) => setDateFilter(e.target.value)}
+ value={fromDate}
+ max={toDate || undefined}
+ onChange={(e) => setFromDate(e.target.value)}
+ className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ />
+ </label>
+ <label className="block">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">To date</span>
+ <input
+ type="date"
+ value={toDate}
+ min={fromDate || undefined}
+ onChange={(e) => setToDate(e.target.value)}
  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
  />
  </label>
@@ -382,7 +412,7 @@ export default function AttendanceRecordsPage() {
  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as AdminAttendanceStatus }))}
  className="w-full rounded-lg bg-gray-100 px-4 py-3.5 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
  >
- {STATUS_OPTIONS.map((s) => (
+ {ATTENDANCE_STATUSES.map((s) => (
  <option key={s} value={s}>
  {s}
  </option>

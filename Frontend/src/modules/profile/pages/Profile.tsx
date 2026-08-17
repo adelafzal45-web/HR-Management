@@ -60,21 +60,9 @@ function formatDate(value?: string | null): string {
   });
 }
 
-/**
- * Joins the structured address, falling back to the legacy free-text column.
- *
- * Records created before the structured fields existed only have `address`, so
- * ignoring it would show "—" for employees whose address is on file.
- */
+/** The single free-text address (the structured parts were merged into it). */
 function formatAddress(employee: Employee): string {
-  const parts = [
-    employee.street_address,
-    employee.city,
-    employee.state_province,
-    employee.postal_code,
-    employee.country,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : (employee.address ?? "");
+  return employee.address ?? "";
 }
 
 function Card({ title, children }: { title: string; children: ReactNode }) {

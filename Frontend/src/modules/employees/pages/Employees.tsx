@@ -104,6 +104,7 @@ export default function EmployeesPage() {
  // uses under the hood.
  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
  const [loading, setLoading] = useState(true);
+ const [error, setError] = useState<unknown>(null);
  const [search, setSearch] = useState("");
  const [filters, setFilters] = useState<EmployeeFilters>(EMPTY_FILTERS);
  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
@@ -131,10 +132,19 @@ export default function EmployeesPage() {
 
  const load = () => {
  setLoading(true);
+ setError(null);
  employeesApi
  .list({ pageSize: 1000 })
- .then((res) => setAllEmployees(res.data))
- .catch(() => toast.showError("Couldn't load employees."))
+ .then((res) => {
+ setAllEmployees(res.data);
+ setError(null);
+ })
+ .catch((err) => {
+ // A backend failure must not read as "no employees": clear the rows and
+ // let the grid render its error + retry state instead of the empty one.
+ setAllEmployees([]);
+ setError(err);
+ })
  .finally(() => setLoading(false));
  };
 
@@ -473,6 +483,8 @@ export default function EmployeesPage() {
  rows={filteredRows}
  rowKey={(e) => e.employeeId}
  loading={loading}
+ error={error}
+ onRetry={load}
  search={search}
  onSearchChange={setSearch}
  searchPlaceholder="Search employees…"

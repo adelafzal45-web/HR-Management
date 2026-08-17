@@ -2,13 +2,11 @@
 // Password recovery API — forgot / validate / reset, plus the admin-issued
 // reset links.
 //
-// Deliberately NOT in `@/api/client`. Every call there is wrapped in
-// `withDemoFallback`, which answers from a mock store when the backend is
-// unreachable. For a password operation that behaviour is worse than an
-// outright failure: the user is told their password changed when nothing
-// happened, and they discover otherwise at the next login — by which point
-// they no longer know which password is live. These functions talk to the real
-// API or throw.
+// For a password operation, a fabricated "success" is worse than an outright
+// failure: the user is told their password changed when nothing happened, and
+// they discover otherwise at the next login — by which point they no longer
+// know which password is live. These functions talk to the real API or throw;
+// there is no fallback path that could mask a failure.
 //
 // Route inventory (Backend/src/auth/auth.controller.ts and
 // password-reset-admin.controller.ts):

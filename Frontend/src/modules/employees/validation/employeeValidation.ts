@@ -15,8 +15,10 @@ export const NAME_REGEX = /^[\p{L}][\p{L}\s'.-]*$/u;
 export const PHONE_REGEX = /^\+?[\d][\d\s().-]{5,25}$/;
 export const PASSWORD_REGEX =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-export const POSTAL_CODE_REGEX = /^[A-Za-z0-9][A-Za-z0-9\s-]{1,18}$/;
-export const EMPLOYEE_CODE_REGEX = /^TC-EMP-\d{3,}$/;
+// Any unique code: letters/digits/hyphens, first char alphanumeric, up to 20
+// chars (matching employee_code varchar(20)). Relaxed from the old TC-EMP-NNN
+// shape so HR can type a custom code; a blank still auto-generates server-side.
+export const EMPLOYEE_CODE_REGEX = /^[A-Za-z0-9][A-Za-z0-9-]{0,19}$/;
 export const ACCOUNT_NUMBER_REGEX = /^[A-Za-z0-9-]{6,34}$/;
 /** 34 = ISO 13616 max IBAN length; 6 keeps shorter SWIFT / IFSC codes valid. */
 export const ROUTING_CODE_REGEX = /^[A-Za-z0-9]{6,34}$/;
@@ -90,22 +92,6 @@ export const validatePassword = (value: string): FieldError => {
   return undefined;
 };
 
-/**
- * Postal code when supplied; blank is allowed.
- *
- * Mirrors `@IsOptional()` + `@Matches(POSTAL_CODE_REGEX)`. There is no required
- * variant because no form requires one — plenty of real addresses have no
- * postal code, and blocking an employee record on a field nobody has was the
- * bug this replaced.
- */
-export const validateOptionalPostalCode = (value: string): FieldError => {
-  const trimmed = (value ?? "").trim();
-  if (!trimmed) return undefined;
-  return POSTAL_CODE_REGEX.test(trimmed)
-    ? undefined
-    : "Postal code must be 2–20 letters or digits (spaces and hyphens allowed).";
-};
-
 /** Name-shaped field when supplied; blank is allowed. */
 export const validateOptionalName = (value: string, label: string): FieldError => {
   const trimmed = (value ?? "").trim();
@@ -113,35 +99,13 @@ export const validateOptionalName = (value: string, label: string): FieldError =
   return validateName(trimmed, label);
 };
 
-// ---- Address ---------------------------------------------------------------
-//
-// Mirrors the group rule in Backend/src/users/dto/validation.constants.ts: each
-// part is optional on its own, but an employee with no address at all is a
-// record nobody can post a letter to, so at least one must be filled in.
-
-export const ADDRESS_FIELDS = [
-  "street_address",
-  "city",
-  "state_province",
-  "postal_code",
-  "country",
-] as const;
-
-export type AddressField = (typeof ADDRESS_FIELDS)[number];
-
-export const ADDRESS_REQUIRED_MESSAGE =
-  "Enter at least one address field (street, city, state / province, postal code or country).";
-
-/** True when any address part carries a non-blank value. */
-export const hasAnyAddressField = (
-  record: Partial<Record<AddressField, unknown>>,
-): boolean => ADDRESS_FIELDS.some((field) => !isBlank(record[field]));
+// ---- Employee code ---------------------------------------------------------
 
 export const validateEmployeeCode = (value: string): FieldError => {
   const trimmed = (value ?? "").trim();
   if (!trimmed) return undefined; // Generated server-side when absent.
   if (!EMPLOYEE_CODE_REGEX.test(trimmed))
-    return "Employee code must look like TC-EMP-001.";
+    return "Employee code may use letters, digits and hyphens (up to 20 characters).";
   return undefined;
 };
 

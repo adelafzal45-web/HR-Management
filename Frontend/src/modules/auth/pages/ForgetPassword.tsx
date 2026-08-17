@@ -1,11 +1,9 @@
 // ============================================================================
 // Forgot Password — requests a one-time reset link.
 //
-// Calls POST /auth/forgot-password through `passwordApi`, not the
-// demo-fallback client this page used to use: that one pointed at
-// `/auth/forget-password` (a route that has never existed here) and, because
-// every call in it is wrapped in `withDemoFallback`, the 404 fell through to
-// the mock store and this screen showed "Check your inbox" for a mail that was
+// Calls POST /auth/forgot-password through `passwordApi` (verified route — note
+// the spelling, "forgot" not "forget"). A transport or 4xx/5xx failure surfaces
+// as an error rather than a fabricated "Check your inbox" for a mail that was
 // never sent.
 //
 // The success screen is shown for ANY accepted request, including one for an

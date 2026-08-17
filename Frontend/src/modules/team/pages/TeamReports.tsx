@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BarChart3, Award, Users2, CalendarClock, Clock } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import EmptyState from "@/components/common/EmptyState";
+import ErrorState from "@/components/common/ErrorState";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { teamReportsApi, type TeamReportData } from "@/modules/team/api/teamApi";
 
@@ -11,20 +12,27 @@ export default function TeamReports() {
 
  const [report, setReport] = useState<TeamReportData | null>(null);
  const [loading, setLoading] = useState(true);
+ const [error, setError] = useState<unknown>(null);
 
- useEffect(() => {
- (async () => {
+ const load = useCallback(async () => {
  setLoading(true);
+ setError(null);
  try {
  const data = await teamReportsApi.getTeamReports();
  setReport(data);
- } catch {
+ } catch (err) {
+ // The /team/reports route 404s until the backend adds a team controller;
+ // show that as an error rather than a benign "no data" state.
+ setError(err);
  setReport(null);
  } finally {
  setLoading(false);
  }
- })();
  }, []);
+
+ useEffect(() => {
+ load();
+ }, [load]);
 
  return (
  <DashboardLayout title="Team Reports" activeKey="team-reports">
@@ -36,6 +44,8 @@ export default function TeamReports() {
  <div key={i} className="h-28 animate-pulse rounded-2xl bg-gray-100" />
  ))}
  </div>
+ ) : error ? (
+ <ErrorState error={error} title="Couldn't load team report" onRetry={load} />
  ) : !report ? (
  <EmptyState icon={BarChart3} title="No data available" description="There isn't enough data to generate a team report yet." />
  ) : (

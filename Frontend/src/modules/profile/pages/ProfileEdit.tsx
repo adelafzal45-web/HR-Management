@@ -33,25 +33,21 @@ import {
   type Employee,
   type UpdateOwnProfilePayload,
 } from "@/modules/employees/types/employee.types";
+import {
+  employeeFieldSettingsApi,
+  DEFAULT_EMPLOYEE_FIELD_CONFIG,
+  type EmployeeFieldConfig,
+} from "@/modules/settings/api/employeeFieldSettingsApi";
 
 /** Mirrors PHONE_REGEX in Backend/src/users/dto/validation.constants.ts. */
 const PHONE_REGEX = /^\+?[\d][\d\s().-]{5,25}$/;
 const PHONE_MESSAGE = "Enter a valid phone number (7–20 digits, optional leading +).";
 
-/** Mirrors POSTAL_CODE_REGEX in the same file. */
-const POSTAL_CODE_REGEX = /^[A-Za-z0-9][A-Za-z0-9\s-]{1,18}$/;
-const POSTAL_CODE_MESSAGE =
-  "Enter a valid postal code (2–20 letters, digits, spaces or hyphens).";
-
 /** The self-editable text fields, in form order. */
 type FormState = {
   email: string;
   phone: string;
-  street_address: string;
-  city: string;
-  state_province: string;
-  postal_code: string;
-  country: string;
+  address: string;
   emergency_contact_name: string;
   emergency_contact_relationship: string;
   emergency_contact_phone: string;
@@ -60,11 +56,7 @@ type FormState = {
 const EMPTY_FORM: FormState = {
   email: "",
   phone: "",
-  street_address: "",
-  city: "",
-  state_province: "",
-  postal_code: "",
-  country: "",
+  address: "",
   emergency_contact_name: "",
   emergency_contact_relationship: "",
   emergency_contact_phone: "",
@@ -73,11 +65,7 @@ const EMPTY_FORM: FormState = {
 const toForm = (employee: Employee): FormState => ({
   email: employee.email ?? "",
   phone: employee.phone ?? "",
-  street_address: employee.street_address ?? "",
-  city: employee.city ?? "",
-  state_province: employee.state_province ?? "",
-  postal_code: employee.postal_code ?? "",
-  country: employee.country ?? "",
+  address: employee.address ?? "",
   emergency_contact_name: employee.emergency_contact_name ?? "",
   emergency_contact_relationship: employee.emergency_contact_relationship ?? "",
   emergency_contact_phone: employee.emergency_contact_phone ?? "",
@@ -93,6 +81,9 @@ function Field({
   disabled = false,
   hint,
   error,
+  requiredMark = false,
+  multiline = false,
+  rows = 3,
 }: {
   label: string;
   value: string;
@@ -102,26 +93,48 @@ function Field({
   disabled?: boolean;
   hint?: string;
   error?: string;
+  requiredMark?: boolean;
+  multiline?: boolean;
+  rows?: number;
 }) {
+  const controlClass = `w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${
+    error
+      ? "border-rose-300 bg-rose-50/40 focus:ring-rose-300/60"
+      : "border-gray-200 bg-white focus:ring-brand/60"
+  } disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500`;
+
   return (
     <label className="mb-4 block">
       <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700">
         {label}
+        {requiredMark && (
+          <span className="text-rose-500" aria-hidden="true">
+            *
+          </span>
+        )}
         {disabled && <Lock size={12} className="text-gray-400" />}
       </span>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        disabled={disabled}
-        onChange={(e) => onChange?.(e.target.value)}
-        aria-invalid={error ? true : undefined}
-        className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 ${
-          error
-            ? "border-rose-300 bg-rose-50/40 focus:ring-rose-300/60"
-            : "border-gray-200 bg-white focus:ring-brand/60"
-        } disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500`}
-      />
+      {multiline ? (
+        <textarea
+          value={value}
+          placeholder={placeholder}
+          disabled={disabled}
+          rows={rows}
+          onChange={(e) => onChange?.(e.target.value)}
+          aria-invalid={error ? true : undefined}
+          className={`${controlClass} resize-y`}
+        />
+      ) : (
+        <input
+          type={type}
+          value={value}
+          placeholder={placeholder}
+          disabled={disabled}
+          onChange={(e) => onChange?.(e.target.value)}
+          aria-invalid={error ? true : undefined}
+          className={controlClass}
+        />
+      )}
       {error ? (
         <span role="alert" className="mt-1 block text-xs font-medium text-rose-600">
           {error}
@@ -159,6 +172,12 @@ export default function ProfileEdit() {
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  // HR's required/optional config. Only the self-editable configurable fields
+  // (phone, address, emergency contact) are enforced here, mirroring the
+  // backend's SELF_EDITABLE_FIELDS-scoped check on PATCH /users/me/profile.
+  const [fieldConfig, setFieldConfig] = useState<EmployeeFieldConfig>(
+    DEFAULT_EMPLOYEE_FIELD_CONFIG,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,6 +198,16 @@ export default function ProfileEdit() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let active = true;
+    void employeeFieldSettingsApi.getEffectiveOrDefaults().then((config) => {
+      if (active) setFieldConfig(config);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const set = useCallback((key: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     // Clear the field's error as soon as it is touched: keeping a stale message
@@ -191,29 +220,53 @@ export default function ProfileEdit() {
     [form, initial],
   );
 
-  /** Client-side mirror of the DTO's validators — the server re-checks all of it. */
+  /**
+   * Client-side mirror of the DTO's validators — the server re-checks all of it.
+   *
+   * Requiredness follows HR's config, but only for the fields this screen can
+   * edit (phone, address, emergency contact): the backend enforces exactly this
+   * subset, so a required bank/gender field the employee can't touch never
+   * blocks a phone or address save.
+   */
   const validate = useCallback((): boolean => {
     const next: Partial<Record<keyof FormState, string>> = {};
 
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       next.email = "Enter a valid email address.";
     }
-    if (form.phone.trim() && !PHONE_REGEX.test(form.phone.trim())) {
+
+    if (!form.phone.trim()) {
+      if (fieldConfig.phone) next.phone = "Phone is required.";
+    } else if (!PHONE_REGEX.test(form.phone.trim())) {
       next.phone = PHONE_MESSAGE;
     }
-    if (form.postal_code.trim() && !POSTAL_CODE_REGEX.test(form.postal_code.trim())) {
-      next.postal_code = POSTAL_CODE_MESSAGE;
+
+    if (!form.address.trim() && fieldConfig.address) {
+      next.address = "Address is required.";
     }
+
+    if (!form.emergency_contact_name.trim() && fieldConfig.emergency_contact_name) {
+      next.emergency_contact_name = "Emergency contact name is required.";
+    }
+
     if (
-      form.emergency_contact_phone.trim() &&
-      !PHONE_REGEX.test(form.emergency_contact_phone.trim())
+      !form.emergency_contact_relationship.trim() &&
+      fieldConfig.emergency_contact_relationship
     ) {
+      next.emergency_contact_relationship = "Relationship is required.";
+    }
+
+    if (!form.emergency_contact_phone.trim()) {
+      if (fieldConfig.emergency_contact_phone) {
+        next.emergency_contact_phone = "Emergency contact phone is required.";
+      }
+    } else if (!PHONE_REGEX.test(form.emergency_contact_phone.trim())) {
       next.emergency_contact_phone = PHONE_MESSAGE;
     }
 
     setErrors(next);
     return Object.keys(next).length === 0;
-  }, [form]);
+  }, [form, fieldConfig]);
 
   /**
    * Sends only what changed.
@@ -354,6 +407,7 @@ export default function ProfileEdit() {
                   onChange={(v) => set("phone", v)}
                   placeholder="e.g. +92 300 1234567"
                   error={errors.phone}
+                  requiredMark={fieldConfig.phone}
                 />
               </div>
             </Card>
@@ -361,37 +415,14 @@ export default function ProfileEdit() {
             {/* ---- Address ---- */}
             <Card title="Address">
               <Field
-                label="Street Address"
-                value={form.street_address}
-                onChange={(v) => set("street_address", v)}
-                error={errors.street_address}
+                label="Address"
+                value={form.address}
+                onChange={(v) => set("address", v)}
+                error={errors.address}
+                requiredMark={fieldConfig.address}
+                multiline
+                placeholder="Street, city, state, postal code, country"
               />
-              <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
-                <Field
-                  label="City"
-                  value={form.city}
-                  onChange={(v) => set("city", v)}
-                  error={errors.city}
-                />
-                <Field
-                  label="State / Province"
-                  value={form.state_province}
-                  onChange={(v) => set("state_province", v)}
-                  error={errors.state_province}
-                />
-                <Field
-                  label="Postal Code"
-                  value={form.postal_code}
-                  onChange={(v) => set("postal_code", v)}
-                  error={errors.postal_code}
-                />
-                <Field
-                  label="Country"
-                  value={form.country}
-                  onChange={(v) => set("country", v)}
-                  error={errors.country}
-                />
-              </div>
             </Card>
 
             {/* ---- Emergency contact ---- */}
@@ -402,6 +433,7 @@ export default function ProfileEdit() {
                   value={form.emergency_contact_name}
                   onChange={(v) => set("emergency_contact_name", v)}
                   error={errors.emergency_contact_name}
+                  requiredMark={fieldConfig.emergency_contact_name}
                 />
                 <Field
                   label="Relationship"
@@ -409,6 +441,7 @@ export default function ProfileEdit() {
                   onChange={(v) => set("emergency_contact_relationship", v)}
                   placeholder="e.g. Spouse"
                   error={errors.emergency_contact_relationship}
+                  requiredMark={fieldConfig.emergency_contact_relationship}
                 />
                 <Field
                   label="Phone"
@@ -416,6 +449,7 @@ export default function ProfileEdit() {
                   value={form.emergency_contact_phone}
                   onChange={(v) => set("emergency_contact_phone", v)}
                   error={errors.emergency_contact_phone}
+                  requiredMark={fieldConfig.emergency_contact_phone}
                 />
               </div>
             </Card>

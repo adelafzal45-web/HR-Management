@@ -14,6 +14,7 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { ATTENDANCE_STATUSES } from '../attendance-status';
+import { ATTENDANCE_SOURCES } from '../attendance-source';
 
 /** "HH:mm:ss" on a 24-hour clock. */
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/;
@@ -105,6 +106,19 @@ export class BulkMarkAttendanceDto {
   @IsOptional()
   @IsUUID('4')
   department_id?: string;
+
+  @ApiPropertyOptional({
+    example: 'Online',
+    enum: ATTENDANCE_SOURCES,
+    description:
+      'Source applied to every row in this run: Device or Online. Defaults ' +
+      'to Online when omitted.',
+  })
+  @IsOptional()
+  @IsIn(ATTENDANCE_SOURCES, {
+    message: `source must be one of: ${ATTENDANCE_SOURCES.join(', ')}`,
+  })
+  source?: string;
 }
 
 export { MAX_BULK_EMPLOYEES };

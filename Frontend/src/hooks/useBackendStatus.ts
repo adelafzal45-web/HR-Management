@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { checkBackendConnection } from "@/api/client";
+import { checkBackendConnection } from "@/lib/connectivity";
 
 export type BackendStatus = "checking" | "online" | "offline";
 

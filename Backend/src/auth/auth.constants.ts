@@ -20,7 +20,7 @@ export const JWT_SECRET =
  * bounds how long a leaked access token stays useful.
  */
 export const JWT_EXPIRES_IN: JwtSignOptions['expiresIn'] = (process.env
-  .JWT_EXPIRES_IN ?? '15m') as JwtSignOptions['expiresIn'];
+  .JWT_EXPIRES_IN ?? '540m') as JwtSignOptions['expiresIn'];
 
 /**
  * Refresh tokens are signed with a SEPARATE secret from access tokens. If they

@@ -23,6 +23,7 @@ import {
 import { AttendanceService } from './attendance.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { AttendanceQueryDto } from './dto/attendance-query.dto';
 
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtUser } from '../auth/auth.constants';
@@ -147,7 +148,13 @@ export class AttendanceController {
     // When the DTO carries an explicit user_id, file the record for that employee;
     // otherwise default to the caller, which is what the self-service route does.
     const targetUserId = createAttendanceDto.user_id ?? req.user.user_id;
-    return this.attendanceService.create(createAttendanceDto, targetUserId);
+    // The caller is always the author, regardless of whose row it is — so a
+    // manual mark for a remote employee records who filed it.
+    return this.attendanceService.create(
+      createAttendanceDto,
+      targetUserId,
+      req.user.user_id,
+    );
   }
 
   @Post('bulk-mark')
@@ -184,10 +191,16 @@ export class AttendanceController {
   @RequirePermission('attendance.view')
   @ApiOperation({
     summary: 'List all attendance records',
-    description: 'Org-wide. Employees should use /attendance/me instead.',
+    description:
+      'Org-wide. Optional from/to/status narrow the set server-side; the ' +
+      'screen still paginates, searches and exports client-side. Employees ' +
+      'should use /attendance/me instead.',
   })
-  findAll() {
-    return this.attendanceService.findAll();
+  @ApiQuery({ name: 'from', required: false, example: '2026-08-01' })
+  @ApiQuery({ name: 'to', required: false, example: '2026-08-31' })
+  @ApiQuery({ name: 'status', required: false, example: 'Present' })
+  findAll(@Query() query: AttendanceQueryDto) {
+    return this.attendanceService.findAll(query);
   }
 
   @Get('working-day-calendar')
@@ -262,10 +275,15 @@ export class AttendanceController {
   @ApiResponse({ status: 200, description: 'Record corrected.' })
   @ApiResponse({ status: 404, description: 'Record not found.' })
   updateById(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() updateAttendanceDto: UpdateAttendanceDto,
   ) {
-    return this.attendanceService.updateById(id, updateAttendanceDto);
+    return this.attendanceService.updateById(
+      id,
+      updateAttendanceDto,
+      req.user.user_id,
+    );
   }
 
   @Delete(':id')

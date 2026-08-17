@@ -40,7 +40,7 @@ export type IdCardData = {
   emergencyName?: string;
   emergencyPhone?: string;
   emergencyRelation?: string;
-  /** Multi-line address, already assembled from the structured columns. */
+  /** Free-text address; any newlines the operator typed render as separate rows. */
   employeeAddress?: string;
   /** Resolved absolute URL of the full-size photo, or undefined for the icon. */
   photoUrl?: string;
@@ -82,21 +82,12 @@ function expiryFrom(joiningDate?: string): string | undefined {
 }
 
 /**
- * Assembles the printed address from the structured columns, falling back to
- * the legacy free-text `address` for records created before those columns
- * existed. Returned as `\n`-separated lines; the card renders each on its own
- * row rather than letting a long address run off the edge.
+ * The single free-text `address` (the structured street/city/state/postal/
+ * country columns were merged into it). Returned as-is; the card renders any
+ * newlines the operator typed as separate rows rather than letting a long
+ * address run off the edge.
  */
 function addressLines(employee: Employee): string | undefined {
-  const structured = [
-    employee.street_address,
-    [employee.city, employee.state_province].filter(Boolean).join(", "),
-    [employee.postal_code, employee.country].filter(Boolean).join(" "),
-  ]
-    .map((line) => line?.trim())
-    .filter((line): line is string => Boolean(line));
-
-  if (structured.length > 0) return structured.join("\n");
   return employee.address?.trim() || undefined;
 }
 

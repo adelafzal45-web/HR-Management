@@ -33,10 +33,6 @@ import {
   UpdateOwnProfileDto,
 } from './dto/update-own-profile.dto';
 import {
-  ADDRESS_REQUIRED_MESSAGE,
-  hasAnyAddressField,
-} from './dto/validation.constants';
-import {
   paginatedResult,
   type PaginatedResult,
 } from '../common/dto/pagination-query.dto';
@@ -51,6 +47,11 @@ import {
   validateImageUpload,
   type UploadedFile,
 } from '../common/upload/image-upload';
+import { EmployeeFieldSettingsService } from '../employee-field-settings/employee-field-settings.service';
+import {
+  EMPLOYEE_CONFIGURABLE_FIELDS,
+  type EmployeeConfigurableField,
+} from './dto/validation.constants';
 
 /** Cost factor for bcrypt. 12 is the current sensible default for a web app. */
 const BCRYPT_ROUNDS = 12;
@@ -143,6 +144,7 @@ export class UserService {
     private readonly auditService: AuditService,
     private readonly passwordPolicy: PasswordPolicyService,
     private readonly mailService: MailService,
+    private readonly employeeFieldSettings: EmployeeFieldSettingsService,
   ) {}
 
   // ==========================================
@@ -272,22 +274,59 @@ export class UserService {
   }
 
   /**
-   * Validates a Team Lead assignment.
+   * Translates a Postgres unique-violation on the users table into the same
+   * friendly 409 the pre-checks raise, then rethrows.
+   *
+   * `assertEmailAvailable` / `assertEmployeeCodeAvailable` cover the ordinary
+   * case, but both are check-then-insert: two concurrent requests claiming the
+   * same email or employee code both pass the check and one loses at the unique
+   * index. Without this, that loser surfaces as a raw 500 instead of a message
+   * HR can act on. A custom employee code has no advisory lock guarding it (only
+   * the auto-generated path does), so this race is reachable in normal use.
+   */
+  private rethrowUserUniqueViolation(error: unknown): never {
+    const pg = error as { code?: string; detail?: string } | null;
+    if (pg?.code === '23505') {
+      const detail = pg.detail ?? '';
+      if (detail.includes('employee_code')) {
+        throw new ConflictException('That employee code is already in use');
+      }
+      if (detail.toLowerCase().includes('email')) {
+        throw new ConflictException(
+          'An employee with that email already exists',
+        );
+      }
+      throw new ConflictException('That value is already in use');
+    }
+    throw error as Error;
+  }
+
+  /** `repository.save`, with unique-violations mapped to a friendly 409. */
+  private async saveUser(
+    repository: Repository<User>,
+    user: User,
+  ): Promise<User> {
+    try {
+      return await repository.save(user);
+    } catch (error) {
+      this.rethrowUserUniqueViolation(error);
+    }
+  }
+
+  /**
+   * Validates an evaluator (Team Lead) assignment.
    *
    * Three rules, none of which SQL can enforce for us: the lead must exist,
-   * must hold the Team Lead role, and must belong to the same department as the
-   * member. The department rule is the reason the create form filters the
-   * dropdown by department — this is the server-side half of that, because a
-   * filtered dropdown is a UI convenience, not a constraint.
+   * must hold the Team Lead role, and must be active. The evaluator may belong
+   * to ANY department — an employee can be evaluated by a lead outside their
+   * own department — so there is deliberately no same-department check here.
    *
-   * Self-assignment is rejected here with a clear message; the DB CHECK
-   * constraint also blocks it, but a 500 from a constraint violation is not a
-   * usable error.
+   * Self-assignment is rejected with a clear message; the DB CHECK constraint
+   * also blocks it, but a 500 from a constraint violation is not a usable error.
    */
   private async assertValidTeamLead(
     manager: EntityManager,
     teamLeadId: string,
-    departmentId: string,
     memberUserId?: string,
   ): Promise<void> {
     if (memberUserId && teamLeadId === memberUserId) {
@@ -298,7 +337,7 @@ export class UserService {
 
     const lead = await manager.getRepository(User).findOne({
       where: { user_id: teamLeadId },
-      relations: { role: true, department: true },
+      relations: { role: true },
     });
 
     if (!lead) {
@@ -308,13 +347,6 @@ export class UserService {
     if (lead.role?.role_name !== TEAM_LEAD_ROLE_NAME) {
       throw new BadRequestException(
         'The selected user is not a Team Lead. Assign them the Team Lead role first.',
-      );
-    }
-
-    const leadDepartmentId = lead.department?.department_id;
-    if (!leadDepartmentId || leadDepartmentId !== departmentId) {
-      throw new BadRequestException(
-        'The selected Team Lead belongs to a different department',
       );
     }
 
@@ -356,11 +388,7 @@ export class UserService {
     assign('gender', dto.gender);
     assign('blood_group', dto.blood_group);
 
-    assign('street_address', dto.street_address);
-    assign('city', dto.city);
-    assign('state_province', dto.state_province);
-    assign('postal_code', dto.postal_code);
-    assign('country', dto.country);
+    assign('address', dto.address);
 
     assign('emergency_contact_name', dto.emergency_contact_name);
     assign(
@@ -411,6 +439,53 @@ export class UserService {
     }
 
     return mapped;
+  }
+
+  /**
+   * Rejects a save when a field HR has marked required (Settings → Employee
+   * Fields) is blank on the record about to be persisted.
+   *
+   * Requiredness is a runtime config, so it can't live in class-validator
+   * decorators — those stay format-only + `@IsOptional`. Instead the check runs
+   * here against the *merged* record (existing DB values plus the incoming
+   * change), so a required field the caller didn't touch still passes when it
+   * already holds a value, and only a genuinely-blank required field is
+   * rejected.
+   *
+   * `limitTo` narrows the check to a subset of fields: self-service profile edit
+   * passes `SELF_EDITABLE_FIELDS` so a save is never blocked over a required
+   * field the employee cannot even edit (e.g. bank details an admin marked
+   * required). Admin create/update omit it and enforce the full configurable
+   * set.
+   */
+  private assertConfiguredRequiredFields(
+    record: Partial<User>,
+    config: Record<EmployeeConfigurableField, boolean>,
+    limitTo?: ReadonlySet<string>,
+  ): void {
+    const missing: string[] = [];
+
+    for (const field of EMPLOYEE_CONFIGURABLE_FIELDS) {
+      if (!config[field]) continue;
+      if (limitTo && !limitTo.has(field)) continue;
+
+      const value = record[field as keyof User];
+      const blank =
+        value === null ||
+        value === undefined ||
+        (typeof value === 'string' && value.trim().length === 0) ||
+        (typeof value === 'number' && Number.isNaN(value));
+
+      if (blank) missing.push(field);
+    }
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `The following fields are required: ${missing
+          .map(humanizeField)
+          .join(', ')}`,
+      );
+    }
   }
 
   /**
@@ -504,6 +579,11 @@ export class UserService {
     createUserDto: CreateUserDto,
     actor?: AuditActor,
   ): Promise<SafeUser> {
+    // Loaded outside the transaction: it's an independent single-row read and
+    // never needs to be part of the create's atomic unit.
+    const fieldConfig =
+      await this.employeeFieldSettings.getEffectiveConfigOrDefaults();
+
     const created = await this.dataSource.transaction(async (manager) => {
       await this.assertEmailAvailable(manager, createUserDto.email);
 
@@ -515,11 +595,7 @@ export class UserService {
       }
 
       if (createUserDto.team_lead_id) {
-        await this.assertValidTeamLead(
-          manager,
-          createUserDto.team_lead_id,
-          createUserDto.department_id,
-        );
+        await this.assertValidTeamLead(manager, createUserDto.team_lead_id);
       }
 
       const repository = manager.getRepository(User);
@@ -529,7 +605,10 @@ export class UserService {
         password: await this.hashPassword(createUserDto.password),
       });
 
-      const saved = await repository.save(user);
+      // Enforce HR's required/optional config against the fully-built record.
+      this.assertConfiguredRequiredFields(user, fieldConfig);
+
+      const saved = await this.saveUser(repository, user);
 
       if (createUserDto.leave_assignments?.length) {
         await this.syncLeaveBalances(
@@ -762,10 +841,12 @@ export class UserService {
   }
 
   /**
-   * Team Leads of one department, for the create/edit form's dropdown.
+   * Team Leads for the create/edit form's evaluator dropdown.
    *
-   * Scoped to active leads in the requested department only — the spec is
-   * explicit that leads from other departments must never appear.
+   * Returns active Team Leads across the whole organisation. An evaluator may be
+   * assigned to an employee in any department, so the dropdown is no longer
+   * scoped by department; `departmentId` is retained only as an optional
+   * narrowing filter for callers that still want it.
    */
   async findTeamLeads(departmentId?: string): Promise<SafeUser[]> {
     const qb = this.userRepository
@@ -831,6 +912,10 @@ export class UserService {
     updateUserDto: UpdateUserDto,
     actor?: AuditActor,
   ): Promise<SafeUser> {
+    // Independent single-row read; kept outside the transaction (see create).
+    const fieldConfig =
+      await this.employeeFieldSettings.getEffectiveConfigOrDefaults();
+
     const outcome = await this.dataSource.transaction(async (manager) => {
       const repository = manager.getRepository(User);
       const existing = await repository.findOne({
@@ -860,50 +945,21 @@ export class UserService {
         );
       }
 
-      // The lead must be valid against the department the employee will end up
-      // in, which may itself be changing in this same request.
+      // The evaluator may belong to any department, so there is nothing to
+      // re-validate against the (possibly changing) department — only that the
+      // lead exists, holds the Team Lead role and is active. A department change
+      // no longer clears the assignment: a cross-department evaluator is valid.
       if (updateUserDto.team_lead_id) {
-        const effectiveDepartmentId =
-          updateUserDto.department_id ?? existing.department?.department_id;
-
-        if (!effectiveDepartmentId) {
-          throw new BadRequestException(
-            'A department is required before assigning a Team Lead',
-          );
-        }
-
-        await this.assertValidTeamLead(
-          manager,
-          updateUserDto.team_lead_id,
-          effectiveDepartmentId,
-          id,
-        );
-      }
-
-      // Moving an employee to another department invalidates a lead from the
-      // old one. Rather than silently keeping a cross-department link, clear it
-      // and let HR pick a lead from the new department.
-      if (
-        updateUserDto.department_id &&
-        updateUserDto.department_id !== existing.department?.department_id &&
-        updateUserDto.team_lead_id === undefined
-      ) {
-        existing.team_lead_id = null;
+        await this.assertValidTeamLead(manager, updateUserDto.team_lead_id, id);
       }
 
       Object.assign(existing, this.mapScalars(updateUserDto));
 
-      // The "at least one address field" rule, checked against the merged
-      // record. It cannot live in UpdateUserDto: a PATCH body sees only what
-      // was sent, so a request clearing `city` alone looks like an empty
-      // address even when the street and country are still on file. Here both
-      // halves are visible, so an edit is rejected only when it would actually
-      // leave the employee with no address at all.
-      if (!hasAnyAddressField(existing)) {
-        throw new BadRequestException(ADDRESS_REQUIRED_MESSAGE);
-      }
+      // Enforce HR's required/optional config against the merged record, so a
+      // required field left untouched but already populated still passes.
+      this.assertConfiguredRequiredFields(existing, fieldConfig);
 
-      const saved = await repository.save(existing);
+      const saved = await this.saveUser(repository, existing);
 
       if (updateUserDto.leave_assignments) {
         await this.syncLeaveBalances(
@@ -944,12 +1000,12 @@ export class UserService {
   }
 
   /**
-   * Clears team links that became invalid after a lead moved or lost the role.
+   * Clears evaluator links that became invalid after the lead lost the role.
    *
-   * A Team Lead who changes department would otherwise keep reports in their
-   * old one, which is exactly the cross-department state
-   * `assertValidTeamLead` exists to prevent — the invariant has to hold when
-   * the lead changes, not only when a member does.
+   * When a Team Lead is demoted, everyone who points at them as evaluator must
+   * be detached — a non-lead cannot evaluate. Department is deliberately NOT a
+   * factor: a cross-department evaluator is valid, so moving the lead (or a
+   * report) between departments leaves the link intact.
    */
   private async detachInvalidReports(
     manager: EntityManager,
@@ -957,29 +1013,21 @@ export class UserService {
   ): Promise<void> {
     const repository = manager.getRepository(User);
 
-    const reports = await repository.find({
-      where: { team_lead_id: lead.user_id },
-      relations: { department: true },
+    const leadRole = await repository.findOne({
+      where: { user_id: lead.user_id },
+      relations: { role: true },
     });
 
-    if (reports.length === 0) {
+    // Still a Team Lead? Every existing link is still valid — nothing to do.
+    if (leadRole?.role?.role_name === TEAM_LEAD_ROLE_NAME) {
       return;
     }
 
-    const leadRole = await repository.findOne({
-      where: { user_id: lead.user_id },
-      relations: { role: true, department: true },
+    const reports = await repository.find({
+      where: { team_lead_id: lead.user_id },
     });
 
-    const stillLead = leadRole?.role?.role_name === TEAM_LEAD_ROLE_NAME;
-    const leadDepartmentId = leadRole?.department?.department_id;
-
-    const invalid = reports.filter(
-      (report) =>
-        !stillLead || report.department?.department_id !== leadDepartmentId,
-    );
-
-    for (const report of invalid) {
+    for (const report of reports) {
       report.team_lead_id = null;
       await repository.save(report);
     }
@@ -1295,6 +1343,10 @@ export class UserService {
     options: { allowEmailChange?: boolean } = {},
     actor?: AuditActor,
   ): Promise<SafeUser> {
+    // Independent single-row read; kept outside the transaction (see create).
+    const fieldConfig =
+      await this.employeeFieldSettings.getEffectiveConfigOrDefaults();
+
     const outcome = await this.dataSource.transaction(async (manager) => {
       const repository = manager.getRepository(User);
       const existing = await repository.findOne({
@@ -1326,6 +1378,15 @@ export class UserService {
             payload[field];
         }
       }
+
+      // Enforce HR's required config, but only over the fields this screen can
+      // actually edit: a required bank/gender field the employee can't touch
+      // must never block them from saving their phone or address.
+      this.assertConfiguredRequiredFields(
+        existing,
+        fieldConfig,
+        new Set<string>(SELF_EDITABLE_FIELDS),
+      );
 
       const saved = await repository.save(existing);
 

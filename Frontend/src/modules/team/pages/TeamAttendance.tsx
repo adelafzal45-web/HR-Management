@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CalendarX, Users } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import EmptyState from "@/components/common/EmptyState";
+import ErrorState from "@/components/common/ErrorState";
 import StatusBadge from "@/components/common/StatusBadge";
 import SectionTabs from "@/components/common/SectionTabs";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
@@ -19,23 +20,31 @@ export default function TeamAttendance() {
 
  const [data, setData] = useState<TeamMemberAttendance[]>([]);
  const [loading, setLoading] = useState(true);
+ const [error, setError] = useState<unknown>(null);
  const [month, setMonth] = useState(monthYearNow().month);
  const [year, setYear] = useState(monthYearNow().year);
  const [expanded, setExpanded] = useState<string | null>(null);
 
- useEffect(() => {
- (async () => {
+ const load = useCallback(async () => {
  setLoading(true);
+ setError(null);
  try {
  const rows = await teamAttendanceApi.getTeamAttendance({ month, year });
  setData(rows);
- } catch {
+ } catch (err) {
+ // Surface the failure instead of collapsing to an empty list — the
+ // /team/attendance route 404s until the backend adds a team controller,
+ // and a fake "no data" state would hide that entirely.
+ setError(err);
  setData([]);
  } finally {
  setLoading(false);
  }
- })();
  }, [month, year]);
+
+ useEffect(() => {
+ load();
+ }, [load]);
 
  const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1);
  const yearOptions = [now.getFullYear(), now.getFullYear() - 1];
@@ -91,6 +100,8 @@ export default function TeamAttendance() {
  <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />
  ))}
  </div>
+ ) : error ? (
+ <ErrorState error={error} title="Couldn't load team attendance" onRetry={load} />
  ) : data.length === 0 ? (
  <EmptyState icon={CalendarX} title="No attendance data" description="There's no attendance data available for the selected month." />
  ) : (

@@ -1,11 +1,10 @@
 // API module for org-wide Professional Management (HR / Administrator).
 //
-// Same contract as authApi/hrApi/settingsApi: every call tries the real
-// NestJS backend first (apiRequest — pings the API root, attaches the JWT),
-// and only falls back to the in-memory mock store (professionalMockData.ts) when
-// the backend is completely unreachable. Real backend errors (validation,
-// duplicate email, etc.) are never swallowed — only "can't reach the API at
-// all" triggers the fallback.
+// Talks to the real backend through the shared transport in lib/apiClient
+// (JWT bearer, refresh cookie, 401 replay, timeout). There is NO demo/mock
+// fallback: real backend errors (validation, a duplicate email, a 403 from
+// the permission guard) surface to the page as an `ApiError`, never swallowed
+// into a synthesized professional list.
 //
 // Verified directly against the backend source
 // (Backend/src/users/{users.controller,users.service,user.entity}.ts and
@@ -41,26 +40,69 @@
 // CreateUserDto/UpdateUserDto — presumably system-managed elsewhere, e.g.
 // attendance) and `managerId` (User has no manager relation/column at all).
 
-import { apiRequest, withDemoFallback, normalizeListResult } from "@/api/client";
-import {
-  mockProfessionalsApi,
-  type Professional,
-  type ProfessionalPayload,
-  type ProfessionalCreatePayload,
-  type ListParams,
-  type ListResult,
-} from "@/modules/professionals/mocks/professionalMockData";
+import { apiRequest, ENDPOINTS, normalizeListResult } from "@/lib/apiClient";
 
-export type {
+// ---- Domain model ---------------------------------------------------------
+// The camelCase shapes the UI consumes, translated to/from the /users wire
+// format by toApiBody/fromApiUser below. They live here (not in a mock) as
+// this module's own contract.
+
+export type Gender = "male" | "female" | "other";
+export type EmploymentType = "full_time" | "part_time" | "contract" | "intern";
+export type ProfessionalStatus = "active" | "inactive";
+
+export type Professional = {
+  professionalId: string;
+  professionalCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  profileImageUrl: string;
+  /** 128px derivative of `profileImageUrl`, for small renderings. */
+  profileImageThumbUrl?: string;
+  dateOfBirth: string; // YYYY-MM-DD
+  gender: Gender;
+  address: string;
+  joiningDate: string; // YYYY-MM-DD
+  employmentType: EmploymentType;
+  salary: number;
+  overtimeAllowed: boolean;
+  roleId: string;
+  roleName: string;
+  departmentId: string;
+  departmentName: string;
+  designationId: string;
+  designationName: string;
+  jobCategoryId: string;
+  jobCategoryName: string;
+  shiftId: string;
+  shiftName: string;
+  managerId: string;
+  managerName: string;
+  status: ProfessionalStatus;
+  createdAt: string;
+};
+
+export type ListParams = {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  departmentId?: string;
+  status?: ProfessionalStatus | "";
+};
+export type ListResult<T> = { data: T[]; total: number };
+
+export type ProfessionalPayload = Omit<
   Professional,
-  ProfessionalPayload,
-  ProfessionalCreatePayload,
-  Gender,
-  EmploymentType,
-  ProfessionalStatus,
-  ListParams,
-  ListResult,
-} from "@/modules/professionals/mocks/professionalMockData";
+  "professionalId" | "createdAt" | "roleName" | "departmentName" | "designationName" | "jobCategoryName" | "shiftName" | "managerName"
+>;
+
+// The backend's `POST /api/users` requires a `password` field that isn't
+// part of the persisted Professional record (and is never returned by GET).
+// Kept as a separate type so create() can require it without leaking it
+// into update()/the rest of the app.
+export type ProfessionalCreatePayload = ProfessionalPayload & { password: string };
 
 const qs = (params: ListParams) => {
   const search = new URLSearchParams();
@@ -221,52 +263,31 @@ function fromApiUser(rawIn: Record<string, unknown> | null | undefined): Profess
 }
 
 export const professionalsApi = {
-  list: (params: ListParams = {}) =>
-    withDemoFallback<ListResult<Professional>>(
-      () =>
-        apiRequest<unknown>(`/users${qs(params)}`).then((raw) => {
-          const normalized = normalizeListResult<Record<string, unknown>>(raw);
-          return { data: normalized.data.map(fromApiUser), total: normalized.total };
-        }),
-      () => mockProfessionalsApi.list(params),
+  list: (params: ListParams = {}): Promise<ListResult<Professional>> =>
+    apiRequest<unknown>(`${ENDPOINTS.users.base}${qs(params)}`).then((raw) => {
+      const normalized = normalizeListResult<Record<string, unknown>>(raw);
+      return { data: normalized.data.map(fromApiUser), total: normalized.total };
+    }),
+
+  getById: (id: string): Promise<Professional> =>
+    apiRequest<Record<string, unknown>>(ENDPOINTS.users.byId(id)).then(fromApiUser),
+
+  create: (payload: ProfessionalCreatePayload): Promise<Professional> =>
+    apiRequest<Record<string, unknown>>(ENDPOINTS.users.base, { method: "POST", body: toApiBody(payload) }).then(fromApiUser),
+
+  update: (id: string, payload: ProfessionalPayload): Promise<Professional> =>
+    apiRequest<Record<string, unknown>>(ENDPOINTS.users.byId(id), { method: "PATCH", body: toApiBody(payload) }).then(fromApiUser),
+
+  setStatus: (id: string, status: "active" | "inactive"): Promise<Professional> =>
+    apiRequest<Record<string, unknown>>(ENDPOINTS.users.byId(id), { method: "PATCH", body: { status: status === "active" } }).then(
+      fromApiUser,
     ),
 
-  getById: (id: string) =>
-    withDemoFallback<Professional>(
-      () => apiRequest<Record<string, unknown>>(`/users/${id}`).then(fromApiUser),
-      () => mockProfessionalsApi.getById(id),
-    ),
-
-  create: (payload: ProfessionalCreatePayload) =>
-    withDemoFallback<Professional>(
-      () => apiRequest<Record<string, unknown>>("/users", { method: "POST", body: toApiBody(payload) }).then(fromApiUser),
-      () => mockProfessionalsApi.create(payload),
-    ),
-
-  update: (id: string, payload: ProfessionalPayload) =>
-    withDemoFallback<Professional>(
-      () => apiRequest<Record<string, unknown>>(`/users/${id}`, { method: "PATCH", body: toApiBody(payload) }).then(fromApiUser),
-      () => mockProfessionalsApi.update(id, payload),
-    ),
-
-  setStatus: (id: string, status: "active" | "inactive") =>
-    withDemoFallback<Professional>(
-      () =>
-        apiRequest<Record<string, unknown>>(`/users/${id}`, { method: "PATCH", body: { status: status === "active" } }).then(
-          fromApiUser,
-        ),
-      () => mockProfessionalsApi.setStatus(id, status),
-    ),
-
-  remove: (id: string) =>
-    withDemoFallback<{ professionalId: string }>(
-      () =>
-        apiRequest<Record<string, unknown> | null>(`/users/${id}`, { method: "DELETE" }).then((raw) => ({
-          // A 204/empty body, `{ professionalId }`, `{ user_id }`, or the full
-          // deleted user object should all resolve correctly — fall back to
-          // the id we requested deletion of if the body doesn't echo one.
-          professionalId: str(pick(raw?.professionalId, raw?.id, raw?.user_id), id),
-        })),
-      () => mockProfessionalsApi.remove(id),
-    ),
+  remove: (id: string): Promise<{ professionalId: string }> =>
+    apiRequest<Record<string, unknown> | null>(ENDPOINTS.users.byId(id), { method: "DELETE" }).then((raw) => ({
+      // A 204/empty body, `{ professionalId }`, `{ user_id }`, or the full
+      // deleted user object should all resolve correctly — fall back to
+      // the id we requested deletion of if the body doesn't echo one.
+      professionalId: str(pick(raw?.professionalId, raw?.id, raw?.user_id), id),
+    })),
 };

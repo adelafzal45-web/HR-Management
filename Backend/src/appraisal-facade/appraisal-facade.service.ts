@@ -1826,18 +1826,23 @@ export class AppraisalFacadeService {
    * /appraisal/evaluate/:employeeId` still accepted them, which is a worse bug
    * than no scoping at all — it looks enforced and is not.
    *
-   * The roster is the union of the lead's assignments:
+   * The roster is the union of three sources:
    *
+   *  - direct links — every active employee whose `User.team_lead_id` points at
+   *    this lead. This is the per-employee evaluator assignment set on the
+   *    employee form; the scheduler stamps auto-generated reviews from the same
+   *    column, so the roster and the stamped reviewer cannot disagree. The
+   *    evaluator may belong to a different department than the employee.
    *  - `MEMBERS`    — exactly the `team_lead_assignment_members` join rows.
    *  - `DEPARTMENT` — every active member of that department, which is what the
    *    whole system did implicitly before assignments existed. Migration
    *    `1787300000000` backfilled one of these per existing lead, so nobody's
    *    visible roster changed on deploy.
    *
-   * A lead with no assignment row at all resolves to an empty set, not to their
-   * own department. Anything else would make the MEMBERS mode unenforceable —
-   * HR narrowing a lead to three people would still leave the department-wide
-   * fallback open underneath it.
+   * A lead with no direct links and no assignment row resolves to an empty set,
+   * not to their own department. That keeps MEMBERS mode enforceable — HR
+   * narrowing a lead to three people must not leave a department-wide fallback
+   * open underneath it.
    *
    * The requester is always removed: self-review is blocked separately in
    * `assertCanReview`, and a lead assigned to their own department would
@@ -1863,11 +1868,20 @@ export class AppraisalFacadeService {
       relations: { department: true, members: true },
     });
 
-    if (assignments.length === 0) {
-      return new Set<string>();
-    }
-
     const visible = new Set<string>();
+
+    // Direct evaluator links (User.team_lead_id). Authoritative on their own:
+    // the scheduler stamps every auto-generated review with
+    // `employee.team_lead_id`, so a lead assigned to an employee this way must
+    // be able to see and evaluate them even without a TeamLeadAssignment row —
+    // and regardless of department, since a cross-department evaluator is valid.
+    const directReports = await userRepo.find({
+      where: { team_lead_id: leadId, status: true },
+      select: { user_id: true },
+    });
+    for (const report of directReports) {
+      visible.add(report.user_id);
+    }
 
     const departmentIds = assignments
       .filter((a) => a.mode === TeamLeadAssignmentMode.DEPARTMENT)

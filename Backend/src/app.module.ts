@@ -31,6 +31,7 @@ import { AppraisalFormQuestionsModule } from './appraisal-form-questions/apprais
 import { AuthModule } from './auth/auth.module';
 import { AppraisalFacadeModule } from './appraisal-facade/appraisal-facade.module';
 import { CompanySettingsModule } from './company-settings/company-settings.module';
+import { EmployeeFieldSettingsModule } from './employee-field-settings/employee-field-settings.module';
 import { LeaveTypesModule } from './leave-types/leave-types.module';
 import { WorkingDaySchedulesModule } from './working-day-schedules/working-day-schedules.module';
 import { AuditModule } from './audit/audit.module';
@@ -122,6 +123,10 @@ import { DashboardModule } from './dashboard/dashboard.module';
 
     // Company details + branding (single global row).
     CompanySettingsModule,
+
+    // Which employee fields HR has marked required vs optional (single global
+    // row). UserModule imports this to enforce the config on create/update.
+    EmployeeFieldSettingsModule,
 
     // Leave type catalog backing the Settings > Leave Types screen.
     LeaveTypesModule,

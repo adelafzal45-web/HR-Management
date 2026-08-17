@@ -82,6 +82,7 @@ export default function ProfessionalsPage() {
   // uses under the hood.
   const [allProfessionals, setAllProfessionals] = useState<Professional[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<ProfessionalFilters>(EMPTY_FILTERS);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
@@ -105,10 +106,19 @@ export default function ProfessionalsPage() {
 
   const load = () => {
     setLoading(true);
+    setError(null);
     professionalsApi
       .list({ pageSize: 1000 })
-      .then((res) => setAllProfessionals(res.data))
-      .catch(() => toast.showError("Couldn't load professionals."))
+      .then((res) => {
+        setAllProfessionals(res.data);
+        setError(null);
+      })
+      .catch((err) => {
+        // A backend failure must not read as "no professionals": clear the rows
+        // and let the grid render its error + retry state instead of the empty one.
+        setAllProfessionals([]);
+        setError(err);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -461,6 +471,8 @@ export default function ProfessionalsPage() {
         rows={filteredRows}
         rowKey={(e) => e.professionalId}
         loading={loading}
+        error={error}
+        onRetry={load}
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search professionals…"

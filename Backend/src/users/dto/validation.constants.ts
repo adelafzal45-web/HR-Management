@@ -1,9 +1,4 @@
 import { Transform } from 'class-transformer';
-import {
-  registerDecorator,
-  type ValidationArguments,
-  type ValidationOptions,
-} from 'class-validator';
 
 /**
  * Shared validation vocabulary for the employee DTOs.
@@ -46,15 +41,18 @@ export const PASSWORD_REGEX =
 export const PASSWORD_MESSAGE =
   'must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character';
 
-/** Postal codes vary wildly by country — allow alphanumeric plus space/hyphen. */
-export const POSTAL_CODE_REGEX = /^[A-Za-z0-9][A-Za-z0-9\s-]{1,18}$/;
-export const POSTAL_CODE_MESSAGE =
-  'must be 2-20 alphanumeric characters (spaces and hyphens allowed)';
-
-/** Auto-generated format, e.g. TC-EMP-001. Validated when supplied explicitly. */
-export const EMPLOYEE_CODE_REGEX = /^TC-EMP-\d{3,}$/;
+/**
+ * Employee code — any short alphanumeric identifier.
+ *
+ * Must start with a letter or digit, then letters, digits or hyphens, up to the
+ * 20-character column limit. This is intentionally permissive: a code may be
+ * auto-generated (TC-EMP-001) or typed by HR in whatever scheme the company
+ * uses. Uniqueness — not format — is what actually matters, and that is checked
+ * in the service.
+ */
+export const EMPLOYEE_CODE_REGEX = /^[A-Za-z0-9][A-Za-z0-9-]{0,19}$/;
 export const EMPLOYEE_CODE_MESSAGE =
-  'must follow the format TC-EMP-001 (prefix TC-EMP- followed by at least 3 digits)';
+  'must be 1-20 characters: letters, digits and hyphens, starting with a letter or digit';
 
 /** Bank account numbers: digits and hyphens only, 6-34 chars (IBAN-length). */
 export const ACCOUNT_NUMBER_REGEX = /^[A-Za-z0-9-]{6,34}$/;
@@ -96,6 +94,63 @@ export const BLOOD_GROUPS = [
 ] as const;
 
 /**
+ * Employee fields whose required/optional state HR can toggle in
+ * Settings → Employee Fields.
+ *
+ * The single source of truth shared by the backend enforcement
+ * (`UserService`) and the settings module. Deliberately limited to columns that
+ * are NULLABLE in the database: making one "optional" must never require a
+ * schema change, and must never risk a NOT NULL insert failure. Structural
+ * fields (name, email, department, designation, role) and the NOT NULL /
+ * payroll-critical fields (`employee_type`, `job_category_id`, `shift_id`,
+ * `salary`) are intentionally NOT configurable — they are always required.
+ */
+export const EMPLOYEE_CONFIGURABLE_FIELDS = [
+  'phone',
+  'date_of_birth',
+  'gender',
+  'blood_group',
+  'address',
+  'emergency_contact_name',
+  'emergency_contact_relationship',
+  'emergency_contact_phone',
+  'bank_name',
+  'bank_account_number',
+  'bank_routing_code',
+] as const;
+
+export type EmployeeConfigurableField =
+  (typeof EMPLOYEE_CONFIGURABLE_FIELDS)[number];
+
+/** O(1) membership test for validating an incoming config's keys. */
+export const EMPLOYEE_CONFIGURABLE_FIELD_SET: ReadonlySet<string> = new Set(
+  EMPLOYEE_CONFIGURABLE_FIELDS,
+);
+
+/**
+ * Default requiredness — mirrors the hard-coded behaviour these fields had
+ * before the settings existed, so seeding this row changes nothing until an
+ * admin edits it (phone / date of birth / gender were required; the rest were
+ * optional).
+ */
+export const DEFAULT_EMPLOYEE_FIELD_CONFIG: Record<
+  EmployeeConfigurableField,
+  boolean
+> = {
+  phone: true,
+  date_of_birth: true,
+  gender: true,
+  blood_group: false,
+  address: false,
+  emergency_contact_name: false,
+  emergency_contact_relationship: false,
+  emergency_contact_phone: false,
+  bank_name: false,
+  bank_account_number: false,
+  bank_routing_code: false,
+};
+
+/**
  * Trims surrounding whitespace and collapses empty strings to undefined.
  *
  * The collapse matters for optional fields: without it, an untouched form input
@@ -117,6 +172,28 @@ export const Trim = () =>
   );
 
 /**
+ * Coerces an optional date field, collapsing blanks to `undefined`.
+ *
+ * Replaces `@Type(() => Date)` on a nullable date. The problem it solves: an
+ * untouched date input submits `""`, which `@Type(() => Date)` turns into an
+ * Invalid Date rather than dropping — so `@IsOptional()` sees a value present
+ * and `@IsDate()` then fails a field the user deliberately left blank. Here a
+ * blank becomes `undefined` (skipped), a parseable value becomes a `Date`
+ * (validated), and anything else is passed through untouched so `@IsDate()`
+ * rejects it with the intended message.
+ */
+export const TransformOptionalDate = () =>
+  Transform(({ value }: { value: unknown }) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (value instanceof Date) return value;
+    if (typeof value === 'string' || typeof value === 'number') {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date;
+    }
+    return value;
+  });
+
+/**
  * Lowercases and trims an email.
  *
  * Stored normalised so the duplicate check is meaningful:
@@ -128,65 +205,3 @@ export const NormalizeEmail = () =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   );
 
-/** The structured address parts, in the order the form presents them. */
-export const ADDRESS_FIELDS = [
-  'street_address',
-  'city',
-  'state_province',
-  'postal_code',
-  'country',
-] as const;
-
-export const ADDRESS_REQUIRED_MESSAGE =
-  'Enter at least one address field (street, city, state / province, postal code or country)';
-
-/** True when a record carries a non-blank value in any address column. */
-export function hasAnyAddressField(
-  record: Partial<Record<(typeof ADDRESS_FIELDS)[number], unknown>>,
-): boolean {
-  return ADDRESS_FIELDS.some((field) => {
-    const value = record[field];
-    return typeof value === 'string' && value.trim().length > 0;
-  });
-}
-
-/**
- * "At least one address field must be filled in."
- *
- * Every part is individually optional — plenty of real addresses have no
- * postal code, and an employee record should not be blocked on one — but an
- * employee with no address at all is a record nobody can post a letter to, so
- * the group as a whole is required.
- *
- * Declared on a synthetic property rather than on `street_address`, because
- * `@IsOptional()` suppresses *every* validator on the property it decorates:
- * hung on a real address field the check would be skipped in exactly the case
- * it exists to catch — all five left empty. The validator reads the address
- * fields off the object under validation, so the property it is attached to
- * carries no value of its own and setting one cannot satisfy the rule.
- *
- * This covers creates only. `UpdateUserDto` derives from this class through
- * `PartialType`, which marks each inherited property optional and so disables
- * this rule too — deliberately, since a PATCH body carrying no address is an
- * edit to something else, not an attempt to erase one. The equivalent check for
- * edits is made against the *merged* record in `UserService.update`, which is
- * the only place the stored values and the incoming ones are both visible.
- */
-export function RequiresAnyAddressField(options?: ValidationOptions) {
-  return function (object: object, propertyName: string) {
-    registerDecorator({
-      name: 'requiresAnyAddressField',
-      target: object.constructor,
-      propertyName,
-      options,
-      validator: {
-        validate(_value: unknown, args: ValidationArguments) {
-          return hasAnyAddressField(args.object as Record<string, unknown>);
-        },
-        defaultMessage() {
-          return ADDRESS_REQUIRED_MESSAGE;
-        },
-      },
-    });
-  };
-}

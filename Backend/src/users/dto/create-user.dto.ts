@@ -26,8 +26,6 @@ import {
   PHONE_MESSAGE,
   PASSWORD_REGEX,
   PASSWORD_MESSAGE,
-  POSTAL_CODE_REGEX,
-  POSTAL_CODE_MESSAGE,
   EMPLOYEE_CODE_REGEX,
   EMPLOYEE_CODE_MESSAGE,
   ACCOUNT_NUMBER_REGEX,
@@ -37,9 +35,9 @@ import {
   GENDERS,
   EMPLOYMENT_TYPES,
   BLOOD_GROUPS,
-  RequiresAnyAddressField,
   Trim,
   TrimOptional,
+  TransformOptionalDate,
   NormalizeEmail,
 } from './validation.constants';
 
@@ -83,14 +81,10 @@ export class LeaveAssignmentDto {
 /**
  * Payload for creating an employee.
  *
- * Two deliberate changes from the previous version of this DTO:
- *
- *   - `employee_code` is now OPTIONAL. The service generates the next
- *     TC-EMP-NNN inside a locked transaction; supplying one explicitly is
- *     still allowed (for data migration) and is uniqueness-checked.
- *   - The free-text `address` field is replaced by structured address parts.
- *     The legacy column still exists on the entity for backward compatibility,
- *     but new records write the structured fields.
+ * `employee_code` is OPTIONAL: the service generates the next code inside a
+ * locked transaction when it is omitted; supplying one explicitly is still
+ * allowed and is uniqueness-checked. The address is a single free-text field —
+ * the structured parts it once had were merged back into it.
  */
 export class CreateUserDto {
   // ==========================================
@@ -100,7 +94,7 @@ export class CreateUserDto {
   @ApiPropertyOptional({
     example: 'TC-EMP-001',
     description:
-      'Auto-generated when omitted. Supply only to preserve an existing code during migration.',
+      'Any unique code (letters, digits, hyphens; up to 20 chars). Auto-generated as TC-EMP-NNN when omitted.',
   })
   @IsOptional()
   @Trim()
@@ -127,11 +121,13 @@ export class CreateUserDto {
   @Matches(NAME_REGEX, { message: `Last name ${NAME_MESSAGE}` })
   last_name!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: '2000-01-01',
-    description: 'Date of birth. The UI defaults this to 01-01-2000.',
+    description:
+      'Date of birth. Required by default; the Employee Field Settings can make it optional. The UI defaults it to 01-01-2000.',
   })
-  @Type(() => Date)
+  @TransformOptionalDate()
+  @IsOptional()
   @IsDate({ message: 'Date of birth must be a valid date' })
   // Guards against a typo putting a future birth date into payroll/appraisal
   // calculations. An exact minimum-age rule is policy, not validation, so it
@@ -139,12 +135,13 @@ export class CreateUserDto {
   @MaxDate(() => new Date(), {
     message: 'Date of birth cannot be in the future',
   })
-  date_of_birth!: Date;
+  date_of_birth?: Date;
 
-  @ApiProperty({ example: 'Male', enum: GENDERS })
-  @Trim()
+  @ApiPropertyOptional({ example: 'Male', enum: GENDERS })
+  @IsOptional()
+  @TrimOptional()
   @IsIn(GENDERS, { message: `Gender must be one of: ${GENDERS.join(', ')}` })
-  gender!: string;
+  gender?: string;
 
   @ApiProperty({ example: 'ali.khan@technocues.com' })
   @NormalizeEmail()
@@ -152,13 +149,13 @@ export class CreateUserDto {
   @MaxLength(255)
   email!: string;
 
-  @ApiProperty({ example: '+92 300 1234567' })
-  @Trim()
+  @ApiPropertyOptional({ example: '+92 300 1234567' })
+  @IsOptional()
+  @TrimOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Phone number is required' })
   @MaxLength(20)
   @Matches(PHONE_REGEX, { message: `Phone ${PHONE_MESSAGE}` })
-  phone!: string;
+  phone?: string;
 
   @ApiProperty({
     example: 'Str0ng@Pass',
@@ -194,73 +191,20 @@ export class CreateUserDto {
   // ADDRESS
   // ==========================================
   //
-  // Every part is optional on its own; at least one must be filled in. Real
-  // addresses skip parts all the time — plenty of places have no postal code —
-  // and requiring all five blocked an employee record on a field nobody had.
-  // The group rule below keeps "no address at all" from getting through.
-  //
-  // `TrimOptional` rather than `Trim`: an untouched input submits `""`, which
-  // satisfies `@IsOptional()` (the value is present) and would then fail the
-  // format regex, so the user is told their postal code is invalid for a field
-  // they deliberately left blank.
+  // A single free-text field. `TrimOptional` collapses an untouched (empty)
+  // input to `undefined` so a blank submission is treated as "not provided"
+  // rather than an empty string. Whether it is required at all is decided by
+  // the Employee Field Settings, enforced against the merged record in the
+  // service — not by a decorator here.
 
-  @ApiPropertyOptional({ example: 'House 12, Street 4, Gulberg III' })
+  @ApiPropertyOptional({
+    example: 'House 12, Street 4, Gulberg III, Lahore, Punjab 54000, Pakistan',
+  })
   @TrimOptional()
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  street_address?: string;
-
-  @ApiPropertyOptional({ example: 'Lahore' })
-  @TrimOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  @Matches(NAME_REGEX, { message: `City ${NAME_MESSAGE}` })
-  city?: string;
-
-  @ApiPropertyOptional({ example: 'Punjab' })
-  @TrimOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  @Matches(NAME_REGEX, { message: `State / province ${NAME_MESSAGE}` })
-  state_province?: string;
-
-  @ApiPropertyOptional({ example: '54000' })
-  @TrimOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  @Matches(POSTAL_CODE_REGEX, { message: `Postal code ${POSTAL_CODE_MESSAGE}` })
-  postal_code?: string;
-
-  @ApiPropertyOptional({ example: 'Pakistan' })
-  @TrimOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  @Matches(NAME_REGEX, { message: `Country ${NAME_MESSAGE}` })
-  country?: string;
-
-  /**
-   * Carries the "at least one address field" rule. Not a real field — nothing
-   * is ever read from or written to it.
-   *
-   * It exists because the rule has to be attached to a property that is *not*
-   * `@IsOptional()`: that decorator suppresses every validator on its own
-   * property, so hung on `street_address` the check would be skipped precisely
-   * when all five are empty. See `RequiresAnyAddressField`.
-   *
-   * A client may set it — `whitelist: true` keeps any property carrying a
-   * validator, so unlike a genuinely unknown key this one survives the pipe.
-   * It stays out of the database because `UserService.mapScalars` copies an
-   * explicit list of columns rather than spreading the DTO, and setting it
-   * cannot satisfy the rule either: the validator reads the five address
-   * fields, never its own value.
-   */
-  @RequiresAnyAddressField()
-  address_group?: never;
+  address?: string;
 
   // ==========================================
   // EMPLOYMENT DETAILS
@@ -299,7 +243,7 @@ export class CreateUserDto {
 
   @ApiPropertyOptional({
     description:
-      'Team Lead UUID. Must be a user in the SAME department who holds the Team Lead role — validated server-side.',
+      'Evaluator (Team Lead) UUID. Must be a user who holds the Team Lead role — from any department — validated server-side.',
   })
   @IsOptional()
   @IsUUID('4', { message: 'team_lead_id must be a valid UUID' })

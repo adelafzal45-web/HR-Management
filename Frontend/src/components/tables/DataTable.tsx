@@ -11,6 +11,8 @@ import {
  ChevronsUpDown,
  Filter,
  X,
+ AlertTriangle,
+ RefreshCw,
 } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
 
@@ -59,6 +61,15 @@ type DataTableProps<T> = {
  emptyIcon: LucideIcon;
  emptyTitle: string;
  emptyDescription?: string;
+ /**
+  * When set, the table renders an error panel — with a Retry button when
+  * `onRetry` is given — in place of rows or the empty state. Pass a
+  * user-facing message, e.g. from `describeError()`. Loading takes precedence,
+  * so a retry in progress shows the skeleton rather than the stale error. This
+  * is what keeps a failed fetch from masquerading as "no results".
+  */
+ error?: string | null;
+ onRetry?: () => void;
  page: number;
  pageSize: number;
  total: number;
@@ -221,6 +232,32 @@ function Pagination({
  );
 }
 
+// Shown in place of rows when a fetch fails. Same footprint as EmptyState so
+// the table doesn't jump, but a rose tone and a Retry make clear this is a
+// failure to recover from — not "no data". The message comes from the caller
+// (typically describeError), so it reflects the real status, never a guess.
+function TableErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+ return (
+ <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white px-6 py-14 text-center shadow-sm ring-1 ring-gray-100">
+ <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-500">
+ <AlertTriangle size={24} />
+ </span>
+ <p className="text-sm font-semibold text-gray-900">Couldn't load this data</p>
+ <p className="max-w-sm text-sm text-gray-500">{message}</p>
+ {onRetry && (
+ <button
+ type="button"
+ onClick={onRetry}
+ className="mt-1 flex items-center gap-2 rounded-full bg-gradient-to-r from-brand to-brand-dark px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+ >
+ <RefreshCw size={15} />
+ Try again
+ </button>
+ )}
+ </div>
+ );
+}
+
 export default function DataTable<T>({
  columns,
  rows = [],
@@ -232,6 +269,8 @@ export default function DataTable<T>({
  emptyIcon,
  emptyTitle,
  emptyDescription,
+ error,
+ onRetry,
  page,
  pageSize,
  total,
@@ -575,6 +614,10 @@ export default function DataTable<T>({
  <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />
  ))}
  </div>
+ ) : error ? (
+ <div className="p-4">
+ <TableErrorState message={error} onRetry={onRetry} />
+ </div>
  ) : rows.length === 0 ? (
  <div className="p-4">
  <EmptyState icon={emptyIcon} title={emptyTitle} description={emptyDescription} />
@@ -673,7 +716,7 @@ export default function DataTable<T>({
  )}
 
  {/* Pagination */}
- {!loading && total > 0 && (
+ {!loading && !error && total > 0 && (
  <div className="flex flex-col items-center justify-between gap-3 border-t border-gray-100 p-4 text-sm text-gray-500 lg:flex-row">
  <div className="flex w-full flex-col items-center gap-3 xs:flex-row xs:justify-between lg:w-auto lg:justify-start lg:gap-5">
  <p>

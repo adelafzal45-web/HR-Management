@@ -12,6 +12,7 @@ import { AuthorizationModule } from '../authorization/authorization.module';
 import { AuditModule } from '../audit/audit.module';
 import { PasswordPolicyModule } from '../auth/password-policy.module';
 import { MailModule } from '../mail/mail.module';
+import { EmployeeFieldSettingsModule } from '../employee-field-settings/employee-field-settings.module';
 
 @Module({
   imports: [
@@ -28,6 +29,11 @@ import { MailModule } from '../mail/mail.module';
     // Account lifecycle notifications (created, activated, deactivated, profile
     // updated). Enqueued, never sent inline — see MailService.
     MailModule,
+    // Requiredness config (single-row). UserService injects its service to
+    // reject a blank value for any field HR has marked required on create,
+    // admin update, and self-service profile edit. Acyclic: this module only
+    // depends on its own entity + AuthorizationModule.
+    EmployeeFieldSettingsModule,
   ],
   controllers: [UserController],
   providers: [UserService],

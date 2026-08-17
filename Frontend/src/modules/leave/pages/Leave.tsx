@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Plus, CalendarX2, History } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import StatusBadge from "@/components/common/StatusBadge";
 import EmptyState from "@/components/common/EmptyState";
+import ErrorState from "@/components/common/ErrorState";
 import Modal from "@/components/dialogs/Modal";
 import SectionTabs from "@/components/common/SectionTabs";
 import { PrimaryButton } from "@/components/forms/FormField";
@@ -64,6 +65,12 @@ export default function Leave() {
  const [ledger, setLedger] = useState<MyLeaveHistoryEntry[]>([]);
  const [historyView, setHistoryView] = useState<HistoryView>("requests");
  const [loading, setLoading] = useState(true);
+ // Each of the four calls in loadAll can fail on its own; a rejection is
+ // surfaced in its own region rather than silently rendering as empty.
+ const [balancesError, setBalancesError] = useState<unknown>(null);
+ const [leaveTypesError, setLeaveTypesError] = useState<unknown>(null);
+ const [requestsError, setRequestsError] = useState<unknown>(null);
+ const [ledgerError, setLedgerError] = useState<unknown>(null);
 
  const [modalOpen, setModalOpen] = useState(false);
  const [leaveTypeId, setLeaveTypeId] = useState("");
@@ -76,8 +83,10 @@ export default function Leave() {
 
  // allSettled, not all: the ledger is the newest of the four calls, so a
  // backend that predates /leave-entitlements/me/history would otherwise take
- // the balance cards and request list down with it.
- const loadAll = async () => {
+ // the balance cards and request list down with it. Each rejection is kept as
+ // that section's own error, so a failure surfaces there instead of blanking
+ // the others or reading as an innocuous empty state.
+ const loadAll = useCallback(async () => {
  setLoading(true);
  const [b, t, r, h] = await Promise.allSettled([
  leaveApi.getBalance(),
@@ -85,17 +94,20 @@ export default function Leave() {
  leaveApi.getMyLeaves(),
  leaveApi.getMyHistory(),
  ]);
- if (b.status === "fulfilled") setBalances(b.value);
- if (t.status === "fulfilled") setLeaveTypes(t.value);
- if (r.status === "fulfilled") setRequests(r.value);
- if (h.status === "fulfilled") setLedger(h.value);
+ if (b.status === "fulfilled") { setBalances(b.value); setBalancesError(null); }
+ else { setBalances([]); setBalancesError(b.reason); }
+ if (t.status === "fulfilled") { setLeaveTypes(t.value); setLeaveTypesError(null); }
+ else { setLeaveTypes([]); setLeaveTypesError(t.reason); }
+ if (r.status === "fulfilled") { setRequests(r.value); setRequestsError(null); }
+ else { setRequests([]); setRequestsError(r.reason); }
+ if (h.status === "fulfilled") { setLedger(h.value); setLedgerError(null); }
+ else { setLedger([]); setLedgerError(h.reason); }
  setLoading(false);
- };
+ }, []);
 
  useEffect(() => {
  loadAll();
- // eslint-disable-next-line react-hooks/exhaustive-deps
- }, []);
+ }, [loadAll]);
 
  const openModal = () => {
  setLeaveTypeId(leaveTypes[0]?.leaveTypeId ?? "");
@@ -179,7 +191,11 @@ export default function Leave() {
  </button>
  </div>
 
- {!loading && balances.length === 0 ? (
+ {!loading && balancesError ? (
+ <div className="mt-4">
+ <ErrorState error={balancesError} title="Couldn't load your leave balance" onRetry={loadAll} />
+ </div>
+ ) : !loading && balances.length === 0 ? (
  <div className="mt-4">
  <EmptyState
  icon={CalendarX2}
@@ -256,7 +272,9 @@ export default function Leave() {
  ))}
  </div>
  ) : historyView === "ledger" ? (
- ledger.length === 0 ? (
+ ledgerError ? (
+ <ErrorState error={ledgerError} title="Couldn't load your balance activity" onRetry={loadAll} />
+ ) : ledger.length === 0 ? (
  <EmptyState
  icon={History}
  title="No balance activity yet"
@@ -309,6 +327,8 @@ export default function Leave() {
  </tbody>
  </table>
  )
+ ) : requestsError ? (
+ <ErrorState error={requestsError} title="Couldn't load your leave requests" onRetry={loadAll} />
  ) : requests.length === 0 ? (
  <EmptyState icon={CalendarX2} title="No leave requests yet" description="Requests you submit will show up here." />
  ) : (
@@ -353,6 +373,9 @@ export default function Leave() {
  </div>
 
  <Modal open={modalOpen} title="Apply for Leave" onClose={() => setModalOpen(false)}>
+ {leaveTypesError && leaveTypes.length === 0 ? (
+ <ErrorState error={leaveTypesError} title="Couldn't load leave types" onRetry={loadAll} />
+ ) : (
  <form onSubmit={handleSubmit}>
  <label className="mb-4 block">
  <span className="mb-2 block text-sm font-medium text-gray-900">Leave Type</span>
@@ -456,6 +479,7 @@ export default function Leave() {
  Submit Request
  </PrimaryButton>
  </form>
+ )}
  </Modal>
  </DashboardLayout>
  );

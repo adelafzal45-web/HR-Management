@@ -106,14 +106,9 @@ export type Employee = {
   gender?: string;
   blood_group?: string;
 
-  // Address — `address` is the legacy free-text column, kept for records
-  // created before the structured fields existed.
+  // Address — a single free-text field. The structured street/city/state /
+  // postal/country columns were merged back into this and dropped.
   address?: string;
-  street_address?: string;
-  city?: string;
-  state_province?: string;
-  postal_code?: string;
-  country?: string;
 
   // Emergency contact
   emergency_contact_name?: string;
@@ -218,11 +213,12 @@ export type EmployeeDocument = {
 // ---- Request payloads ------------------------------------------------------
 
 /**
- * POST /users. `employee_code` is omitted deliberately: the service generates
- * the next TC-EMP-NNN inside a locked transaction. Sending one from the form
- * would reintroduce the duplicate-code race the lock exists to prevent.
+ * POST /users. `employee_code` is optional: leave it blank and the service
+ * generates the next TC-EMP-NNN inside a locked transaction; supply a custom
+ * one and it is used as-is after a uniqueness check.
  */
 export type CreateEmployeePayload = {
+  employee_code?: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -235,12 +231,8 @@ export type CreateEmployeePayload = {
   profile_image_thumb?: string;
   blood_group?: string;
 
-  // Each part is optional; the server requires at least one of the five.
-  street_address?: string;
-  city?: string;
-  state_province?: string;
-  postal_code?: string;
-  country?: string;
+  // Single free-text address (the structured parts were merged into it).
+  address?: string;
 
   joining_date: string;
   employee_type: string;
@@ -270,7 +262,7 @@ export type CreateEmployeePayload = {
  * PATCH /users/:id — every field optional (UpdateUserDto extends
  * PartialType(CreateUserDto)), minus `password`: credential changes go through
  * POST /users/:id/reset-password so they are separately permissioned and
- * audited. `employee_code` IS editable here, unlike on create.
+ * audited. `employee_code` is editable here, the same as on create.
  */
 export type UpdateEmployeePayload = Partial<
   Omit<CreateEmployeePayload, 'password' | 'team_lead_id'>
@@ -308,11 +300,7 @@ export type UpdateOwnProfilePayload = {
   profile_image?: string;
   /** 128px WebP derivative of `profile_image`, for small renderings. */
   profile_image_thumb?: string;
-  street_address?: string;
-  city?: string;
-  state_province?: string;
-  postal_code?: string;
-  country?: string;
+  address?: string;
   emergency_contact_name?: string;
   emergency_contact_relationship?: string;
   emergency_contact_phone?: string;

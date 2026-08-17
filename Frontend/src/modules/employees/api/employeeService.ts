@@ -1,12 +1,11 @@
 // ============================================================================
 // Employee Management API — the real backend, nothing else.
 //
-// Deliberately does NOT use `withDemoFallback`. The legacy employeeApi.ts wraps
-// every call so an unreachable backend silently yields mock rows; that is
-// tolerable for a read-only dashboard widget and actively harmful here, because
-// a "successful" create against the mock store reports an employee code that
-// was never issued and an id that does not exist. Callers of this module get a
-// real ApiError and render an error state.
+// Every call talks to the real backend or throws — there is no fallback that
+// could mask a failure. A "successful" create that never reached the database
+// would report an employee code that was never issued and an id that does not
+// exist, so callers of this module get a real ApiError and render an error
+// state instead.
 //
 // Every path below is a route that exists in Backend/src/users/users.controller.ts.
 // ============================================================================
@@ -70,11 +69,11 @@ export const employeeService = {
   get: (id: string) => api.get<Employee>(ENDPOINTS.users.byId(id)),
 
   /**
-   * GET /users/team-leads — for the Team Lead dropdown.
+   * GET /users/team-leads — for the Evaluator (team lead) dropdown.
    *
-   * Passing no department returns every active lead; passing one returns only
-   * that department's leads, which is what the form must use. The spec is
-   * explicit that leads from other departments must never be offered.
+   * Passing no department returns every active team lead; passing one narrows to
+   * that department. Since an evaluator may now be from any department, the
+   * employee form calls this with no argument to list candidates org-wide.
    */
   teamLeads: (departmentId?: string) =>
     api.get<Employee[]>(

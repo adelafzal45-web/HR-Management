@@ -2,15 +2,12 @@
 // tab): one row per (employee, leave type) with entitlement / used /
 // remaining / pending, backed by GET /leave-entitlements/balances.
 //
-// Same contract as adminOpsApi.ts / employeeApi.ts: try the real backend
-// first (apiRequest — pings the API root, attaches the JWT), and only fall
-// back to a client-synthesized demo dataset when the backend is completely
-// unreachable. Real backend errors are never swallowed.
+// Talks to the real backend through the shared transport in lib/apiClient
+// (JWT bearer, refresh cookie, 401 replay, timeout). There is NO demo/mock
+// fallback: real backend errors surface to the page as an `ApiError` rather
+// than being swallowed into a synthesized balance table.
 
-import { apiRequest, withDemoFallback, normalizeListResult } from "@/api/client";
-import { ENDPOINTS } from "@/app/config/endpoints";
-import { employeesApi } from "@/modules/employees/api/employeeApi";
-import { leaveTypes as mockLeaveTypes } from "@/mocks/hrMockData";
+import { apiRequest, ENDPOINTS, normalizeListResult } from "@/lib/apiClient";
 
 export type LeaveBalanceStatus = "active" | "inactive";
 
@@ -95,101 +92,10 @@ function qs(params: LeaveBalanceListParams): string {
   return str ? `?${str}` : "";
 }
 
-// ---- Demo fallback: synthesize a deterministic-but-plausible balance ------
-// table from whatever employees the demo store already has, so the tab is
-// still usable when the real API is unreachable.
-
-function seedFor(a: string, b: string): number {
-  let hash = 0;
-  const s = `${a}:${b}`;
-  for (let i = 0; i < s.length; i++) {
-    hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
-
-async function buildDemoRows(): Promise<LeaveBalanceRow[]> {
-  const employeesRes = await employeesApi.list({ pageSize: 1000 });
-  const rows: LeaveBalanceRow[] = [];
-  for (const e of employeesRes.data) {
-    for (const lt of mockLeaveTypes) {
-      const seed = seedFor(e.employeeId, lt.leaveTypeId);
-      const allocated = lt.allocatedDays || 12;
-      const used = allocated > 0 ? seed % (allocated + 1) : 0;
-      const pending = seed % 5 === 0 ? 1 + (seed % 3) : 0;
-      rows.push({
-        userId: e.employeeId,
-        employeeCode: e.employeeCode,
-        employeeName: `${e.firstName} ${e.lastName}`.trim(),
-        departmentId: e.departmentId,
-        departmentName: e.departmentName,
-        designationName: e.designationName,
-        leaveTypeId: lt.leaveTypeId,
-        leaveTypeName: lt.leaveTypeName,
-        totalEntitlement: allocated,
-        usedLeave: used,
-        remainingLeave: Math.max(0, allocated - used),
-        pendingRequests: pending,
-        status: e.status === "active" ? "active" : "inactive",
-      });
-    }
-  }
-  return rows;
-}
-
-function applyDemoFilters(rows: LeaveBalanceRow[], params: LeaveBalanceListParams): LeaveBalanceListResult {
-  const needle = params.search?.trim().toLowerCase();
-  let filtered = rows.filter((r) => {
-    if (needle) {
-      const haystack = [r.employeeName, r.employeeCode, r.departmentName, r.designationName, r.leaveTypeName]
-        .join(" ")
-        .toLowerCase();
-      if (!haystack.includes(needle)) return false;
-    }
-    if (params.departmentId && r.departmentId !== params.departmentId) return false;
-    if (params.leaveTypeId && r.leaveTypeId !== params.leaveTypeId) return false;
-    if (params.employeeId && r.userId !== params.employeeId) return false;
-    if (params.status && r.status !== params.status) return false;
-    return true;
-  });
-
-  if (params.sortBy) {
-    const dir = params.sortOrder === "ASC" ? 1 : -1;
-    const key: Record<string, (r: LeaveBalanceRow) => string | number> = {
-      employee_name: (r) => r.employeeName,
-      department: (r) => r.departmentName,
-      leave_type: (r) => r.leaveTypeName,
-      remaining: (r) => r.remainingLeave,
-      status: (r) => r.status,
-    };
-    const accessor = key[params.sortBy];
-    if (accessor) {
-      filtered = [...filtered].sort((a, b) => {
-        const av = accessor(a);
-        const bv = accessor(b);
-        if (av < bv) return -1 * dir;
-        if (av > bv) return 1 * dir;
-        return 0;
-      });
-    }
-  }
-
-  const total = filtered.length;
-  const page = params.page ?? 1;
-  const pageSize = params.pageSize ?? 10;
-  const start = pageSize > 0 ? (page - 1) * pageSize : 0;
-  const data = pageSize > 0 ? filtered.slice(start, start + pageSize) : filtered;
-  return { data, total };
-}
-
 export const leaveEntitlementsApi = {
-  list: (params: LeaveBalanceListParams = {}) =>
-    withDemoFallback<LeaveBalanceListResult>(
-      async () => {
-        const raw = await apiRequest<unknown>(`${ENDPOINTS.leaveEntitlements.balances}${qs(params)}`);
-        const normalized = normalizeListResult<ApiLeaveBalanceRow>(raw);
-        return { data: normalized.data.map(adaptRow), total: normalized.total };
-      },
-      async () => applyDemoFilters(await buildDemoRows(), params),
-    ),
+  list: async (params: LeaveBalanceListParams = {}): Promise<LeaveBalanceListResult> => {
+    const raw = await apiRequest<unknown>(`${ENDPOINTS.leaveEntitlements.balances}${qs(params)}`);
+    const normalized = normalizeListResult<ApiLeaveBalanceRow>(raw);
+    return { data: normalized.data.map(adaptRow), total: normalized.total };
+  },
 };

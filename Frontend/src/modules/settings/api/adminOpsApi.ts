@@ -1,63 +1,218 @@
 // API module for the HR/Administrator operational workspace: org-wide
 // Attendance correction, Leave approval, and Payroll generation.
 //
-// Same contract as employeeApi.ts/settingsApi.ts: every call tries the real
-// NestJS backend first (apiRequest — pings /health, attaches the JWT), and
-// only falls back to the in-memory mock store (adminOpsMockData.ts) when the
-// backend is completely unreachable.
+// Talks to the real backend through the shared transport in lib/apiClient
+// (JWT bearer, refresh cookie, single-flight 401 replay, request timeout).
+// There is NO demo/mock fallback anywhere in this file: a failed request
+// surfaces to the page as an `ApiError` carrying the server's status and
+// message, and the screen renders its own error state. Falling back to
+// invented rows would reproduce exactly the bug this work set out to fix — a
+// screen quietly showing fabricated attendance/leave/payroll while the real
+// request was 403ing.
 //
-// Live backend routes (per the Swagger doc):
-// GET /attendance org-wide list (search, department, status, date, page)
+// Live backend routes (verified against the controllers):
+// GET /attendance org-wide list (findAll takes no query params)
+// POST /attendance mark one employee (optional user_id)
 // PATCH /attendance/:id correct a record (checkIn/checkOut/status)
-// GET /leave-requests org-wide list (search, department, status, page)
+// POST /attendance/bulk-mark mark a set / department / all-active for a day
+// GET /leave-requests org-wide list (findAll takes no query params)
+// POST /leave-requests file a request on behalf of an employee
 // PATCH /leave-requests/:id update a request — used here to set status to
-// "Approved" / "Rejected" (the Swagger doc has no
-// dedicated /approve or /reject route, so approve/
-// reject both go through the generic update).
+// "Approved" / "Rejected" (there is no dedicated
+// /approve or /reject route, so both go through
+// the generic update).
 // POST /payroll generate a payslip for one employee/month
-// GET /payroll org-wide list (search, department, month, year, page)
+// GET /payroll org-wide list
 // DELETE /payroll/:id remove a generated payslip
+//
+// GET /attendance, /leave-requests, and /payroll all ignore query params
+// (their findAll() takes none) and nest the employee under `user` with no
+// department, so every filter the *ListParams describe, plus pagination and
+// the department join, is applied client-side after fetching the full list.
 
-import { apiRequest, withDemoFallback, normalizeListResult } from "@/api/client";
+import { apiRequest, ENDPOINTS, normalizeListResult } from "@/lib/apiClient";
 import { parseAttendanceRow, computeHours } from "@/modules/attendance/api/attendanceAdapter";
 import { parseLeaveRow } from "@/modules/leave/api/leaveAdapter";
 import { parsePayrollRow, buildPayrollPayload } from "@/modules/payroll/api/payrollAdapter";
 import { employeesApi } from "@/modules/employees/api/employeeApi";
-import { ENDPOINTS } from "@/app/config/endpoints";
-import {
- mockAdminAttendanceApi,
- mockAdminLeaveApi,
- mockAdminPayrollApi,
- type AdminAttendanceRecord,
- type AttendanceCorrection,
- type AttendanceListParams,
- type MarkAttendancePayload,
- type BulkMarkPayload,
- type BulkMarkResult,
- type AdminLeaveRequest,
- type LeaveListParams,
- type AdminPayrollRecord,
- type PayrollListParams,
- type GeneratePayrollInput,
- type ListResult,
-} from "@/modules/settings/mocks/adminOpsMockData";
 
-export type {
- AdminAttendanceRecord,
- AdminAttendanceStatus,
- AttendanceCorrection,
- AttendanceListParams,
- MarkAttendancePayload,
- BulkMarkPayload,
- BulkMarkResult,
- AdminLeaveRequest,
- AdminLeaveStatus,
- LeaveListParams,
- AdminPayrollRecord,
- PayrollListParams,
- GeneratePayrollInput,
- ListResult,
-} from "@/modules/settings/mocks/adminOpsMockData";
+export type ListResult<T> = { data: T[]; total: number };
+
+// ---- Attendance -------------------------------------------------------
+
+// The union is a superset: "Leave"/"Holiday" are legacy labels kept so any
+// older persisted row still type-checks, while the live backend's canonical
+// set is the six in ATTENDANCE_STATUSES below ("Non-Working" is the backend's
+// name for a non-scheduled day, replacing the old "Holiday"). Every selectable
+// status dropdown uses ATTENDANCE_STATUSES so it can never offer a value the
+// backend's `@IsIn` would reject.
+export type AdminAttendanceStatus =
+ | "Present"
+ | "Late"
+ | "Absent"
+ | "Leave"
+ | "Holiday"
+ | "Half-Day"
+ | "On Leave"
+ | "Non-Working";
+
+// Canonical statuses the live backend accepts (mirror of Backend
+// attendance-status.ts `ATTENDANCE_STATUSES`). Drives every status dropdown so
+// the filter, correction, and mark modals stay in lock-step with the API.
+export const ATTENDANCE_STATUSES: AdminAttendanceStatus[] = [
+ "Present",
+ "Late",
+ "Half-Day",
+ "Absent",
+ "On Leave",
+ "Non-Working",
+];
+
+// How a record was captured (mirror of Backend attendance-source.ts). "Device"
+// is a biometric/terminal punch; "Online" is manual/self-service marking and is
+// the default when none is given.
+export type AttendanceSource = "Device" | "Online";
+export const ATTENDANCE_SOURCES: AttendanceSource[] = ["Device", "Online"];
+export const DEFAULT_ATTENDANCE_SOURCE: AttendanceSource = "Online";
+
+export type AdminAttendanceRecord = {
+ attendanceId: string;
+ employeeId: string;
+ employeeName: string;
+ employeeCode: string;
+ departmentId: string;
+ departmentName: string;
+ shiftName: string;
+ attendanceDate: string; // YYYY-MM-DD
+ checkIn: string | null; // HH:mm
+ checkOut: string | null; // HH:mm
+ workingHours: number | null;
+ status: AdminAttendanceStatus;
+ checkInPunctuality: "early" | "on-time" | "late" | null;
+ checkInVarianceMinutes: number | null;
+ checkOutPunctuality: "early" | "on-time" | "late" | null;
+ checkOutVarianceMinutes: number | null;
+};
+
+export type AttendanceListParams = {
+ search?: string;
+ departmentId?: string;
+ employeeId?: string;
+ status?: AdminAttendanceStatus | "";
+ date?: string;
+ /** Inclusive range bounds (YYYY-MM-DD); applied server-side and echoed client-side. */
+ from?: string;
+ to?: string;
+ month?: number;
+ year?: number;
+ page?: number;
+ pageSize?: number;
+};
+
+export type AttendanceCorrection = { checkIn: string | null; checkOut: string | null; status: AdminAttendanceStatus };
+
+// HR/Admin "mark attendance" payloads. Times are "HH:mm" (the display
+// precision); the API layer pads them to "HH:mm:ss" for the live backend.
+export type MarkAttendancePayload = {
+ attendanceDate: string; // YYYY-MM-DD
+ status: AdminAttendanceStatus;
+ checkIn?: string | null; // HH:mm
+ checkOut?: string | null; // HH:mm
+ /** Device (biometric/terminal) vs Online (manual/self-service). Defaults Online. */
+ source?: AttendanceSource;
+};
+
+export type BulkMarkPayload = MarkAttendancePayload & {
+ employeeIds?: string[];
+ departmentId?: string;
+ allActive?: boolean;
+};
+
+export type BulkMarkResult = {
+ marked: number;
+ skipped: number;
+ total: number;
+ results: Array<{
+ employeeId: string;
+ employeeCode: string;
+ employeeName: string;
+ ok: boolean;
+ reason?: string;
+ }>;
+};
+
+// ---- Leave --------------------------------------------------------------
+
+export type AdminLeaveStatus = "Pending" | "Approved" | "Rejected";
+
+export type AdminLeaveRequest = {
+ leaveId: string;
+ employeeId: string;
+ employeeName: string;
+ employeeCode: string;
+ departmentId: string;
+ departmentName: string;
+ leaveTypeName: string;
+ startDate: string;
+ endDate: string;
+ totalDays: number;
+ /** "Full Day" | "First Half" | "Second Half" | "Multiple Days". */
+ durationType: string;
+ reason: string;
+ status: AdminLeaveStatus;
+ appliedOn: string;
+};
+
+export type LeaveListParams = {
+ search?: string;
+ departmentId?: string;
+ employeeId?: string;
+ status?: AdminLeaveStatus | "";
+ page?: number;
+ pageSize?: number;
+};
+
+// ---- Payroll --------------------------------------------------------------
+
+export type AdminPayrollRecord = {
+ payrollId: string;
+ employeeId: string;
+ employeeName: string;
+ employeeCode: string;
+ departmentId: string;
+ departmentName: string;
+ payrollMonth: number; // 1-12
+ payrollYear: number;
+ basicSalary: number;
+ allowance: number;
+ bonus: number;
+ deduction: number;
+ tax: number;
+ netSalary: number;
+ paymentDate: string | null;
+ status: "Generated" | "Pending";
+};
+
+export type PayrollListParams = {
+ search?: string;
+ departmentId?: string;
+ employeeId?: string;
+ month?: number;
+ year?: number;
+ page?: number;
+ pageSize?: number;
+};
+
+export type GeneratePayrollInput = {
+ month: number;
+ year: number;
+ basicSalary: number;
+ allowance: number;
+ bonus: number;
+ deduction: number;
+ tax: number;
+ paymentDate?: string | null;
+};
 
 const attendanceQs = (params: AttendanceListParams) => {
  const search = new URLSearchParams();
@@ -66,6 +221,8 @@ const attendanceQs = (params: AttendanceListParams) => {
  if (params.employeeId) search.set("employeeId", params.employeeId);
  if (params.status) search.set("status", params.status);
  if (params.date) search.set("date", params.date);
+ if (params.from) search.set("from", params.from);
+ if (params.to) search.set("to", params.to);
  if (params.month) search.set("month", String(params.month));
  if (params.year) search.set("year", String(params.year));
  if (params.page) search.set("page", String(params.page));
@@ -199,6 +356,8 @@ function applyAttendanceFilters(rows: AdminAttendanceRecord[], params: Attendanc
  if (params.employeeId) filtered = filtered.filter((r) => r.employeeId === params.employeeId);
  if (params.status) filtered = filtered.filter((r) => r.status === params.status);
  if (params.date) filtered = filtered.filter((r) => r.attendanceDate === params.date);
+ if (params.from) filtered = filtered.filter((r) => r.attendanceDate >= params.from!);
+ if (params.to) filtered = filtered.filter((r) => r.attendanceDate <= params.to!);
  if (params.month) filtered = filtered.filter((r) => new Date(r.attendanceDate).getMonth() + 1 === params.month);
  if (params.year) filtered = filtered.filter((r) => new Date(r.attendanceDate).getFullYear() === params.year);
 
@@ -274,19 +433,13 @@ function applyLeaveFilters(rows: AdminLeaveRequest[], params: LeaveListParams): 
 }
 
 export const adminAttendanceApi = {
- list: (params: AttendanceListParams = {}) =>
- withDemoFallback<ListResult<AdminAttendanceRecord>>(
- async () => {
+ list: async (params: AttendanceListParams = {}): Promise<ListResult<AdminAttendanceRecord>> => {
  const raw = await apiRequest<unknown>(`${ENDPOINTS.attendance.base}${attendanceQs(params)}`);
  const rows = await adaptAdminAttendanceRows(raw);
  return applyAttendanceFilters(rows, params);
  },
- () => mockAdminAttendanceApi.list(params),
- ),
 
- correct: (id: string, payload: AttendanceCorrection) =>
- withDemoFallback<AdminAttendanceRecord>(
- async () => {
+ correct: async (id: string, payload: AttendanceCorrection): Promise<AdminAttendanceRecord> => {
  const needsTimes = payload.checkIn && payload.checkOut;
  const hours = needsTimes ? computeHours(payload.checkIn as string, payload.checkOut as string) : null;
  const updated = await apiRequest<Record<string, unknown>>(ENDPOINTS.attendance.byId(id), {
@@ -320,26 +473,18 @@ export const adminAttendanceApi = {
  checkOutVarianceMinutes: parsed.checkOutVarianceMinutes,
  };
  },
- () => mockAdminAttendanceApi.correct(id, payload),
- ),
 
  // HR/Admin marking check-in/check-out on behalf of a single employee (e.g.
  // front-desk attendance). Mirrors the self-service checkIn/checkOut in
  // hrApi.ts but takes an explicit employeeId instead of the current session.
- getTodayFor: (employeeId: string) =>
- withDemoFallback<AdminAttendanceRecord | null>(
- async () => {
+ getTodayFor: async (employeeId: string): Promise<AdminAttendanceRecord | null> => {
  const today = new Date().toISOString().slice(0, 10);
  const raw = await apiRequest<unknown>(ENDPOINTS.attendance.base);
  const rows = await adaptAdminAttendanceRows(raw);
  return rows.find((r) => r.employeeId === employeeId && r.attendanceDate === today) ?? null;
  },
- () => mockAdminAttendanceApi.getToday(employeeId),
- ),
 
- checkInEmployee: (employeeId: string) =>
- withDemoFallback<AdminAttendanceRecord>(
- async () => {
+ checkInEmployee: async (employeeId: string): Promise<AdminAttendanceRecord> => {
  const now = new Date();
  const hh = String(now.getHours()).padStart(2, "0");
  const mm = String(now.getMinutes()).padStart(2, "0");
@@ -377,12 +522,8 @@ export const adminAttendanceApi = {
  checkOutVarianceMinutes: parsed.checkOutVarianceMinutes,
  };
  },
- () => mockAdminAttendanceApi.checkInEmployee(employeeId),
- ),
 
- checkOutEmployee: (employeeId: string) =>
- withDemoFallback<AdminAttendanceRecord>(
- async () => {
+ checkOutEmployee: async (employeeId: string): Promise<AdminAttendanceRecord> => {
  const today = await adminAttendanceApi.getTodayFor(employeeId);
  if (!today || !today.checkIn) throw new Error("No check-in found for today.");
  const now = new Date();
@@ -407,16 +548,12 @@ export const adminAttendanceApi = {
  status: (parsed.status as AdminAttendanceRecord["status"]) ?? today.status,
  };
  },
- () => mockAdminAttendanceApi.checkOutEmployee(employeeId),
- ),
 
  // HR/Admin marks a single employee for a specific day with an explicit
  // status/times (POST /attendance honours the optional user_id on the
  // permission-guarded route). Working hours are computed when both stamps
  // are present, matching the correction path above.
- markFor: (employeeId: string, payload: MarkAttendancePayload) =>
- withDemoFallback<AdminAttendanceRecord>(
- async () => {
+ markFor: async (employeeId: string, payload: MarkAttendancePayload): Promise<AdminAttendanceRecord> => {
  const hasTimes = Boolean(payload.checkIn && payload.checkOut);
  const hours = hasTimes ? computeHours(payload.checkIn as string, payload.checkOut as string) : null;
  const created = await apiRequest<Record<string, unknown>>(ENDPOINTS.attendance.base, {
@@ -425,6 +562,7 @@ export const adminAttendanceApi = {
  user_id: employeeId,
  attendance_date: payload.attendanceDate,
  attendance_status: payload.status,
+ ...(payload.source ? { source: payload.source } : {}),
  ...(payload.checkIn ? { check_in: `${payload.checkIn}:00` } : {}),
  ...(payload.checkOut ? { check_out: `${payload.checkOut}:00` } : {}),
  ...(hours
@@ -452,20 +590,17 @@ export const adminAttendanceApi = {
  checkOutVarianceMinutes: parsed.checkOutVarianceMinutes,
  };
  },
- () => mockAdminAttendanceApi.markFor(employeeId, payload),
- ),
 
  // HR/Admin bulk-marks a set of employees, a whole department, or every
  // active employee for one day (POST /attendance/bulk-mark). The server
  // skips anyone already marked that day and returns a per-employee report.
- bulkMark: (payload: BulkMarkPayload) =>
- withDemoFallback<BulkMarkResult>(
- async () => {
+ bulkMark: async (payload: BulkMarkPayload): Promise<BulkMarkResult> => {
  const raw = await apiRequest<Record<string, unknown>>(ENDPOINTS.attendance.bulkMark, {
  method: "POST",
  body: {
  attendance_date: payload.attendanceDate,
  attendance_status: payload.status,
+ ...(payload.source ? { source: payload.source } : {}),
  ...(payload.checkIn ? { check_in: `${payload.checkIn}:00` } : {}),
  ...(payload.checkOut ? { check_out: `${payload.checkOut}:00` } : {}),
  ...(payload.allActive ? { all_active: true } : {}),
@@ -487,29 +622,21 @@ export const adminAttendanceApi = {
  })),
  };
  },
- () => mockAdminAttendanceApi.bulkMark(payload),
- ),
 };
 
 export const adminLeaveApi = {
- list: (params: LeaveListParams = {}) =>
- withDemoFallback<ListResult<AdminLeaveRequest>>(
- async () => {
+ list: async (params: LeaveListParams = {}): Promise<ListResult<AdminLeaveRequest>> => {
  const raw = await apiRequest<unknown>(`${ENDPOINTS.leaveRequests.base}${leaveQs(params)}`);
  const rows = await adaptAdminLeaveRows(raw);
  return applyLeaveFilters(rows, params);
  },
- () => mockAdminLeaveApi.list(params),
- ),
 
  // The decision note is mandatory, not optional polish: the backend's
  // `assertDecisionReason` rejects a status change to Approved/Rejected/
  // Cancelled with a 400 when the matching *_reason field is missing or blank,
  // because that note is what the employee reads in the notification. Sending
  // only `{ status }` — as this did — made every approval fail.
- approve: (id: string, reason: string) =>
- withDemoFallback<AdminLeaveRequest>(
- async () => {
+ approve: async (id: string, reason: string): Promise<AdminLeaveRequest> => {
  const updated = await apiRequest<Record<string, unknown>>(ENDPOINTS.leaveRequests.byId(id), {
  method: "PATCH",
  body: { status: "Approved", approval_reason: reason },
@@ -517,12 +644,8 @@ export const adminLeaveApi = {
  const rows = await adaptAdminLeaveRows([updated]);
  return rows[0];
  },
- () => mockAdminLeaveApi.setStatus(id, "Approved"),
- ),
 
- reject: (id: string, reason: string) =>
- withDemoFallback<AdminLeaveRequest>(
- async () => {
+ reject: async (id: string, reason: string): Promise<AdminLeaveRequest> => {
  const updated = await apiRequest<Record<string, unknown>>(ENDPOINTS.leaveRequests.byId(id), {
  method: "PATCH",
  body: { status: "Rejected", rejection_reason: reason },
@@ -530,16 +653,12 @@ export const adminLeaveApi = {
  const rows = await adaptAdminLeaveRows([updated]);
  return rows[0];
  },
- () => mockAdminLeaveApi.setStatus(id, "Rejected"),
- ),
 
  // HR/Admin filing a leave request on behalf of a single employee (e.g.
  // logging a verbal/phoned-in request). Same confirmed POST contract as
  // the self-service applyLeave in hrApi.ts: leave_type/start_date/
  // end_date/reason/status/user_id, all snake_case.
- applyFor: (employeeId: string, payload: { leaveTypeName: string; startDate: string; endDate: string; reason: string }) =>
- withDemoFallback<AdminLeaveRequest>(
- async () => {
+ applyFor: async (employeeId: string, payload: { leaveTypeName: string; startDate: string; endDate: string; reason: string }): Promise<AdminLeaveRequest> => {
  const created = await apiRequest<Record<string, unknown>>(ENDPOINTS.leaveRequests.base, {
  method: "POST",
  body: {
@@ -554,28 +673,20 @@ export const adminLeaveApi = {
  const rows = await adaptAdminLeaveRows([created]);
  return rows[0];
  },
- () => mockAdminLeaveApi.applyFor(employeeId, payload),
- ),
 };
 
 export const adminPayrollApi = {
- list: (params: PayrollListParams = {}) =>
- withDemoFallback<ListResult<AdminPayrollRecord>>(
- async () => {
+ list: async (params: PayrollListParams = {}): Promise<ListResult<AdminPayrollRecord>> => {
  const raw = await apiRequest<unknown>(ENDPOINTS.payroll.base);
  const rows = await adaptAdminPayrollRows(raw);
  return applyPayrollFilters(rows, params);
  },
- () => mockAdminPayrollApi.list(params),
- ),
 
  // HR/Admin generating a payslip for a single employee for a given month.
  // Confirmed POST contract (per the live Swagger doc): payroll_month
  // (first-of-month date string), basic_salary/allowance/bonus/deduction/
  // tax/net_salary as numbers, payment_date, user_id — all snake_case.
- generate: (employeeId: string, input: GeneratePayrollInput) =>
- withDemoFallback<AdminPayrollRecord>(
- async () => {
+ generate: async (employeeId: string, input: GeneratePayrollInput): Promise<AdminPayrollRecord> => {
  const body = buildPayrollPayload({
  employeeId,
  month: input.month,
@@ -594,15 +705,9 @@ export const adminPayrollApi = {
  const rows = await adaptAdminPayrollRows([created]);
  return rows[0];
  },
- () => mockAdminPayrollApi.generate(employeeId, input),
- ),
 
- remove: (payrollId: string) =>
- withDemoFallback<{ payrollId: string }>(
- async () => {
+ remove: async (payrollId: string): Promise<{ payrollId: string }> => {
  await apiRequest<unknown>(ENDPOINTS.payroll.byId(payrollId), { method: "DELETE" });
  return { payrollId };
  },
- () => mockAdminPayrollApi.remove(payrollId),
- ),
 };

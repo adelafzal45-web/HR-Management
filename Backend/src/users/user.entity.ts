@@ -103,51 +103,19 @@ export class User {
   gender?: string;
 
   /**
-   * Legacy free-text address.
+   * Employee address — a single free-text field.
    *
-   * Superseded by the structured columns below. Kept so existing readers keep
-   * working; EmployeeManagementSchema1786800000000 backfilled `street_address`
-   * from it rather than trying to parse it into parts.
+   * The structured columns (street_address, city, state_province, postal_code,
+   * country) that briefly superseded this were merged back into it by the
+   * address-merge migration: each row's non-blank parts were composed into
+   * `address` before the columns were dropped, so no existing record lost its
+   * address.
    */
   @Column({
     type: 'text',
     nullable: true,
   })
   address?: string;
-
-  // ==========================
-  // Structured address
-  // ==========================
-
-  @Column({
-    type: 'text',
-    nullable: true,
-  })
-  street_address?: string;
-
-  @Column({
-    length: 100,
-    nullable: true,
-  })
-  city?: string;
-
-  @Column({
-    length: 100,
-    nullable: true,
-  })
-  state_province?: string;
-
-  @Column({
-    length: 20,
-    nullable: true,
-  })
-  postal_code?: string;
-
-  @Column({
-    length: 100,
-    nullable: true,
-  })
-  country?: string;
 
   // ==========================
   // Emergency contact

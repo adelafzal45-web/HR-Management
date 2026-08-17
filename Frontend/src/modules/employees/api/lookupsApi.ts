@@ -2,12 +2,11 @@
 // Reference-data lookups for the employee forms.
 //
 // The settings module already exposes departmentsApi/designationsApi/etc., but
-// those return camelCase adapter models and route through `withDemoFallback`,
-// which substitutes mock rows when the backend is unreachable. A form that
-// silently offers fabricated departments will happily POST an id the database
-// has never heard of, so the employee module reads these collections directly
-// in the backend's own snake_case and lets a transport failure surface as an
-// error the UI can render.
+// those return camelCase adapter models. The employee forms want the backend's
+// own snake_case shapes, so this module reads the collections directly. A
+// transport failure surfaces as an error the UI can render rather than a masked
+// empty list, so a form never offers a fabricated department whose id the
+// database has never heard of.
 //
 // Response shapes verified against the live API:
 //   GET /departments    -> [{ department_id, department_name, description }]

@@ -1,15 +1,12 @@
 // ============================================================================
 // Change Password (UC-3) — the authenticated self-service password change.
 //
-// Posts to POST /users/me/change-password with **snake_case** keys. This
-// previously called `authApi.changePassword` from @/api/client, which was wrong
-// twice over: the route `/auth/change-password` did not exist, and the body was
-// camelCase, which the global ValidationPipe (`whitelist: true`) strips rather
-// than rejects. Because that client wraps every call in `withDemoFallback`, an
-// unreachable route fell through to the mock store and the page reported
-// success — the user believed their password had changed when nothing had.
-// A failed password change must surface as an error, so there is no fallback
-// here: `myProfileService` talks to the real API or throws.
+// Posts to POST /users/me/change-password with **snake_case** keys — route and
+// body shape verified against the backend. The global ValidationPipe runs
+// `whitelist: true`, so a camelCase body would be silently stripped and fail on
+// a confusing "should not be empty" rather than a naming error. A failed
+// password change must surface as an error, never a fabricated success:
+// `myProfileService` talks to the real API or throws.
 // ============================================================================
 
 import { useState, type FormEvent } from "react";

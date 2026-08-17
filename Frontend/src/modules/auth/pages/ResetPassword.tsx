@@ -4,19 +4,18 @@
 // Three fixes over the previous version:
 //
 //  1. It posts to POST /auth/reset-password with the real snake_case body
-//     `{ token, new_password }`. The old code called `authApi.resetPassword`
-//     from @/api/client, which sent a camelCase body — silently stripped by
-//     the global ValidationPipe (`whitelist: true`) — and, on failure, fell
-//     through `withDemoFallback` to the mock store and navigated to /login as
-//     though the password had changed. It had not.
+//     `{ token, new_password }`. The global ValidationPipe runs
+//     `whitelist: true`, so a camelCase body would be silently stripped and
+//     fail validation. A failure surfaces as an error instead of navigating to
+//     /login as though the password had changed when it had not.
 //
 //  2. The token is validated on mount. An expired, used, or superseded link
 //     now says so before the form is drawn, instead of after the user has
 //     typed a new password twice.
 //
-//  3. The "I agree to all Terms and Conditions" gate is gone. Consent is
-//     collected at signup; blocking a locked-out user's password reset behind
-//     a second acceptance stops a recovery flow for no benefit.
+//  3. The "I agree to all Terms and Conditions" gate is gone. Blocking a
+//     locked-out user's password reset behind a second acceptance stops a
+//     recovery flow for no benefit.
 // ============================================================================
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";

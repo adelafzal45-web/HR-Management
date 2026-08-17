@@ -8,7 +8,15 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import {
+  Between,
+  In,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  QueryFailedError,
+  Repository,
+  type FindOptionsWhere,
+} from 'typeorm';
 
 import { Attendance } from './attendance.entity';
 import { User } from '../users/user.entity';
@@ -16,6 +24,7 @@ import { User } from '../users/user.entity';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { BulkMarkAttendanceDto } from './dto/bulk-mark-attendance.dto';
+import { AttendanceQueryDto } from './dto/attendance-query.dto';
 
 import {
   ATTENDANCE_STATUSES,
@@ -24,6 +33,7 @@ import {
   STATUSES_REQUIRING_CHECK_IN,
   type AttendanceStatus,
 } from './attendance-status';
+import { normaliseSource } from './attendance-source';
 
 import {
   derivePunctuality,
@@ -127,6 +137,7 @@ export class AttendanceService {
   async create(
     createAttendanceDto: CreateAttendanceDto,
     userId: string,
+    actorId?: string,
   ): Promise<Attendance> {
     const user = await this.userRepository.findOne({
       where: {
@@ -215,9 +226,16 @@ export class AttendanceService {
 
       overtime_hours: overtimeHours,
       is_overtime: isOvertime,
+
+      // Manual entry provenance. `actorId` is the HR/Admin who filed it (from
+      // their token); it falls back to the target employee for a self-service
+      // create so `created_by` is never blank on a real write.
+      attendance_source: normaliseSource(createAttendanceDto.source),
+      created_by: actorId ?? userId,
+      updated_by: actorId ?? userId,
     });
 
-    const savedAttendance = await this.attendanceRepository.save(attendance);
+    const savedAttendance = await this.persist(attendance);
 
     // ==========================================
     // AUTO ZERO APPRAISAL LOGIC
@@ -228,6 +246,39 @@ export class AttendanceService {
     }
 
     return savedAttendance;
+  }
+
+  /**
+   * Saves a row, turning a Postgres unique-violation on (user_id,
+   * attendance_date) into the same friendly message the app-level pre-check
+   * gives.
+   *
+   * `create` still runs the explicit "already exists" pre-check first, so the
+   * common case gets a clear message without relying on a DB error. This closes
+   * the check-then-insert race: two manual marks for the same employee+date can
+   * both pass the pre-check, and the unique index (added by migration) then
+   * rejects the second insert — which would otherwise surface as a raw 500.
+   */
+  private async persist(attendance: Attendance): Promise<Attendance> {
+    try {
+      return await this.attendanceRepository.save(attendance);
+    } catch (error) {
+      const code =
+        error instanceof QueryFailedError
+          ? ((error as QueryFailedError & { code?: string }).code ??
+            (error.driverError as { code?: string } | undefined)?.code)
+          : undefined;
+
+      if (code === '23505') {
+        throw new BadRequestException(
+          `Attendance for ${this.formatDate(
+            attendance.attendance_date,
+          )} already exists for this employee. Update the existing record instead of creating a second one.`,
+        );
+      }
+
+      throw error;
+    }
   }
 
   // ==========================================
@@ -428,6 +479,10 @@ export class AttendanceService {
         attendance_date: date as unknown as Date,
         user,
         attendance_status: status,
+        // A self-service punch is Online by definition, and the employee is
+        // both the subject and the author of the new row.
+        attendance_source: 'Online',
+        created_by: userId,
       });
 
     attendance.check_in = now;
@@ -436,8 +491,11 @@ export class AttendanceService {
     // otherwise take the employee's assigned shift rather than guessing from
     // their most recent attendance row, which is what the frontend used to do.
     attendance.shift = attendance.shift ?? user.shift ?? undefined;
+    // The employee is the one acting on the row, whether it is new or a
+    // pre-existing placeholder they are now stamping.
+    attendance.updated_by = userId;
 
-    const saved = await this.attendanceRepository.save(attendance);
+    const saved = await this.persist(attendance);
     const [decorated] = await this.decorateWithWorkingDay([saved]);
     return decorated;
   }
@@ -476,6 +534,7 @@ export class AttendanceService {
     attendance.working_hours = workingHours;
     attendance.overtime_hours = overtimeHours;
     attendance.is_overtime = overtimeHours > 0;
+    attendance.updated_by = userId;
 
     const saved = await this.attendanceRepository.save(attendance);
     const [decorated] = await this.decorateWithWorkingDay([saved]);
@@ -639,8 +698,46 @@ export class AttendanceService {
   // FIND ALL
   // ==========================================
 
-  async findAll(): Promise<AttendanceWithWorkingDay[]> {
+  /**
+   * Org-wide list, optionally narrowed by date range and/or status.
+   *
+   * The filters are applied in SQL so a large table is not shipped whole to the
+   * browser just to be hidden. Everything the screen does on top — pagination,
+   * search, department/employee narrowing, CSV export — stays client-side and
+   * keeps working unchanged, now over the smaller filtered set. An unfiltered
+   * call still returns everything.
+   */
+  async findAll(
+    query: AttendanceQueryDto = {},
+  ): Promise<AttendanceWithWorkingDay[]> {
+    const { from, to, status } = query;
+
+    const where: FindOptionsWhere<Attendance> = {};
+
+    // `attendance_date` is a Postgres `date`; the string bounds compare
+    // correctly against it. The cast bridges the FindOperator<string> the
+    // helpers infer to the column's Date type.
+    if (from && to) {
+      where.attendance_date = Between(
+        from,
+        to,
+      ) as unknown as Attendance['attendance_date'];
+    } else if (from) {
+      where.attendance_date = MoreThanOrEqual(
+        from,
+      ) as unknown as Attendance['attendance_date'];
+    } else if (to) {
+      where.attendance_date = LessThanOrEqual(
+        to,
+      ) as unknown as Attendance['attendance_date'];
+    }
+
+    if (status) {
+      where.attendance_status = status;
+    }
+
     const records = await this.attendanceRepository.find({
+      where,
       relations: [
         'user',
         'user.department',
@@ -791,6 +888,12 @@ export class AttendanceService {
     attendance.attendance_status = targetStatus;
     attendance.overtime_hours = overtimeHours;
     attendance.is_overtime = isOvertime;
+    attendance.updated_by = userId;
+    if (updateAttendanceDto.source) {
+      attendance.attendance_source = normaliseSource(
+        updateAttendanceDto.source,
+      );
+    }
 
     const updatedAttendance = await this.attendanceRepository.save(attendance);
 
@@ -840,6 +943,7 @@ export class AttendanceService {
   async updateById(
     id: string,
     dto: UpdateAttendanceDto,
+    actorId?: string,
   ): Promise<AttendanceWithWorkingDay> {
     const attendance = await this.attendanceRepository.findOne({
       where: { attendance_id: id },
@@ -899,6 +1003,10 @@ export class AttendanceService {
     attendance.working_hours = workingHours;
     attendance.overtime_hours = overtimeHours;
     attendance.is_overtime = isOvertime;
+    attendance.updated_by = actorId ?? attendance.updated_by;
+    if (dto.source) {
+      attendance.attendance_source = normaliseSource(dto.source);
+    }
 
     const saved = await this.attendanceRepository.save(attendance);
 
@@ -970,8 +1078,10 @@ export class AttendanceService {
             attendance_status: dto.attendance_status,
             check_in: dto.check_in,
             check_out: dto.check_out,
+            source: dto.source,
           },
           target.user_id,
+          actorId,
         );
 
         results.push({

@@ -74,6 +74,64 @@ export function Field({
   );
 }
 
+/**
+ * Multi-line text input, styled to match `Field`.
+ *
+ * Used for the single free-text address that replaced the structured
+ * street/city/state/postal/country fields — one field an operator can paste a
+ * whole address into, rather than five they must split it across.
+ */
+export function Textarea({
+  label,
+  name,
+  value,
+  onChange,
+  error,
+  hint,
+  requiredMark,
+  placeholder,
+  rows = 3,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  hint?: string;
+  requiredMark?: boolean;
+  placeholder?: string;
+  rows?: number;
+}) {
+  const described = error ? `${name}-error` : undefined;
+  return (
+    <label className="mb-5 block">
+      <span className="mb-2 block text-[15px] font-medium text-gray-900">
+        {label}
+        {requiredMark && <RequiredMark />}
+      </span>
+      <textarea
+        name={name}
+        value={value}
+        rows={rows}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={described}
+        className={`w-full resize-y rounded-lg bg-gray-100 px-4 py-3.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 ${
+          error ? "ring-2 ring-rose-400" : "focus:ring-brand/60"
+        }`}
+      />
+      {error ? (
+        <span id={described} className="mt-1.5 block text-xs text-rose-500">
+          {error}
+        </span>
+      ) : hint ? (
+        <span className="mt-1.5 block text-xs text-gray-400">{hint}</span>
+      ) : null}
+    </label>
+  );
+}
+
 /** Native select styled to match `FormField`. */
 export function Select({
   label,

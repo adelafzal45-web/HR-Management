@@ -6,21 +6,17 @@
 //   PATCH  /holidays/:id         update (holiday.manage)
 //   DELETE /holidays/:id         delete (holiday.manage)
 //
-// Same contract as leaveEntitlementsApi.ts / settingsApi.ts: try the real
-// backend first (apiRequest — pings the API root, attaches the JWT), and only
-// fall back to a client-synthesized demo dataset when the backend is
-// completely unreachable (BackendUnavailableError). Real backend errors — most
-// importantly the 409 ConflictException the service throws on a duplicate
-// holiday — are NEVER swallowed; they surface to the page as a plain Error with
-// the server message.
+// Talks to the real backend through the shared transport in lib/apiClient
+// (JWT bearer, refresh cookie, 401 replay, timeout). There is NO demo/mock
+// fallback: real backend errors — most importantly the 409 ConflictException
+// the service throws on a duplicate holiday — surface to the page as an
+// `ApiError` carrying the server message, never swallowed into fabricated data.
 //
 // The backend returns a bare array (with the `department` relation joined) and
 // applies only the year/department filters server-side, so search and
 // pagination are done client-side here to match the DataTable's paged contract.
 
-import { apiRequest, withDemoFallback } from "@/api/client";
-import { ENDPOINTS } from "@/app/config/endpoints";
-import { mockNotificationApi } from "@/mocks/hrMockData";
+import { apiRequest, ENDPOINTS } from "@/lib/apiClient";
 
 /** `Holiday` is excluded from leave/attendance day counts; `Event` (a team
  * dinner, a town hall) is calendar-and-notification only. */
@@ -125,8 +121,9 @@ function qs(params: HolidayListParams): string {
   return str ? `?${str}` : "";
 }
 
-// Search + sort + paginate a fully-adapted set client-side — shared by the
-// real path (backend returns an unpaged array) and the demo path.
+// Search + sort + paginate the fully-adapted set client-side: the backend
+// returns an unpaged array (only year/department filtered), so the DataTable's
+// page/search/sort contract is satisfied here.
 function applyClientFilters(rows: Holiday[], params: HolidayListParams): HolidayListResult {
   const needle = params.search?.trim().toLowerCase();
   let filtered = needle
@@ -145,174 +142,30 @@ function applyClientFilters(rows: Holiday[], params: HolidayListParams): Holiday
   return { data, total };
 }
 
-// ---- Demo fallback -------------------------------------------------------
-// In-memory store used only when the backend is unreachable. It replicates the
-// backend's duplicate-prevention rule so the demo behaves like the real thing.
-
-const DUPLICATE_MESSAGE = "A holiday already exists for this date and department scope";
-
-function makeId(): string {
-  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  return c?.randomUUID ? c.randomUUID() : `demo-${Date.now()}-${demoStore.length}`;
-}
-
-const demoStore: Holiday[] = [
-  { holidayId: "demo-h1", name: "New Year's Day", eventType: "Holiday", holidayDate: "2026-01-01", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true, notify: false, notifiedAt: null },
-  { holidayId: "demo-h2", name: "Labour Day", eventType: "Holiday", holidayDate: "2026-05-01", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true, notify: false, notifiedAt: null },
-  { holidayId: "demo-h3", name: "Independence Day", eventType: "Holiday", holidayDate: "2026-08-14", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true, notify: false, notifiedAt: null },
-  { holidayId: "demo-h4", name: "Christmas Day", eventType: "Holiday", holidayDate: "2026-12-25", description: "", departmentId: null, departmentName: "Company-wide", isRecurring: true, notify: false, notifiedAt: null },
-  { holidayId: "demo-h5", name: "Eid-ul-Adha", eventType: "Holiday", holidayDate: "2026-08-16", description: "Public holiday for Eid-ul-Adha.", departmentId: null, departmentName: "Company-wide", isRecurring: false, notify: true, notifiedAt: "2026-07-01T09:00:00Z" },
-  { holidayId: "demo-h6", name: "Dinner", eventType: "Event", holidayDate: "2026-08-17", description: "Company dinner — everyone's invited.", departmentId: null, departmentName: "Company-wide", isRecurring: false, notify: true, notifiedAt: "2026-07-25T09:00:00Z" },
-];
-
-// Mirror of HolidaysService.hasDuplicate: scope + event type matched exactly;
-// a recurring holiday on either side collides on month/day across every
-// year, two fixed entries collide only on the exact same date. A Holiday and
-// an Event on the same day never collide with each other.
-function demoCollides(payload: HolidayPayload, excludeId?: string): boolean {
-  const scope = payload.departmentId ? payload.departmentId : null;
-  const type = payload.eventType ?? "Holiday";
-  const [y, m, d] = payload.holidayDate.split("-");
-  const recurring = payload.isRecurring ?? false;
-  return demoStore.some((h) => {
-    if (excludeId && h.holidayId === excludeId) return false;
-    if ((h.departmentId ?? null) !== scope) return false;
-    if (h.eventType !== type) return false;
-    const [ey, em, ed] = h.holidayDate.split("-");
-    const sameMonthDay = em === m && ed === d;
-    return recurring || h.isRecurring ? sameMonthDay : sameMonthDay && ey === y;
-  });
-}
-
-function demoDepartmentName(departmentId: string | null): string {
-  if (!departmentId) return "Company-wide";
-  const existing = demoStore.find((h) => h.departmentId === departmentId);
-  return existing ? existing.departmentName : "Department";
-}
-
-// Fires the demo bell the same way the backend's `HolidaysService.announce`
-// does — best-effort, and never lets a notification hiccup fail the save
-// that already succeeded.
-function demoAnnounce(row: Holiday): void {
-  const dateLabel = new Date(`${row.holidayDate}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const isEvent = row.eventType === "Event";
-  mockNotificationApi
-    .create({
-      title: `${isEvent ? "New event" : "Upcoming holiday"}: ${row.name}`,
-      message: `${row.name} is scheduled on ${dateLabel}.${row.description ? ` ${row.description}` : ""}`,
-      type: "Announcement",
-    })
-    .catch(() => undefined);
-}
-
-const mockHolidaysApi = {
-  list(params: HolidayListParams): HolidayListResult {
-    let rows = demoStore;
-    if (params.year) {
-      rows = rows.filter((h) => h.isRecurring || h.holidayDate.slice(0, 4) === String(params.year));
-    }
-    if (params.departmentId) {
-      rows = rows.filter((h) => h.departmentId === null || h.departmentId === params.departmentId);
-    }
-    if (params.eventType) {
-      rows = rows.filter((h) => h.eventType === params.eventType);
-    }
+export const holidaysApi = {
+  list: async (params: HolidayListParams = {}): Promise<HolidayListResult> => {
+    const raw = await apiRequest<ApiHoliday[]>(`${ENDPOINTS.holidays.base}${qs(params)}`);
+    const rows = (Array.isArray(raw) ? raw : []).map(adaptRow);
     return applyClientFilters(rows, params);
   },
-  create(payload: HolidayPayload): Holiday {
-    if (demoCollides(payload)) throw new Error(DUPLICATE_MESSAGE);
-    const notify = payload.notify ?? false;
-    const row: Holiday = {
-      holidayId: makeId(),
-      name: payload.name,
-      eventType: payload.eventType ?? "Holiday",
-      holidayDate: payload.holidayDate,
-      description: payload.description ?? "",
-      departmentId: payload.departmentId ? payload.departmentId : null,
-      departmentName: demoDepartmentName(payload.departmentId ? payload.departmentId : null),
-      isRecurring: payload.isRecurring ?? false,
-      notify,
-      notifiedAt: notify ? new Date().toISOString() : null,
-    };
-    demoStore.push(row);
-    if (notify) demoAnnounce(row);
-    return row;
+
+  create: async (payload: HolidayPayload): Promise<Holiday> => {
+    const raw = await apiRequest<ApiHoliday>(ENDPOINTS.holidays.base, {
+      method: "POST",
+      body: toApiPayload(payload),
+    });
+    return adaptRow(raw);
   },
-  update(id: string, payload: HolidayPayload): Holiday {
-    if (demoCollides(payload, id)) throw new Error(DUPLICATE_MESSAGE);
-    const idx = demoStore.findIndex((h) => h.holidayId === id);
-    if (idx === -1) throw new Error("Holiday not found");
-    const departmentId = payload.departmentId ? payload.departmentId : null;
-    const notify = payload.notify ?? false;
-    const updated: Holiday = {
-      ...demoStore[idx],
-      name: payload.name,
-      eventType: payload.eventType ?? "Holiday",
-      holidayDate: payload.holidayDate,
-      description: payload.description ?? "",
-      departmentId,
-      departmentName: demoDepartmentName(departmentId),
-      isRecurring: payload.isRecurring ?? false,
-      notify,
-      // A fresh notify request re-announces, mirroring the backend: editing
-      // and asking again is a deliberate re-send, not a no-op.
-      notifiedAt: notify ? new Date().toISOString() : demoStore[idx].notifiedAt,
-    };
-    demoStore[idx] = updated;
-    if (notify) demoAnnounce(updated);
-    return updated;
+
+  update: async (id: string, payload: HolidayPayload): Promise<Holiday> => {
+    const raw = await apiRequest<ApiHoliday>(ENDPOINTS.holidays.byId(id), {
+      method: "PATCH",
+      body: toApiPayload(payload),
+    });
+    return adaptRow(raw);
   },
-  remove(id: string): void {
-    const idx = demoStore.findIndex((h) => h.holidayId === id);
-    if (idx !== -1) demoStore.splice(idx, 1);
+
+  remove: async (id: string): Promise<void> => {
+    await apiRequest<{ message: string }>(ENDPOINTS.holidays.byId(id), { method: "DELETE" });
   },
-};
-
-export const holidaysApi = {
-  list: (params: HolidayListParams = {}) =>
-    withDemoFallback<HolidayListResult>(
-      async () => {
-        const raw = await apiRequest<ApiHoliday[]>(`${ENDPOINTS.holidays.base}${qs(params)}`);
-        const rows = (Array.isArray(raw) ? raw : []).map(adaptRow);
-        return applyClientFilters(rows, params);
-      },
-      async () => mockHolidaysApi.list(params),
-    ),
-
-  create: (payload: HolidayPayload) =>
-    withDemoFallback<Holiday>(
-      async () => {
-        const raw = await apiRequest<ApiHoliday>(ENDPOINTS.holidays.base, {
-          method: "POST",
-          body: toApiPayload(payload),
-        });
-        return adaptRow(raw);
-      },
-      async () => mockHolidaysApi.create(payload),
-    ),
-
-  update: (id: string, payload: HolidayPayload) =>
-    withDemoFallback<Holiday>(
-      async () => {
-        const raw = await apiRequest<ApiHoliday>(ENDPOINTS.holidays.byId(id), {
-          method: "PATCH",
-          body: toApiPayload(payload),
-        });
-        return adaptRow(raw);
-      },
-      async () => mockHolidaysApi.update(id, payload),
-    ),
-
-  remove: (id: string) =>
-    withDemoFallback<void>(
-      async () => {
-        await apiRequest<{ message: string }>(ENDPOINTS.holidays.byId(id), { method: "DELETE" });
-      },
-      async () => mockHolidaysApi.remove(id),
-    ),
 };

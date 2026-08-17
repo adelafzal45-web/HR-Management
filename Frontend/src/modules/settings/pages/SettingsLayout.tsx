@@ -12,6 +12,7 @@ import {
  Clock,
  CalendarRange,
  CalendarDays,
+ ListChecks,
  ChevronRight,
  ChevronDown,
  SlidersHorizontal,
@@ -61,6 +62,7 @@ const GROUPS: SettingsGroup[] = [
  { to: "/settings/shifts", label: "Shifts", icon: Clock },
  { to: "/settings/leave-types", label: "Leave Types", icon: CalendarRange },
  { to: "/settings/working-days", label: "Working Days", icon: CalendarDays },
+ { to: "/settings/employee-fields", label: "Employee Fields", icon: ListChecks },
  ],
  },
  {

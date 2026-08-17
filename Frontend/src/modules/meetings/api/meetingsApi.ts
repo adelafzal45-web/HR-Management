@@ -8,20 +8,16 @@
 //   PATCH  /meetings/:id/cancel   cancel with a reason (meeting.manage)
 //   DELETE /meetings/:id          delete (meeting.manage)
 //
-// Same contract as holidaysApi.ts / leaveEntitlementsApi.ts: try the real
-// backend first (apiRequest — pings the API root, attaches the JWT), and only
-// fall back to a client-synthesized demo dataset when the backend is completely
-// unreachable (BackendUnavailableError). Real backend errors are NEVER
-// swallowed — notably the 400s the service throws for a past date or an
-// audience that resolves to nobody — and surface as a plain Error carrying the
-// server message.
+// Same contract as holidaysApi.ts / leaveEntitlementsApi.ts: talks to the real
+// backend through the shared transport in lib/apiClient (attaches the JWT).
+// There is NO demo/mock fallback — real backend errors are NEVER swallowed
+// (notably the 400s the service throws for a past date or an audience that
+// resolves to nobody); they surface to the page as an `ApiError`.
 //
-// Unlike /holidays, the list endpoint already filters and paginates server-side,
-// so this module passes the query through rather than slicing locally. Only the
-// demo store does its own filtering.
+// The list endpoint already filters and paginates server-side, so this module
+// passes the query straight through rather than slicing locally.
 
-import { apiRequest, withDemoFallback } from "@/api/client";
-import { ENDPOINTS } from "@/app/config/endpoints";
+import { apiRequest, ENDPOINTS } from "@/lib/apiClient";
 
 /** How the organizer picked the invitee list. Mirrors the backend enum. */
 export type MeetingAudienceType = "Specific" | "Department" | "All";
@@ -196,214 +192,43 @@ function buildQuery(params: MeetingListParams): string {
 }
 
 // ==========================================
-// DEMO STORE
-// ==========================================
-
-// Only reached when the backend is unreachable. Kept in module scope so edits
-// persist across navigations within a session, matching holidaysApi's store.
-const demoMeetings: Meeting[] = [
-  {
-    meetingId: "demo-meeting-1",
-    title: "Quarterly Engineering Review",
-    scheduledAt: new Date(Date.now() + 2 * 86400000).toISOString(),
-    location: "https://meet.example.com/eng-review",
-    agenda: "Roadmap progress, hiring plan, and Q3 priorities.",
-    audienceType: "Department",
-    audienceDepartmentId: null,
-    audienceDepartmentName: "Engineering",
-    notifyEmail: true,
-    notifyInApp: true,
-    status: "Scheduled",
-    cancellationReason: "",
-    organizerId: "demo-organizer",
-    organizerName: "Sarah Khan",
-    participantCount: 12,
-    participants: [],
-  },
-  {
-    meetingId: "demo-meeting-2",
-    title: "New Policy Briefing",
-    scheduledAt: new Date(Date.now() + 5 * 86400000).toISOString(),
-    location: "Conference Room A",
-    agenda: "Walkthrough of the updated leave policy.",
-    audienceType: "All",
-    audienceDepartmentId: null,
-    audienceDepartmentName: "",
-    notifyEmail: true,
-    notifyInApp: false,
-    status: "Scheduled",
-    cancellationReason: "",
-    organizerId: "demo-organizer",
-    organizerName: "Sarah Khan",
-    participantCount: 48,
-    participants: [],
-  },
-];
-
-let demoSequence = demoMeetings.length;
-
-function applyClientFilters(
-  rows: Meeting[],
-  params: MeetingListParams,
-): MeetingListResult {
-  let result = [...rows];
-
-  const search = params.search?.trim().toLowerCase();
-  if (search) {
-    result = result.filter(
-      (row) =>
-        row.title.toLowerCase().includes(search) ||
-        row.location.toLowerCase().includes(search) ||
-        row.agenda.toLowerCase().includes(search),
-    );
-  }
-
-  if (params.status) {
-    result = result.filter((row) => row.status === params.status);
-  }
-
-  result.sort(
-    (a, b) =>
-      new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
-  );
-
-  const total = result.length;
-  const page = Math.max(1, params.page ?? 1);
-  const pageSize = Math.max(1, params.pageSize ?? 10);
-  const start = (page - 1) * pageSize;
-
-  return { data: result.slice(start, start + pageSize), total };
-}
-
-// ==========================================
 // PUBLIC API
 // ==========================================
 
 export const meetingsApi = {
   list: (params: MeetingListParams = {}): Promise<MeetingListResult> =>
-    withDemoFallback(
-      async () => {
-        const response = await apiRequest<{
-          data: ApiMeeting[];
-          total: number;
-        }>(`${ENDPOINTS.meetings.base}?${buildQuery(params)}`);
-        return {
-          data: (response.data ?? []).map(adaptRow),
-          total: response.total ?? 0,
-        };
-      },
-      async () => applyClientFilters(demoMeetings, params),
-    ),
+    apiRequest<{ data: ApiMeeting[]; total: number }>(
+      `${ENDPOINTS.meetings.base}?${buildQuery(params)}`,
+    ).then((response) => ({
+      data: (response.data ?? []).map(adaptRow),
+      total: response.total ?? 0,
+    })),
 
   /** The caller's own meetings — organized or invited. No permission needed. */
   listMine: (): Promise<Meeting[]> =>
-    withDemoFallback(
-      async () => {
-        const rows = await apiRequest<ApiMeeting[]>(ENDPOINTS.meetings.me);
-        return (rows ?? []).map(adaptRow);
-      },
-      async () => demoMeetings.filter((row) => row.status === "Scheduled"),
-    ),
+    apiRequest<ApiMeeting[]>(ENDPOINTS.meetings.me).then((rows) => (rows ?? []).map(adaptRow)),
 
   getById: (id: string): Promise<Meeting> =>
-    withDemoFallback(
-      async () => adaptRow(await apiRequest<ApiMeeting>(ENDPOINTS.meetings.byId(id))),
-      async () => {
-        const found = demoMeetings.find((row) => row.meetingId === id);
-        if (!found) throw new Error("Meeting not found.");
-        return found;
-      },
-    ),
+    apiRequest<ApiMeeting>(ENDPOINTS.meetings.byId(id)).then(adaptRow),
 
   create: (payload: MeetingPayload): Promise<Meeting> =>
-    withDemoFallback(
-      async () =>
-        adaptRow(
-          await apiRequest<ApiMeeting>(ENDPOINTS.meetings.base, {
-            method: "POST",
-            body: toApiPayload(payload),
-          }),
-        ),
-      async () => {
-        demoSequence += 1;
-        const created: Meeting = {
-          meetingId: `demo-meeting-${demoSequence}`,
-          title: payload.title,
-          scheduledAt: payload.scheduledAt,
-          location: payload.location ?? "",
-          agenda: payload.agenda ?? "",
-          audienceType: payload.audienceType,
-          audienceDepartmentId: payload.audienceDepartmentId ?? null,
-          audienceDepartmentName: "",
-          notifyEmail: payload.notifyEmail ?? true,
-          notifyInApp: payload.notifyInApp ?? true,
-          status: "Scheduled",
-          cancellationReason: "",
-          organizerId: "demo-organizer",
-          organizerName: "You",
-          participantCount: payload.participantIds?.length ?? 0,
-          participants: [],
-        };
-        demoMeetings.unshift(created);
-        return created;
-      },
-    ),
+    apiRequest<ApiMeeting>(ENDPOINTS.meetings.base, {
+      method: "POST",
+      body: toApiPayload(payload),
+    }).then(adaptRow),
 
   update: (id: string, payload: Partial<MeetingPayload>): Promise<Meeting> =>
-    withDemoFallback(
-      async () =>
-        adaptRow(
-          await apiRequest<ApiMeeting>(ENDPOINTS.meetings.byId(id), {
-            method: "PATCH",
-            body: toApiPayload(payload as MeetingPayload),
-          }),
-        ),
-      async () => {
-        const index = demoMeetings.findIndex((row) => row.meetingId === id);
-        if (index === -1) throw new Error("Meeting not found.");
-        const next = {
-          ...demoMeetings[index],
-          ...payload,
-          location: payload.location ?? demoMeetings[index].location,
-          agenda: payload.agenda ?? demoMeetings[index].agenda,
-        } as Meeting;
-        demoMeetings[index] = next;
-        return next;
-      },
-    ),
+    apiRequest<ApiMeeting>(ENDPOINTS.meetings.byId(id), {
+      method: "PATCH",
+      body: toApiPayload(payload as MeetingPayload),
+    }).then(adaptRow),
 
   cancel: (id: string, reason: string): Promise<Meeting> =>
-    withDemoFallback(
-      async () =>
-        adaptRow(
-          await apiRequest<ApiMeeting>(ENDPOINTS.meetings.cancel(id), {
-            method: "PATCH",
-            body: { cancellation_reason: reason },
-          }),
-        ),
-      async () => {
-        const index = demoMeetings.findIndex((row) => row.meetingId === id);
-        if (index === -1) throw new Error("Meeting not found.");
-        const next: Meeting = {
-          ...demoMeetings[index],
-          status: "Cancelled",
-          cancellationReason: reason,
-        };
-        demoMeetings[index] = next;
-        return next;
-      },
-    ),
+    apiRequest<ApiMeeting>(ENDPOINTS.meetings.cancel(id), {
+      method: "PATCH",
+      body: { cancellation_reason: reason },
+    }).then(adaptRow),
 
   remove: (id: string): Promise<{ message: string }> =>
-    withDemoFallback(
-      async () =>
-        apiRequest<{ message: string }>(ENDPOINTS.meetings.byId(id), {
-          method: "DELETE",
-        }),
-      async () => {
-        const index = demoMeetings.findIndex((row) => row.meetingId === id);
-        if (index !== -1) demoMeetings.splice(index, 1);
-        return { message: "Meeting deleted." };
-      },
-    ),
+    apiRequest<{ message: string }>(ENDPOINTS.meetings.byId(id), { method: "DELETE" }),
 };
