@@ -6,6 +6,7 @@ import icon from "@/assets/icon.png";
 import badge from "@/assets/badge.png";
 import panelTexture from "@/assets/panel-texture.jpg";
 import { useAuth } from "@/app/providers/AuthContext";
+import { useBranding } from "@/app/providers/BrandingContext";
 
 type AuthLayoutProps = {
  heading: string;
@@ -33,11 +34,12 @@ const BG_ICON_BOX = { left: 425.25, top: -195.52, width: 492.46, height: 492.37 
 export default function AuthLayout({ heading, children }: AuthLayoutProps) {
  const navigate = useNavigate();
  const { isAuthenticated } = useAuth();
+ const { branding } = useBranding();
 
  return (
- <div className="relative min-h-screen w-full overflow-hidden bg-white">
+ <div className="relative min-h-screen w-full overflow-hidden bg-surface">
  {/* Right panel background fill */}
- <div className="absolute inset-y-0 right-0 hidden w-1/2 bg-[#eef4f9] lg:block" />
+ <div className="absolute inset-y-0 right-0 hidden w-1/2 bg-surface-muted lg:block" />
 
  {/* faint architectural texture — barely visible, purely a subtle
  employee accent behind the icon/robot, not a showcased photo */}
@@ -64,7 +66,7 @@ export default function AuthLayout({ heading, children }: AuthLayoutProps) {
  mascot's size and position proportional at any viewport size.
  */}
  <div className="absolute inset-y-0 right-0 hidden w-1/2 flex-col items-center justify-center gap-6 px-10 lg:flex">
- <h1 className="z-10 text-center text-3xl font-extrabold leading-tight text-gray-900 xl:text-4xl">
+ <h1 className="z-10 text-center text-3xl font-extrabold leading-tight text-foreground xl:text-4xl">
  {heading.split(" ").map((line) => (
  <span key={line} className="block">
  {line}
@@ -85,7 +87,7 @@ export default function AuthLayout({ heading, children }: AuthLayoutProps) {
  src={badge}
  alt=""
  aria-hidden
- className="pointer-events-none absolute left-1/2 top-1/2 z-20 hidden h-40 w-40 -translate-x-[55%] -translate-y-1/2 rounded-full object-contain shadow-xl ring-8 ring-white lg:block"
+ className="pointer-events-none absolute left-1/2 top-1/2 z-20 hidden h-40 w-40 -translate-x-[55%] -translate-y-1/2 rounded-full object-contain shadow-card-lg ring-8 ring-surface lg:block"
  />
 
  {/*
@@ -97,10 +99,10 @@ export default function AuthLayout({ heading, children }: AuthLayoutProps) {
  the form was independently centered in the full viewport height, which
  caused them to overlap on shorter windows.
  */}
- <div className="relative z-10 flex min-h-screen w-full flex-col bg-white/0 px-5 py-8 xs:px-8 xs:py-10 sm:px-16 lg:w-1/2 lg:px-24 lg:py-12">
+ <div className="relative z-10 flex min-h-screen w-full flex-col bg-surface/0 px-5 py-8 xs:px-8 xs:py-10 sm:px-16 lg:w-1/2 lg:px-24 lg:py-12">
  <img
- src={logo}
- alt="TechnoCues — Designers of the Visible"
+ src={branding.logoUrl || logo}
+ alt={branding.companyName || "TechnoCues"}
  className="h-auto w-[140px] shrink-0 cursor-pointer object-contain object-left xs:w-[164px] sm:w-[206px]"
  onClick={() => navigate(isAuthenticated ? "/dashboard" : "/login")}
  />

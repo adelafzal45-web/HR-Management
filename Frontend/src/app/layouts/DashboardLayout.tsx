@@ -4,6 +4,7 @@ import Header from "@/modules/dashboard/components/Header";
 import Breadcrumbs from "@/components/common/Breadcrumbs";
 import ConfirmDialog from "@/components/dialogs/ConfirmDialog";
 import { useAuth } from "@/app/providers/AuthContext";
+import { useBranding } from "@/app/providers/BrandingContext";
 import badge from "@/assets/badge.png";
 
 type DashboardLayoutProps = {
@@ -19,6 +20,8 @@ export default function DashboardLayout({ title, activeKey, children }: Dashboar
  // risk of the two copies ever drifting apart in copy or behavior.
  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
  const { logout } = useAuth();
+ const { branding } = useBranding();
+ const companyName = branding.companyName || "TechnoCues";
 
  // Lock the body while the mobile drawer is open so the page behind it
  // can't scroll along with it (the classic "double scroll" iOS bug).
@@ -35,7 +38,7 @@ export default function DashboardLayout({ title, activeKey, children }: Dashboar
  // Fixed to the viewport height — the sidebar and the main content area
  // below are each their own independent, self-contained scroll regions
  // instead of the whole page scrolling as one long column.
- <div className="flex h-[100dvh] w-full overflow-hidden bg-gray-50">
+ <div className="flex h-[100dvh] w-full overflow-hidden bg-background">
  <Sidebar
  activeKey={activeKey}
  mobileOpen={mobileNavOpen}
@@ -50,7 +53,7 @@ export default function DashboardLayout({ title, activeKey, children }: Dashboar
  onRequestLogout={() => setConfirmLogoutOpen(true)}
  />
  <main className="scroll-touch scrollbar-hide min-w-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 xs:px-4 sm:px-6 sm:py-6 lg:px-8">
- <div className="mx-auto w-full max-w-[1600px]">
+ <div className="mx-auto w-full max-w-content">
 					<Breadcrumbs />
 					{children}
 				</div>
@@ -59,14 +62,14 @@ export default function DashboardLayout({ title, activeKey, children }: Dashboar
 
  <ConfirmDialog
  open={confirmLogoutOpen}
- title="Log out of TechnoCues?"
+ title={`Log out of ${companyName}?`}
  description="You'll need to sign in again to access your dashboard."
  confirmLabel="Log Out"
  cancelLabel="Cancel"
  tone="danger"
  icon={
- <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 ring-4 ring-gray-100/40">
- <img src={badge} alt="TechnoCues" className="h-7 w-7 rounded-full object-contain" />
+ <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-muted ring-4 ring-border-muted/40">
+ <img src={badge} alt={companyName} className="h-7 w-7 rounded-full object-contain" />
  </div>
  }
  onConfirm={() => {

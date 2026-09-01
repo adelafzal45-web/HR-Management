@@ -36,8 +36,8 @@ export default function Login() {
   return (
     <AuthLayout heading={"Good\nto see you"}>
       <LoadingOverlay show={loading} label="Signing you in…" />
-      <h2 className="mb-1 text-[26px] xs:text-[28px] sm:text-[32px] font-bold text-gray-900">Login</h2>
-      <p className="mb-8 text-[15px] text-gray-500">Welcome back — enter your details to sign in.</p>
+      <h2 className="mb-1 text-[26px] xs:text-[28px] sm:text-[32px] font-bold text-foreground">Login</h2>
+      <p className="mb-8 text-[15px] text-muted">Welcome back — enter your details to sign in.</p>
 
       <BackendStatusBanner status={status} />
 
@@ -60,12 +60,12 @@ export default function Login() {
         />
 
         <div className="mb-6 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-brand-dark focus:ring-brand"
+              className="h-4 w-4 rounded border-border text-brand-dark focus:ring-brand"
             />
             Remember
           </label>
@@ -74,7 +74,7 @@ export default function Login() {
           </Link>
         </div>
 
-        {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
+        {error && <p className="mb-4 text-sm text-error">{error}</p>}
 
         <PrimaryButton type="submit" loading={loading}>
           Login

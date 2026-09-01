@@ -5,36 +5,201 @@
 @tailwind utilities;
 
 /*
- Typography: Poppins, kept to light weights (400/500/600) across the dashboard;
- 600 is the heaviest weight used anywhere, reserved for KPI values.
+ Typography: Poppins by default, kept to light weights (400/500/600) across the
+ dashboard; 600 is the heaviest weight used anywhere, reserved for KPI values.
+ The family is now a token (--font-sans) so Settings > Appearance can swap it.
 */
 
+/* ==========================================================================
+   Design tokens — the single source of truth for the whole UI.
+
+   This is the LIGHT baseline. src/lib/theme.ts overwrites any of these on
+   <html> at runtime once company_settings.theme_config loads (and re-writes the
+   colour set when the light/dark mode changes), so a saved theme applies live
+   with no rebuild. These static defaults are what paints correctly before that
+   JS runs — including the very first, un-cached visit — and what the app falls
+   back to when theme_config is null (no admin override).
+
+   Colours are SPACE-SEPARATED RGB CHANNELS, never hex. tailwind.config.js
+   consumes them as `rgb(var(--color-x) / <alpha-value>)`, which is what keeps
+   opacity modifiers such as `bg-surface/60` or `text-muted/70` compiling to a
+   valid colour. A hex value here would silently break every `/opacity` utility.
+
+   Radii, shadows, typography and layout are raw CSS values (px / strings).
+   ========================================================================== */
+:root {
+  color-scheme: light;
+
+  /* -- Brand (existing; theme.ts derives these from primary_color) --------- */
+  --color-brand: 241 179 68;        /* #F1B344 */
+  --color-brand-dark: 224 138 62;   /* #E08A3E */
+  --color-brand-light: 253 233 200; /* #FDE9C8 — pale tint for active nav/rows */
+  --color-brand-contrast: 17 24 39; /* readable text on a solid brand fill */
+
+  /* -- Secondary / accent -------------------------------------------------- */
+  --color-accent: 71 85 105;          /* slate-600 */
+  --color-accent-contrast: 255 255 255;
+
+  /* -- Semantic surfaces & text (replace the hardcoded grays) -------------- */
+  --color-background: 249 250 251;       /* gray-50   ← was bg-gray-50   */
+  --color-surface: 255 255 255;          /* white     ← was bg-white     */
+  --color-surface-muted: 243 244 246;    /* gray-100  ← was bg-gray-100  */
+  --color-foreground: 17 24 39;          /* gray-900  ← was text-gray-900 */
+  --color-muted: 107 114 128;            /* gray-500  ← was text-gray-500 */
+  --color-muted-foreground: 156 163 175; /* gray-400  ← was text-gray-400 */
+  --color-border: 229 231 235;           /* gray-200  ← was border-gray-200 */
+  --color-border-muted: 243 244 246;     /* gray-100  ← was border-gray-100 */
+
+  /* -- Status (each with a subtle tint bg and a readable contrast fg) ------ */
+  --color-success: 16 185 129;          /* emerald-500 */
+  --color-success-tint: 236 253 245;    /* emerald-50  */
+  --color-success-contrast: 255 255 255;
+  --color-warning: 245 158 11;          /* amber-500   */
+  --color-warning-tint: 255 251 235;    /* amber-50    */
+  --color-warning-contrast: 17 24 39;
+  --color-error: 239 68 68;             /* red-500     */
+  --color-error-tint: 254 242 242;      /* red-50      */
+  --color-error-contrast: 255 255 255;
+  --color-info: 59 130 246;             /* blue-500    */
+  --color-info-tint: 239 246 255;       /* blue-50     */
+  --color-info-contrast: 255 255 255;
+
+  /* -- Radii (px; Appearance edits these as integers) ---------------------- */
+  --radius-control: 12px; /* buttons, inputs, selects */
+  --radius-card: 16px;    /* cards, panels            */
+  --radius-modal: 16px;   /* dialogs, side panels     */
+  --radius-pill: 9999px;  /* badges, chips, avatars   */
+
+  /* -- Elevation ----------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px 0 rgb(17 24 39 / 0.05);
+  --shadow-md: 0 4px 12px -2px rgb(17 24 39 / 0.08), 0 2px 4px -2px rgb(17 24 39 / 0.05);
+  --shadow-lg: 0 12px 32px -8px rgb(17 24 39 / 0.12), 0 4px 8px -4px rgb(17 24 39 / 0.06);
+  /* Default card elevation; the shadow-level setting rewrites this to one of
+     none / var(--shadow-sm|md|lg). */
+  --shadow-card: var(--shadow-sm);
+
+  /* -- Typography ---------------------------------------------------------- */
+  --font-sans: "Poppins", system-ui, sans-serif;
+  --font-size-base: 16px; /* drives rem-based sizing via <html> */
+  --font-scale: 1.2;      /* modular scale for headings          */
+
+  /* -- Layout -------------------------------------------------------------- */
+  --sidebar-width: 288px;
+  --sidebar-width-collapsed: 80px;
+  --content-max-width: 1600px;
+  --header-height: 64px;
+
+  /* -- Density (overridden by [data-density="compact"]) -------------------- */
+  --density-row: 0.875rem; /* vertical padding of table rows / list items */
+  --density-pad: 1.25rem;  /* inner padding of cards / sections           */
+}
+
+/* Dark scheme. Same token names, dark values. theme.ts toggles the `dark` class
+   on <html> (resolving 'system' via prefers-color-scheme) and, when the admin
+   has customised colours, overwrites these inline for the active scheme. */
+.dark {
+  color-scheme: dark;
+
+  /* Brand hues stay vivid on dark; brand-light becomes a dark warm tint so an
+     active-nav background reads as a subtle highlight, not a bright block.
+     (Components in this pass prefer `bg-brand/10` for active states, which is
+     scheme-agnostic; this keeps legacy `bg-brand-light` usages sane in dark.) */
+  --color-brand-light: 68 52 28;
+
+  --color-accent: 148 163 184;     /* slate-400 */
+  --color-accent-contrast: 15 23 42;
+
+  --color-background: 15 23 42;        /* slate-900 */
+  --color-surface: 30 41 59;           /* slate-800 */
+  --color-surface-muted: 51 65 85;     /* slate-700 */
+  --color-foreground: 241 245 249;     /* slate-100 */
+  --color-muted: 148 163 184;          /* slate-400 */
+  --color-muted-foreground: 100 116 139; /* slate-500 */
+  --color-border: 51 65 85;            /* slate-700 */
+  --color-border-muted: 30 41 59;      /* slate-800 */
+
+  --color-success: 52 211 153;         /* emerald-400 */
+  --color-success-tint: 6 78 59;       /* emerald-900 */
+  --color-success-contrast: 5 46 22;
+  --color-warning: 251 191 36;         /* amber-400 */
+  --color-warning-tint: 120 53 15;     /* amber-900 */
+  --color-warning-contrast: 20 14 0;
+  --color-error: 248 113 113;          /* red-400 */
+  --color-error-tint: 127 29 29;       /* red-900 */
+  --color-error-contrast: 51 6 6;
+  --color-info: 96 165 250;            /* blue-400 */
+  --color-info-tint: 30 58 138;        /* blue-900 */
+  --color-info-contrast: 8 22 51;
+
+  /* Shadows read as near-invisible on dark surfaces unless deepened. */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 4px 8px -4px rgb(0 0 0 / 0.5);
+}
+
+/* Compact density tightens rows/padding without touching colours or sizing. */
+[data-density="compact"] {
+  --density-row: 0.5rem;
+  --density-pad: 0.875rem;
+}
+
+html {
+  /* Root font size is the base-size lever: all rem-based utilities scale off it.
+     Defaults to the browser standard (16px) so an un-themed install is unchanged. */
+  font-size: var(--font-size-base, 16px);
+}
+
 html, body, #root {
- height: 100%;
+  height: 100%;
 }
 
 body {
- font-family: "Poppins", system-ui, sans-serif;
- background: #ffffff;
- -webkit-font-smoothing: antialiased;
- text-rendering: optimizeLegibility;
+  font-family: var(--font-sans, "Poppins", system-ui, sans-serif);
+  background: rgb(var(--color-background));
+  color: rgb(var(--color-foreground));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 input::placeholder {
- color: #b7bcc3;
+  color: rgb(var(--color-muted-foreground));
 }
 
 /* Scrollable but scrollbar-less containers (sidebar rail, mobile drawer). */
 .scrollbar-hide {
- -ms-overflow-style: none;
- scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .scrollbar-hide::-webkit-scrollbar {
- display: none;
+  display: none;
 }
 
 /* Smooth momentum scrolling on iOS for our custom scroll containers. */
 .scroll-touch {
- -webkit-overflow-scrolling: touch;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Toast auto-dismiss progress bar — shrinks from full to empty over the
+   toast's configured duration (see ToastContext.tsx). */
+@keyframes toast-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.toast-progress {
+  animation-name: toast-shrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-progress {
+    animation: none;
+    width: 0%;
+  }
 }

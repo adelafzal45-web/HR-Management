@@ -101,49 +101,49 @@ export default function ReassignDeleteDialog({
     role="alertdialog"
     aria-modal="true"
     aria-labelledby="reassign-dialog-title"
-    className={`relative w-full max-w-[92vw] overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all duration-200 xs:max-w-md ${
+    className={`relative w-full max-w-[92vw] overflow-hidden rounded-modal bg-surface p-6 text-left shadow-card-lg transition-all duration-200 xs:max-w-md ${
      visible ? "translate-y-0 scale-100 opacity-100" : "translate-y-2 scale-95 opacity-0"
     }`}
    >
-    <h2 id="reassign-dialog-title" className="text-base font-semibold text-gray-900">
+    <h2 id="reassign-dialog-title" className="text-base font-semibold text-foreground">
      {title}
     </h2>
 
-    {loadingImpact && <p className="mt-3 text-sm text-gray-500">Checking what's attached…</p>}
+    {loadingImpact && <p className="mt-3 text-sm text-muted">Checking what's attached…</p>}
 
     {!loadingImpact && !isBlocked && (
-     <p className="mt-2 text-sm leading-relaxed text-gray-500">{emptyDescription}</p>
+     <p className="mt-2 text-sm leading-relaxed text-muted">{emptyDescription}</p>
     )}
 
     {!loadingImpact && isBlocked && (
      <>
-      <div className="mt-4 rounded-xl bg-amber-50 p-4">
-       <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
-        <AlertTriangle size={15} className="shrink-0" />
+      <div className="mt-4 rounded-card border border-warning/30 bg-warning-tint p-4">
+       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <AlertTriangle size={15} className="shrink-0 text-warning" />
         Blocked by:
        </div>
        <ul className="mt-2 space-y-1 pl-6">
         {blockers.map((b) => (
-         <li key={b.label} className="list-disc text-sm text-amber-900">
+         <li key={b.label} className="list-disc text-sm text-foreground">
           {b.label}
-          {b.detail && <span className="text-amber-700"> {b.detail}</span>}
+          {b.detail && <span className="text-muted"> {b.detail}</span>}
          </li>
         ))}
        </ul>
       </div>
 
       {noTargets ? (
-       <p className="mt-4 text-sm leading-relaxed text-gray-500">
+       <p className="mt-4 text-sm leading-relaxed text-muted">
         There is nowhere to move them to — create another {targetLabel.toLowerCase()} first, or reassign
         them individually.
        </p>
       ) : (
        <label className="mt-4 block">
-        <span className="mb-2 block text-sm font-medium text-gray-900">Move them to</span>
+        <span className="mb-2 block text-sm font-medium text-foreground">Move them to</span>
         <select
          value={targetId}
          onChange={(e) => setTargetId(e.target.value)}
-         className="w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
+         className="w-full rounded-control bg-surface-muted px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/60"
         >
          <option value="" disabled>
           Select a {targetLabel.toLowerCase()}
@@ -159,13 +159,13 @@ export default function ReassignDeleteDialog({
      </>
     )}
 
-    {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
+    {error && <p className="mt-4 text-sm text-error">{error}</p>}
 
     <div className="mt-6 flex flex-col-reverse gap-2.5 xs:flex-row xs:gap-3">
      <button
       type="button"
       onClick={onCancel}
-      className="min-h-11 flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+      className="min-h-11 flex-1 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted transition hover:bg-background"
      >
       Cancel
      </button>
@@ -173,7 +173,7 @@ export default function ReassignDeleteDialog({
       type="button"
       onClick={() => onConfirm(isBlocked ? targetId : null)}
       disabled={!canSubmit}
-      className="min-h-11 flex-1 rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-300"
+      className="min-h-11 flex-1 rounded-full bg-error px-4 py-2 text-sm font-semibold text-error-contrast shadow-card transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
      >
       {submitting ? "Please wait…" : isBlocked ? "Move & Delete" : "Delete"}
      </button>

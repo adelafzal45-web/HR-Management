@@ -170,6 +170,14 @@ export interface ComputeContext {
   // ---- Phase 2 rules (all optional; absent → Phase 1 behaviour) ----
   overtimeRule?: OvertimeRuleResolved | null;
   bonusRule?: BonusRuleResolved | null;
+  /**
+   * A per-employee, per-run manual bonus entered in the Run Payroll grid. When
+   * present it replaces the rule-computed bonus for this employee/run — and an
+   * explicit `0` cancels the rule bonus entirely. The amount overrides the
+   * rule's figure; the rule (if any) still supplies the label and taxable flag.
+   * See PayrollBonusOverride.
+   */
+  bonusOverride?: { amount: number; note: string } | null;
   lateRule?: LateRuleResolved | null;
   repeatedLateRule?: RepeatedLateRuleResolved | null;
   absentRule?: AbsentRuleResolved | null;
@@ -334,21 +342,28 @@ export function computePayslip(ctx: ComputeContext): ComputedResult {
     if (component.is_taxable) taxableBase += amount;
   }
 
-  // 4. Bonus earning (Phase 2 rule) — percent triggers use gross-so-far.
-  if (ctx.bonusRule) {
+  // 4. Bonus earning (Phase 2 rule, or a per-run manual override). An override
+  //    entered in the Run Payroll grid wins over the configured rule for this
+  //    employee/run — including an explicit 0, which cancels the rule bonus.
+  if (ctx.bonusRule || ctx.bonusOverride) {
     const provisionalGross = round2(basic + grossAdditions);
-    const bonus = computeBonus(
-      ctx.bonusRule,
-      scope,
-      provisionalGross,
-      warnings,
-    );
+    const bonus = ctx.bonusOverride
+      ? {
+          amount: round2(ctx.bonusOverride.amount),
+          note: overrideBonusNote(
+            round2(ctx.bonusOverride.amount),
+            ctx.bonusOverride.note,
+            ctx.bonusRule?.name ?? null,
+          ),
+        }
+      : computeBonus(ctx.bonusRule!, scope, provisionalGross, warnings);
     scope.BONUS = bonus.amount;
     if (bonus.amount > 0) {
+      const taxable = ctx.bonusRule?.taxable ?? true;
       lines.push(
         syntheticLine(
           'BONUS',
-          ctx.bonusRule.name || BONUS_LINE_LABEL,
+          ctx.bonusRule?.name || BONUS_LINE_LABEL,
           'earning',
           'fixed',
           bonus.amount,
@@ -357,7 +372,7 @@ export function computePayslip(ctx: ComputeContext): ComputedResult {
         ),
       );
       grossAdditions += bonus.amount;
-      if (ctx.bonusRule.taxable) taxableBase += bonus.amount;
+      if (taxable) taxableBase += bonus.amount;
     }
   }
 
@@ -602,6 +617,23 @@ function computeOvertime(
       `${hours} overtime hour(s) × hourly rate ${round2(hourlyRate).toFixed(2)} ` +
       `× ${rule.rate_multiplier} = ${amount.toFixed(2)}.`,
   };
+}
+
+/**
+ * The "Why?" note for a manual bonus override entered during a run. States the
+ * amount, that it overrides the configured rule (when one exists), and appends
+ * any memo HR attached to the override.
+ */
+function overrideBonusNote(
+  amount: number,
+  memo: string,
+  ruleName: string | null,
+): string {
+  const base = ruleName
+    ? `Manual bonus for this run = ${amount.toFixed(2)} (overrides the "${ruleName}" bonus rule).`
+    : `Manual bonus for this run = ${amount.toFixed(2)}.`;
+  const memoText = memo && memo.trim() ? ` ${memo.trim()}` : '';
+  return `${base}${memoText}`;
 }
 
 /** Bonus earning (spec §8): flat, percent of gross-so-far, or a formula. */

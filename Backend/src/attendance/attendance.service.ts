@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   forwardRef,
   Inject,
 } from '@nestjs/common';
@@ -33,7 +34,11 @@ import {
   STATUSES_REQUIRING_CHECK_IN,
   type AttendanceStatus,
 } from './attendance-status';
-import { normaliseSource } from './attendance-source';
+import {
+  normaliseSource,
+  DEFAULT_ATTENDANCE_SOURCE,
+  type AttendanceSource,
+} from './attendance-source';
 
 import {
   derivePunctuality,
@@ -46,6 +51,8 @@ import {
   WorkingDaySchedulesService,
   isoDayOfWeek,
 } from '../working-day-schedules/working-day-schedules.service';
+import { CompanySettingsService } from '../company-settings/company-settings.service';
+import type { AttendanceMode } from '../company-settings/biometric-device.type';
 
 // Re-exported so the existing import path keeps working; the value itself now
 // lives with the rest of the status vocabulary in `attendance-status.ts`.
@@ -72,6 +79,17 @@ export type TodayAttendanceStatus = {
   is_working_day: boolean;
   can_check_in: boolean;
   can_check_out: boolean;
+  /**
+   * Company-wide attendance policy in force. In 'Device' mode self check-in/out
+   * is disabled (the terminal records attendance) and both `can_*` flags above
+   * are forced false; in 'Manual' mode the buttons work as normal.
+   */
+  attendance_mode: AttendanceMode;
+  /**
+   * Why self-service is unavailable, for the frontend to show verbatim; null
+   * when the buttons are usable.
+   */
+  self_service_disabled_reason: string | null;
   attendance: Attendance | null;
   shift: {
     shift_id: string;
@@ -81,6 +99,15 @@ export type TodayAttendanceStatus = {
     grace_period_minutes: number;
   } | null;
 };
+
+/**
+ * Shown to an employee who tries to self check-in/out while the company is in
+ * Device mode, and returned on `me/today` so the frontend can explain the
+ * missing buttons. One constant so the API rejection and the status hint read
+ * identically.
+ */
+export const DEVICE_MODE_SELF_SERVICE_MESSAGE =
+  'Attendance is recorded on the biometric device. Manual check-in and check-out are disabled.';
 
 /**
  * Hours beyond this are overtime. The shift's own span would be the better
@@ -107,6 +134,8 @@ export class AttendanceService {
     private readonly performanceReviewService: PerformanceReviewService,
 
     private readonly workingDaySchedules: WorkingDaySchedulesService,
+
+    private readonly companySettingsService: CompanySettingsService,
   ) {}
 
   /**
@@ -420,14 +449,26 @@ export class AttendanceService {
     const attendance = await this.findOwnAttendanceOn(userId, date);
     const isWorkingDay = await this.isWorkingDayForUser(user, date);
 
+    // In Device mode the terminal is the only sanctioned way in: self
+    // check-in/out is disabled company-wide, so the buttons are suppressed and
+    // the frontend shows a banner instead. Manual mode leaves the rules as-is.
+    const { mode } = await this.companySettingsService.getBiometricConfig();
+    const deviceMode = mode === 'Device';
+
     return {
       date,
       is_working_day: isWorkingDay,
       // Check-in stays legal on a non-working day (weekend cover, callout): the
       // day simply never counts as an absence. Blocking it would leave someone
       // who genuinely worked with no way to record it.
-      can_check_in: !attendance?.check_in,
-      can_check_out: !!attendance?.check_in && !attendance?.check_out,
+      can_check_in: deviceMode ? false : !attendance?.check_in,
+      can_check_out: deviceMode
+        ? false
+        : !!attendance?.check_in && !attendance?.check_out,
+      attendance_mode: mode,
+      self_service_disabled_reason: deviceMode
+        ? DEVICE_MODE_SELF_SERVICE_MESSAGE
+        : null,
       attendance: attendance ?? null,
       shift: user.shift
         ? {
@@ -441,8 +482,20 @@ export class AttendanceService {
     };
   }
 
-  /** Stamps the caller in, on the server's clock, against their own shift. */
-  async checkIn(userId: string): Promise<AttendanceWithWorkingDay> {
+  /**
+   * Stamps the caller in, on the server's clock, against their own shift.
+   *
+   * `source` records where the punch came from: 'Online' for a self-service
+   * button press (the default), 'Device' when a biometric terminal drove it.
+   * A self-service punch is rejected while the company is in Device mode — the
+   * terminal is then the only sanctioned way in.
+   */
+  async checkIn(
+    userId: string,
+    source: AttendanceSource = DEFAULT_ATTENDANCE_SOURCE,
+  ): Promise<AttendanceWithWorkingDay> {
+    await this.assertSelfServiceAllowed(source);
+
     const user = await this.loadUserForClock(userId);
     const date = this.today();
     const now = this.currentTime();
@@ -479,9 +532,10 @@ export class AttendanceService {
         attendance_date: date as unknown as Date,
         user,
         attendance_status: status,
-        // A self-service punch is Online by definition, and the employee is
-        // both the subject and the author of the new row.
-        attendance_source: 'Online',
+        // Tagged with where the punch originated (Online for a button press,
+        // Device for a terminal); the employee is both the subject and the
+        // author of the new row.
+        attendance_source: source,
         created_by: userId,
       });
 
@@ -507,7 +561,12 @@ export class AttendanceService {
    * client because a client-supplied figure is a client-chosen figure — and
    * these feed payroll.
    */
-  async checkOut(userId: string): Promise<AttendanceWithWorkingDay> {
+  async checkOut(
+    userId: string,
+    source: AttendanceSource = DEFAULT_ATTENDANCE_SOURCE,
+  ): Promise<AttendanceWithWorkingDay> {
+    await this.assertSelfServiceAllowed(source);
+
     const date = this.today();
     const attendance = await this.findOwnAttendanceOn(userId, date);
 
@@ -534,11 +593,33 @@ export class AttendanceService {
     attendance.working_hours = workingHours;
     attendance.overtime_hours = overtimeHours;
     attendance.is_overtime = overtimeHours > 0;
+    // Record where the closing punch came from, consistent with check-in.
+    attendance.attendance_source = source;
     attendance.updated_by = userId;
 
     const saved = await this.attendanceRepository.save(attendance);
     const [decorated] = await this.decorateWithWorkingDay([saved]);
     return decorated;
+  }
+
+  /**
+   * Rejects a self-service punch when the company runs on Device mode.
+   *
+   * Only self-service ('Online') punches are gated: a punch tagged 'Device'
+   * comes from the terminal itself via the biometric listener, which is exactly
+   * what Device mode wants. HR's manual create/correct paths never call this —
+   * they stay available in either mode. The backend is the source of truth here;
+   * the frontend's hidden buttons are a UX nicety, not the enforcement.
+   */
+  private async assertSelfServiceAllowed(
+    source: AttendanceSource,
+  ): Promise<void> {
+    if (source !== 'Online') return;
+
+    const { mode } = await this.companySettingsService.getBiometricConfig();
+    if (mode === 'Device') {
+      throw new ForbiddenException(DEVICE_MODE_SELF_SERVICE_MESSAGE);
+    }
   }
 
   /**
@@ -1176,6 +1257,7 @@ export class AttendanceService {
  */
 async processBiometricPunch(
   userId: string,
+  source: AttendanceSource = 'Device',
 ): Promise<AttendanceWithWorkingDay> {
   const date = this.today();
 
@@ -1189,7 +1271,7 @@ async processBiometricPunch(
   // =====================================================
 
   if (!attendance || !attendance.check_in) {
-    return this.checkIn(userId);
+    return this.checkIn(userId, source);
   }
 
   // =====================================================
@@ -1197,7 +1279,7 @@ async processBiometricPunch(
   // =====================================================
 
   if (attendance.check_in && !attendance.check_out) {
-    return this.checkOut(userId);
+    return this.checkOut(userId, source);
   }
 
   // =====================================================

@@ -84,6 +84,10 @@ import {
   type EmployeeFieldConfig,
   type EmployeeFieldKey,
 } from "@/modules/settings/api/employeeFieldSettingsApi";
+import {
+  biometricApi,
+  type BiometricMapping,
+} from "@/modules/settings/api/biometricApi";
 
 import PhotoUpload from "@/modules/employees/components/PhotoUpload";
 import LeaveTypesPicker, {
@@ -151,6 +155,7 @@ type FormState = {
   emergency_contact_phone: string;
 
   role_id: string;
+  biometric_device_id: string;
 };
 
 /** The spec's stated default: 01-01-2000. */
@@ -201,6 +206,7 @@ const emptyForm = (): FormState => ({
   emergency_contact_relationship: "",
   emergency_contact_phone: "",
   role_id: "",
+  biometric_device_id: "",
 });
 
 /** Maps a loaded employee onto the form's string-shaped state. */
@@ -233,6 +239,10 @@ function formFromEmployee(e: Employee): FormState {
     emergency_contact_relationship: e.emergency_contact_relationship ?? "",
     emergency_contact_phone: e.emergency_contact_phone ?? "",
     role_id: e.role?.role_id ?? "",
+    // Loaded separately via biometricApi.getByUser — the Employee object does
+    // not carry the device mapping, so this starts empty and the edit-load
+    // effect fills it in.
+    biometric_device_id: "",
   };
 }
 
@@ -278,6 +288,7 @@ const FIELD_SECTION: Partial<Record<keyof FormState, SectionId>> = {
   emergency_contact_relationship: "emergency",
   emergency_contact_phone: "emergency",
   role_id: "system",
+  biometric_device_id: "system",
 };
 
 // ---- Component --------------------------------------------------------------
@@ -316,6 +327,12 @@ export default function EmployeeForm({
   const canAssignLeave = hasPermission("employees.leave.assign");
   const canEditEmergency =
     hasPermission("employees.emergency.edit") || !isEdit;
+  // The biometric device mapping is administered under the same keys as the
+  // rest of company settings — the mapping endpoints require them. Without the
+  // manage key the field renders read-only rather than disappearing, matching
+  // salary and role.
+  const canViewBiometric = hasPermission("company-settings.view");
+  const canManageBiometric = hasPermission("company-settings.update");
 
   const [form, setForm] = useState<FormState>(() =>
     employee ? formFromEmployee(employee) : emptyForm(),
@@ -338,6 +355,12 @@ export default function EmployeeForm({
   const [leaveRows, setLeaveRows] = useState<LeaveSelection[]>([]);
   const [documents, setDocuments] = useState<SessionDocument[]>([]);
   const [storedDocuments, setStoredDocuments] = useState<EmployeeDocument[]>([]);
+
+  // The employee's current device mapping (active or not), loaded on edit. Held
+  // so the save step can tell create/update/delete apart. Null = no mapping.
+  const [initialMapping, setInitialMapping] = useState<BiometricMapping | null>(
+    null,
+  );
 
   const [departments, setDepartments] = useState<DepartmentRef[]>([]);
   const [designations, setDesignations] = useState<DesignationOption[]>([]);
@@ -460,6 +483,36 @@ export default function EmployeeForm({
       alive = false;
     };
   }, [isEdit, employee?.user_id]);
+
+  // The employee's biometric device ID, so the edit form prefills the mapping.
+  // Non-fatal and silent on failure, exactly like leave balances and documents:
+  // a user without company-settings.view gets a 403 here, and the field simply
+  // starts empty. Gated on the view permission so we don't fire a request we
+  // already know will be refused.
+  useEffect(() => {
+    if (!isEdit || !employee?.user_id || !canViewBiometric) return;
+    let alive = true;
+
+    biometricApi
+      .getByUser(employee.user_id)
+      .then((mapping) => {
+        if (!alive) return;
+        setInitialMapping(mapping);
+        if (mapping) {
+          setForm((prev) => ({
+            ...prev,
+            biometric_device_id: mapping.deviceUserId,
+          }));
+        }
+      })
+      .catch(() => {
+        // Non-fatal — see comment above.
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [isEdit, employee?.user_id, canViewBiometric]);
 
   /**
    * Candidate evaluators (team leads), loaded org-wide.
@@ -839,6 +892,52 @@ export default function EmployeeForm({
     [documents, toast],
   );
 
+  /**
+   * Creates, updates or removes the employee ↔ device-ID mapping to match the
+   * form field. Same contract as the photo/leave/document steps: the record is
+   * already saved by the time this runs, so a failure warns rather than
+   * discarding the save. No-ops when the value is unchanged, so a plain "Save
+   * changes" never fires a needless request. Requires the manage permission —
+   * the mapping endpoints reject it otherwise.
+   */
+  const saveBiometricMapping = useCallback(
+    async (employeeId: string) => {
+      if (!canManageBiometric) return;
+      const desired = form.biometric_device_id.trim();
+      const existing = initialMapping;
+
+      // Nothing entered and nothing on file, or the ID is unchanged.
+      if (!desired && !existing) return;
+      if (existing && desired === existing.deviceUserId) return;
+
+      try {
+        if (desired && !existing) {
+          await biometricApi.createMapping({
+            userId: employeeId,
+            deviceUserId: desired,
+          });
+        } else if (desired && existing) {
+          await biometricApi.updateMapping(existing.biometricUserId, {
+            deviceUserId: desired,
+          });
+        } else if (!desired && existing) {
+          // Cleared — remove the mapping entirely. Delete (not deactivate) keeps
+          // it recoverable: re-entering an ID re-creates a fresh active row,
+          // whereas a deactivated row has no re-activate path.
+          await biometricApi.deleteMapping(existing.biometricUserId);
+        }
+      } catch (error) {
+        toast.showError(
+          "Employee saved, but the biometric device ID didn't update.",
+          error instanceof ApiError
+            ? error.message
+            : "You can set it from Settings → Biometric.",
+        );
+      }
+    },
+    [canManageBiometric, form.biometric_device_id, initialMapping, toast],
+  );
+
   /** Deletes a stored document immediately. */
   const handleDeleteStoredDocument = useCallback(
     async (documentId: string) => {
@@ -918,6 +1017,7 @@ export default function EmployeeForm({
         }
         await saveLeaveAssignments(saved.user_id);
         await uploadDeferredDocuments(saved.user_id);
+        await saveBiometricMapping(saved.user_id);
 
         toast.showSuccess(
           "Employee updated.",
@@ -938,6 +1038,7 @@ export default function EmployeeForm({
           if (withPhoto) saved = withPhoto;
         }
         await uploadDeferredDocuments(saved.user_id);
+        await saveBiometricMapping(saved.user_id);
 
         toast.showSuccess(
           "Employee created.",
@@ -1558,6 +1659,31 @@ export default function EmployeeForm({
                   label="Assign Role"
                   value={employee?.role?.role_name ?? "Not assigned"}
                   hint="You don't have permission to assign roles."
+                />
+              )}
+              {canManageBiometric ? (
+                <Field
+                  label="Biometric Device ID"
+                  name="biometric_device_id"
+                  value={form.biometric_device_id}
+                  onChange={(e) => update("biometric_device_id", e.target.value)}
+                  error={errors.biometric_device_id}
+                  placeholder="e.g. 1024"
+                  hint="The user ID enrolled on the ZKTeco terminal. Leave blank if this employee doesn't punch on the device."
+                />
+              ) : (
+                <ReadOnlyField
+                  label="Biometric Device ID"
+                  value={
+                    canViewBiometric
+                      ? form.biometric_device_id || "Not set"
+                      : "Hidden"
+                  }
+                  hint={
+                    canViewBiometric
+                      ? "You don't have permission to change the biometric device mapping."
+                      : "You don't have permission to view the biometric device mapping."
+                  }
                 />
               )}
               <ReadOnlyField

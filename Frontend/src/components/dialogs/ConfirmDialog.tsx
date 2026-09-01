@@ -63,8 +63,8 @@ export default function ConfirmDialog({
 
  const confirmClasses =
  tone === "danger"
- ? "bg-red-500 hover:bg-red-600 disabled:bg-red-300"
- : "bg-brand hover:bg-brand-dark disabled:opacity-60";
+ ? "bg-error text-error-contrast hover:brightness-95 disabled:opacity-60"
+ : "bg-brand text-brand-contrast hover:brightness-95 disabled:opacity-60";
 
  return createPortal(
  <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6 sm:px-6">
@@ -81,17 +81,17 @@ export default function ConfirmDialog({
  role="alertdialog"
  aria-modal="true"
  aria-labelledby="confirm-dialog-title"
- className={`relative w-full max-w-[92vw] overflow-hidden rounded-2xl bg-white p-6 text-left shadow-2xl transition-all duration-200 xs:max-w-sm ${
+ className={`relative w-full max-w-[92vw] overflow-hidden rounded-modal bg-surface p-6 text-left shadow-card-lg transition-all duration-200 xs:max-w-sm ${
  visible ? "translate-y-0 scale-100 opacity-100" : "translate-y-2 scale-95 opacity-0"
  }`}
  >
  <div className="flex items-start gap-3">
  {icon && <div className="flex shrink-0 items-center justify-center">{icon}</div>}
  <div className="min-w-0 flex-1">
- <h2 id="confirm-dialog-title" className="text-base font-semibold text-gray-900">
+ <h2 id="confirm-dialog-title" className="text-base font-semibold text-foreground">
  {title}
  </h2>
- {description && <p className="mt-2 text-sm leading-relaxed text-gray-500">{description}</p>}
+ {description && <p className="mt-2 text-sm leading-relaxed text-muted">{description}</p>}
  </div>
  </div>
 
@@ -99,7 +99,7 @@ export default function ConfirmDialog({
  <button
  type="button"
  onClick={onCancel}
- className="min-h-11 flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+ className="min-h-11 flex-1 rounded-full border border-border px-4 py-2 text-sm font-medium text-muted transition hover:bg-background"
  >
  {cancelLabel}
  </button>
@@ -107,7 +107,7 @@ export default function ConfirmDialog({
  type="button"
  onClick={onConfirm}
  disabled={loading}
- className={`min-h-11 flex-1 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition ${confirmClasses}`}
+ className={`min-h-11 flex-1 rounded-full px-4 py-2 text-sm font-semibold shadow-card transition ${confirmClasses}`}
  >
  {loading ? "Please wait…" : confirmLabel}
  </button>

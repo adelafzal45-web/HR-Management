@@ -7,6 +7,13 @@ import {
   Check,
 } from 'typeorm';
 
+import type { ThemeConfig } from './theme-config.type';
+import type {
+  AttendanceMode,
+  BiometricDeviceConfig,
+} from './biometric-device.type';
+import type { CelebrationConfig } from './celebration-config.type';
+
 /**
  * Single-row global company settings table.
  *
@@ -68,6 +75,48 @@ export class CompanySettings {
 
   @Column({ length: 20, default: '#F1B344' })
   primary_color!: string;
+
+  /**
+   * Admin-configurable design theme (semantic colours, radii, shadows,
+   * typography, layout, mode/density). One jsonb blob replaced wholesale by the
+   * Appearance settings screen; null means "no override" and the frontend uses
+   * its DEFAULT_THEME. Explicit `type` is required for a nullable column typed as
+   * a union (`ThemeConfig | null`) — the metadata builder can't infer it.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  theme_config!: ThemeConfig | null;
+
+  /**
+   * Company-wide attendance policy. 'Manual' (default): employees clock in/out
+   * themselves and any connected biometric device is ignored. 'Device': a
+   * physical ZKTeco terminal records attendance and self check-in is disabled.
+   * HR flips this on the Biometric settings screen. Scalar + DB CHECK, mirroring
+   * the per-row `attendance_source`.
+   */
+  @Column({ length: 20, default: 'Manual' })
+  attendance_mode!: AttendanceMode;
+
+  /**
+   * Biometric device connection the real-time listener dials. One nullable jsonb
+   * blob (mirroring `theme_config`); null means "not configured" and the
+   * biometric service uses its built-in defaults. Deliberately NOT on the public
+   * branding payload — a device address is internal. Explicit `type` is required
+   * for a nullable union column.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  biometric_device!: BiometricDeviceConfig | null;
+
+  /**
+   * Admin-configurable birthday & work-anniversary announcement (backlog #2b):
+   * whether it runs, at what time, and the announcement heading. One nullable
+   * jsonb blob (mirroring `theme_config` / `biometric_device`); null means "no
+   * override" and the scheduler falls back to CELEBRATION_CONFIG_DEFAULTS — i.e.
+   * the original hard-coded enabled/08:00/heading defaults. Deliberately NOT on
+   * the public branding payload — nothing here is needed before login. Explicit
+   * `type` is required for a nullable union column.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  celebration_config!: CelebrationConfig | null;
 
   // ---- Certificate signatories ----------------------------------------
   //

@@ -73,7 +73,7 @@ import { payslipsApi } from "@/modules/payroll/api/payslipsApi";
 import { PAYROLL_FREQUENCIES, type PayrollFrequency } from "@/modules/payroll/api/payrollSettingsApi";
 import { employeesApi, type Employee } from "@/modules/employees/api/employeeApi";
 import { salaryStructuresApi } from "@/modules/payroll/api/salaryStructuresApi";
-import { salaryComponentsApi, type SalaryComponent } from "@/modules/payroll/api/salaryComponentsApi";
+import { bonusOverridesApi } from "@/modules/payroll/api/bonusOverridesApi";
 import { payrollLoansApi } from "@/modules/payroll/api/payrollLoansApi";
 import { reimbursementsApi } from "@/modules/payroll/api/reimbursementsApi";
 import { money, shortDate, registerFilename } from "@/modules/payroll/utils/format";
@@ -83,8 +83,12 @@ import { money, shortDate, registerFilename } from "@/modules/payroll/utils/form
 // One row per employee, one column per configured salary component that
 // shows up on anyone's payslip for the period (earnings and deductions
 // alike — both editable). Loan installment and claim/reimbursement columns
-// are auto-fetched and read-only; Bonus is editable when a "Bonus" salary
-// component exists. Editing a cell writes a per-employee EmployeeOverride
+// are auto-fetched and read-only. The Bonus column pre-fills from the
+// configured bonus rule (surfaced by the engine as the synthetic
+// `code === "BONUS"` line) and is always editable — an edit persists as a
+// per-(employee, period) bonus override the engine honors with precedence
+// over the rule for this run only. Editing a component cell writes a
+// per-employee EmployeeOverride
 // (salaryStructuresApi) scoped to the period being run — the same mechanism
 // HR uses to give one person a different amount for a component, but bounded
 // to this month so it doesn't change future runs.
@@ -325,23 +329,23 @@ function GridAmountCell({
 function ReviewGrid({
   rows,
   columns,
-  bonusComponent,
   editable,
   loading,
   savingAll,
   onCellChange,
   onBonusChange,
+  onClearBonus,
   onSaveRow,
   onSaveAll,
 }: {
   rows: ReviewRow[];
   columns: ReviewColumn[];
-  bonusComponent: SalaryComponent | null;
   editable: boolean;
   loading: boolean;
   savingAll: boolean;
   onCellChange?: (userId: string, componentId: string, value: number) => void;
   onBonusChange?: (userId: string, value: number) => void;
+  onClearBonus?: (userId: string) => void;
   onSaveRow?: (userId: string) => void;
   onSaveAll?: () => void;
 }) {
@@ -523,16 +527,23 @@ function ReviewGrid({
                   )}
                 </td>
                 <td className="border-b border-l border-gray-50 px-3 py-2 text-right">
-                  {bonusComponent ? (
-                    <GridAmountCell
-                      value={row.bonusAmount}
-                      currency={row.currency}
-                      editable={editable}
-                      tone="earning"
-                      onChange={(v) => onBonusChange?.(row.userId, v)}
-                    />
-                  ) : (
-                    <span className="text-xs text-gray-300">—</span>
+                  <GridAmountCell
+                    value={row.bonusAmount}
+                    currency={row.currency}
+                    editable={editable}
+                    tone="earning"
+                    onChange={(v) => onBonusChange?.(row.userId, v)}
+                  />
+                  {editable && row.bonusOverrideId && (
+                    <button
+                      type="button"
+                      onClick={() => onClearBonus?.(row.userId)}
+                      disabled={row.saving}
+                      className="mt-1 block w-full text-right text-[11px] font-medium text-gray-400 transition hover:text-rose-600 disabled:opacity-40"
+                      title="Remove this manual bonus and revert to the configured rule"
+                    >
+                      Clear override
+                    </button>
                   )}
                 </td>
                 <td className="border-b border-l border-gray-50 px-3 py-2 text-right font-semibold text-gray-900">
@@ -582,9 +593,11 @@ function ReviewGrid({
           </tfoot>
         </table>
       </div>
-      {!bonusComponent && (
+      {editable && (
         <p className="mt-2 text-xs text-gray-400">
-          No active "Bonus" salary component found — add one under Salary Components to enable the Bonus column.
+          Bonus pre-fills from the configured Bonus rule (Payroll → Rules). Editing a cell sets a
+          manual bonus for that employee this run only — it overrides the rule; enter 0 to leave
+          someone out, or Clear override to revert to the rule.
         </p>
       )}
     </div>
@@ -631,7 +644,6 @@ export default function RunPayrollPage() {
   // read-only confirmation mirror. Loaded once per period.
   const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
   const [reviewColumns, setReviewColumns] = useState<ReviewColumn[]>([]);
-  const [bonusComponent, setBonusComponent] = useState<SalaryComponent | null>(null);
   const [loadingReview, setLoadingReview] = useState(false);
   const [reviewLoadedFor, setReviewLoadedFor] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
@@ -796,7 +808,7 @@ export default function RunPayrollPage() {
     if (!period) return;
     setLoadingReview(true);
     try {
-      const [previews, overrides, loans, claims, components] = await Promise.all([
+      const [previews, overrides, loans, claims, bonusOverrides] = await Promise.all([
         Promise.all(
           employees.map((e) =>
             payslipsApi.preview({ user_id: e.employeeId, period_id: pid }).catch(() => null),
@@ -805,21 +817,14 @@ export default function RunPayrollPage() {
         salaryStructuresApi.listOverrides(),
         payrollLoansApi.list({ status: "active" }),
         reimbursementsApi.list({ status: "approved" }),
-        salaryComponentsApi.list(),
+        bonusOverridesApi.list(pid),
       ]);
-
-      const bonusComp =
-        components.find(
-          (c) => c.type === "earning" && c.is_active && /bonus/i.test(`${c.code} ${c.name}`),
-        ) ?? null;
-      setBonusComponent(bonusComp);
 
       const colMap = new Map<string, ReviewColumn>();
       previews.forEach((p) => {
         if (!p) return;
         p.lines.forEach((l) => {
           if (!l.component_id) return;
-          if (bonusComp && l.component_id === bonusComp.component_id) return;
           if (!colMap.has(l.component_id)) {
             colMap.set(l.component_id, {
               component_id: l.component_id,
@@ -869,15 +874,13 @@ export default function RunPayrollPage() {
         const empClaims = claims.filter((c) => c.user_id === e.employeeId && !c.paid_period_id);
         const claimAmount = empClaims.reduce((sum, c) => sum + c.amount, 0);
 
-        const bonusOv = bonusComp
-          ? overrides.find(
-              (o) =>
-                o.user_id === e.employeeId &&
-                o.component_id === bonusComp.component_id &&
-                isGridOverrideForPeriod(o, period),
-            )
-          : undefined;
-        const bonusLine = bonusComp ? p?.lines.find((l) => l.component_id === bonusComp.component_id) : undefined;
+        // Bonus pre-fills from the engine's synthetic BONUS line, which already
+        // reflects any persisted override (build() reads overrides for both the
+        // preview and the run). The overrides list gives us the override's id
+        // (so the Clear affordance can show) and the amount to fall back on when
+        // an override of 0 cancels the bonus, leaving no BONUS line to read.
+        const bonusOv = bonusOverrides.find((o) => o.user_id === e.employeeId);
+        const bonusLine = p?.lines.find((l) => l.code === "BONUS");
 
         return {
           userId: e.employeeId,
@@ -890,8 +893,8 @@ export default function RunPayrollPage() {
           loanInstallment,
           claimAmount,
           claimCount: empClaims.length,
-          bonusOverrideId: bonusOv?.override_id ?? null,
-          bonusAmount: bonusLine ? Math.abs(bonusLine.amount) : (bonusOv?.override_amount ?? 0),
+          bonusOverrideId: bonusOv?.bonus_override_id ?? null,
+          bonusAmount: bonusLine ? Math.abs(bonusLine.amount) : (bonusOv?.amount ?? 0),
           bonusDirty: false,
           net: p?.net_salary ?? 0,
           dirty: false,
@@ -942,6 +945,44 @@ export default function RunPayrollPage() {
     );
   };
 
+  // Clears a persisted bonus override, reverting the employee to the configured
+  // rule for this run, then re-previews so the cell and Net Pay reflect the rule
+  // value again. Any other unsaved cell edits on the row stay dirty.
+  const clearBonusOverride = async (userId: string) => {
+    const row = reviewRows.find((r) => r.userId === userId);
+    if (!row || !row.bonusOverrideId) return;
+    setReviewRows((rows) => rows.map((r) => (r.userId === userId ? { ...r, saving: true, error: null } : r)));
+    try {
+      await bonusOverridesApi.remove(row.bonusOverrideId);
+      const refreshed = await payslipsApi.preview({ user_id: userId, period_id: periodId });
+      const bonusLine = refreshed.lines.find((l) => l.code === "BONUS");
+      setReviewRows((rows) =>
+        rows.map((r) => {
+          if (r.userId !== userId) return r;
+          const cellsDirty = Object.values(r.cells).some((c) => c.dirty);
+          return {
+            ...r,
+            saving: false,
+            bonusOverrideId: null,
+            bonusDirty: false,
+            dirty: cellsDirty,
+            net: refreshed.net_salary,
+            bonusAmount: bonusLine ? Math.abs(bonusLine.amount) : 0,
+          };
+        }),
+      );
+      toast.showSuccess("Bonus override cleared — reverted to the configured rule.");
+    } catch (err) {
+      setReviewRows((rows) =>
+        rows.map((r) =>
+          r.userId === userId
+            ? { ...r, saving: false, error: err instanceof Error ? err.message : "Couldn't clear the bonus override." }
+            : r,
+        ),
+      );
+    }
+  };
+
   // Persists only the cells the user actually edited for one row, as
   // period-scoped EmployeeOverrides (their effective window is the period being
   // run), then re-previews that person so Net Pay reflects the change.
@@ -979,23 +1020,17 @@ export default function RunPayrollPage() {
         }
       }
       let newBonusOverrideId: string | null = null;
-      if (bonusComponent && row.bonusDirty) {
-        if (row.bonusOverrideId) {
-          await salaryStructuresApi.updateOverride(row.bonusOverrideId, {
-            override_calculation_type: "fixed",
-            override_amount: row.bonusAmount,
-            ...window,
-          });
-        } else if (row.bonusAmount > 0) {
-          const created = await salaryStructuresApi.createOverride({
-            user_id: userId,
-            component_id: bonusComponent.component_id,
-            override_calculation_type: "fixed",
-            override_amount: row.bonusAmount,
-            ...window,
-          });
-          newBonusOverrideId = created.override_id;
-        }
+      if (row.bonusDirty) {
+        // One manual bonus per (employee, period): upsert covers the first edit
+        // and every later one, and stores an explicit 0 (which cancels the rule
+        // bonus for this run). No effective window — the period is the key. To
+        // revert to the rule, the row's Clear affordance deletes the override.
+        const saved = await bonusOverridesApi.upsert({
+          user_id: userId,
+          period_id: periodId,
+          amount: row.bonusAmount,
+        });
+        newBonusOverrideId = saved.bonus_override_id;
       }
       const refreshed = await payslipsApi.preview({ user_id: userId, period_id: periodId });
       setReviewRows((rows) =>
@@ -1012,9 +1047,7 @@ export default function RunPayrollPage() {
               dirty: false,
             };
           });
-          const bonusLine = bonusComponent
-            ? refreshed.lines.find((l) => l.component_id === bonusComponent.component_id)
-            : undefined;
+          const bonusLine = refreshed.lines.find((l) => l.code === "BONUS");
           return {
             ...r,
             dirty: false,
@@ -1022,8 +1055,8 @@ export default function RunPayrollPage() {
             saving: false,
             net: refreshed.net_salary,
             cells,
-            bonusOverrideId: r.bonusOverrideId ?? newBonusOverrideId,
-            bonusAmount: bonusLine ? Math.abs(bonusLine.amount) : r.bonusAmount,
+            bonusOverrideId: newBonusOverrideId ?? r.bonusOverrideId,
+            bonusAmount: bonusLine ? Math.abs(bonusLine.amount) : 0,
           };
         }),
       );
@@ -1313,12 +1346,12 @@ export default function RunPayrollPage() {
               <ReviewGrid
                 rows={reviewRows}
                 columns={reviewColumns}
-                bonusComponent={bonusComponent}
                 editable
                 loading={loadingReview}
                 savingAll={savingAll}
                 onCellChange={updateCell}
                 onBonusChange={updateBonus}
+                onClearBonus={clearBonusOverride}
                 onSaveRow={(userId) => saveRow(userId).catch(() => {})}
                 onSaveAll={saveAllDirty}
               />
@@ -1371,7 +1404,6 @@ export default function RunPayrollPage() {
                 <ReviewGrid
                   rows={reviewRows}
                   columns={reviewColumns}
-                  bonusComponent={bonusComponent}
                   editable={false}
                   loading={loadingReview}
                   savingAll={false}

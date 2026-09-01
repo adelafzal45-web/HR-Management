@@ -97,6 +97,12 @@ export type TodayAttendance = {
   isWorkingDay: boolean;
   canCheckIn: boolean;
   canCheckOut: boolean;
+  // Company-wide policy in force. In 'Device' mode self check-in/out is disabled
+  // (the terminal records attendance): both can* flags above are false and
+  // `selfServiceDisabledReason` carries the server's verbatim explanation for
+  // the banner. In 'Manual' mode the reason is null and the buttons work.
+  attendanceMode: "Device" | "Manual";
+  selfServiceDisabledReason: string | null;
   attendance: AttendanceRecord | null;
   shiftName: string | null;
   shiftStart: string | null;
@@ -109,6 +115,8 @@ type RawTodayStatus = {
   is_working_day?: boolean;
   can_check_in?: boolean;
   can_check_out?: boolean;
+  attendance_mode?: string;
+  self_service_disabled_reason?: string | null;
   attendance?: Record<string, unknown> | null;
   shift?: { shift_name?: string | null; start_time?: string | null; end_time?: string | null } | null;
 };
@@ -120,6 +128,10 @@ function adaptTodayStatus(res: RawTodayStatus): TodayAttendance {
     isWorkingDay: res.is_working_day !== false,
     canCheckIn: res.can_check_in === true,
     canCheckOut: res.can_check_out === true,
+    // Default to Manual (buttons enabled) when the field is absent, so an older
+    // backend that predates the mode switch never strands the self-service UI.
+    attendanceMode: res.attendance_mode === "Device" ? "Device" : "Manual",
+    selfServiceDisabledReason: res.self_service_disabled_reason ?? null,
     attendance: res.attendance ? adaptAttendanceRow(res.attendance) : null,
     shiftName: shift?.shift_name ?? null,
     shiftStart: shift?.start_time ? String(shift.start_time).slice(0, 5) : null,

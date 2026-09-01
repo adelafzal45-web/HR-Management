@@ -8,6 +8,7 @@ import { FormField, PrimaryButton } from "@/components/forms/FormField";
 import BackendStatusBanner from "@/components/common/BackendStatusBanner";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { useToast } from "@/app/providers/ToastContext";
+import { describeError } from "@/lib/describeError";
 import {
  departmentsApi,
  type Department,
@@ -25,6 +26,7 @@ export default function DepartmentsPage() {
  const [rows, setRows] = useState<Department[]>([]);
  const [total, setTotal] = useState(0);
  const [loading, setLoading] = useState(true);
+ const [error, setError] = useState<string | null>(null);
  const [search, setSearch] = useState("");
  const [page, setPage] = useState(1);
  const [pageSize, setPageSize] = useState(10);
@@ -46,13 +48,14 @@ export default function DepartmentsPage() {
 
  const load = () => {
  setLoading(true);
+ setError(null);
  departmentsApi
  .list({ search, page, pageSize })
  .then((res) => {
  setRows(res.data);
  setTotal(res.total);
  })
- .catch(() => toast.showError("Couldn't load departments."))
+ .catch((err) => setError(describeError(err)))
  .finally(() => setLoading(false));
  };
 
@@ -171,11 +174,11 @@ export default function DepartmentsPage() {
  : null;
 
  const columns: DataTableColumn<Department>[] = [
- { key: "name", label: "Department Name", render: (d) => <span className="font-medium text-gray-900">{d.name}</span> },
+ { key: "name", label: "Department Name", render: (d) => <span className="font-medium text-foreground">{d.name}</span> },
  {
  key: "description",
  label: "Description",
- render: (d) => <span className="line-clamp-2 max-w-sm text-gray-600">{d.description || "—"}</span>,
+ render: (d) => <span className="line-clamp-2 max-w-sm text-muted">{d.description || "—"}</span>,
  hideBelow: "md",
  },
  ];
@@ -189,6 +192,8 @@ export default function DepartmentsPage() {
  rows={rows}
  rowKey={(d) => d.departmentId}
  loading={loading}
+ error={error}
+ onRetry={load}
  search={search}
  onSearchChange={setSearch}
  searchPlaceholder="Search departments…"
@@ -205,7 +210,7 @@ export default function DepartmentsPage() {
  <button
  type="button"
  onClick={openCreate}
- className="flex min-h-10 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-4 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+ className="flex min-h-10 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-4 text-sm font-semibold text-brand-contrast shadow-card transition hover:brightness-95"
  >
  <Plus size={16} /> Add Department
  </button>
@@ -216,7 +221,7 @@ export default function DepartmentsPage() {
  type="button"
  onClick={() => openEdit(d)}
  aria-label={`Edit ${d.name}`}
- className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+ className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-surface-muted hover:text-foreground"
  >
  <Pencil size={15} />
  </button>
@@ -224,7 +229,7 @@ export default function DepartmentsPage() {
  type="button"
  onClick={() => openDelete(d)}
  aria-label={`Delete ${d.name}`}
- className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
+ className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-error-tint hover:text-error"
  >
  <Trash2 size={15} />
  </button>
@@ -247,22 +252,22 @@ export default function DepartmentsPage() {
  required
  />
  <label className="mb-5 block">
- <span className="mb-2 block text-[15px] font-medium text-gray-900">Description</span>
+ <span className="mb-2 block text-[15px] font-medium text-foreground">Description</span>
  <textarea
  value={form.description}
  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
  placeholder="What does this department do?"
  rows={3}
- className="w-full resize-none rounded-lg bg-gray-100 px-4 py-3.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
+ className="w-full resize-none rounded-control bg-surface-muted px-4 py-3.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-brand/60"
  />
  </label>
- {formError && <p className="mb-4 text-sm text-red-500">{formError}</p>}
+ {formError && <p className="mb-4 text-sm text-error">{formError}</p>}
 
  <div className="flex flex-col-reverse gap-2.5 xs:flex-row">
  <button
  type="button"
  onClick={() => setModalOpen(false)}
- className="min-h-11 flex-1 rounded-full border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+ className="min-h-11 flex-1 rounded-full border border-border px-5 py-2.5 text-sm font-medium text-muted transition hover:bg-background"
  >
  Cancel
  </button>

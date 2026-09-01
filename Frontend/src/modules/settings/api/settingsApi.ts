@@ -54,6 +54,7 @@
 
 import { apiRequest, apiUpload, normalizeListResult } from "@/lib/apiClient";
 import { API_ORIGIN } from "@/lib/apiBaseUrl";
+import type { ThemeConfig } from "@/lib/theme";
 
 // ---- Shared entity types ---------------------------------------------------
 // These used to be defined in (and re-exported from) the settings demo store.
@@ -154,6 +155,13 @@ export type BrandingSettings = {
  website: string;
  /** Hex, e.g. "#F1B344". Applied app-wide as a CSS custom property. */
  primaryColor: string;
+ /**
+  * Full design theme (semantic colours, radii, shadows, typography, layout,
+  * mode/density). `null` means no admin override — the app renders with
+  * DEFAULT_THEME. Travels on the public branding payload so the whole UI, not
+  * just the brand colour, themes itself before login.
+  */
+ themeConfig: ThemeConfig | null;
 };
 
 /**
@@ -779,6 +787,9 @@ type ApiCompanySettings = {
  address?: string | null;
  website?: string | null;
  primary_color?: string | null;
+ theme_config?: ThemeConfig | null;
+ attendance_mode?: AttendanceMode | null;
+ biometric_device?: BiometricDeviceConfig | null;
  ceo_name?: string | null;
  ceo_signature_url?: string | null;
  cofounder_name?: string | null;
@@ -898,6 +909,7 @@ const fromApiBranding = (raw: ApiCompanySettings): BrandingSettings => ({
  address: raw.address ?? "",
  website: raw.website ?? "",
  primaryColor: raw.primary_color ?? "",
+ themeConfig: raw.theme_config ?? null,
 });
 
 const toApiBranding = (payload: BrandingSettings) => ({
@@ -910,6 +922,9 @@ const toApiBranding = (payload: BrandingSettings) => ({
  address: payload.address,
  website: payload.website,
  primary_color: payload.primaryColor,
+ // Omitted (not null) when there's no override, so a plain branding save never
+ // clobbers a stored theme — the backend PATCH treats `undefined` as "leave as-is".
+ theme_config: payload.themeConfig ?? undefined,
 });
 
 export const brandingApi = {
@@ -950,6 +965,51 @@ export const signatoriesApi = {
  cofounder_signature_url: toStoredPath(payload.cofounderSignatureUrl),
  },
  }).then(fromApiSignatories),
+};
+
+// ---- Attendance policy + biometric device — GET/PATCH /company-settings ----
+// The company-wide attendance mode (Device vs Manual) and the biometric device
+// connection (ip/port/timeout) are plain company_settings columns, read and
+// written through the same authenticated GET/PATCH as Company Details and
+// Branding. They are deliberately NOT part of the @Public() /branding payload —
+// a device IP is not something to hand an anonymous caller. No mock fallback:
+// a failure here is a real failure the Biometric screen must surface.
+export type AttendanceMode = "Device" | "Manual";
+
+export type BiometricDeviceConfig = {
+ ip: string;
+ port: number;
+ // Socket timeout in ms. Optional — the backend applies its default when unset.
+ timeout?: number;
+};
+
+export type AttendancePolicy = {
+ mode: AttendanceMode;
+ // null until HR configures the device connection on the Biometric screen.
+ device: BiometricDeviceConfig | null;
+};
+
+const fromApiAttendancePolicy = (raw: ApiCompanySettings): AttendancePolicy => ({
+ // Default to the safer Manual when the column is unset — never assume the
+ // device is authoritative without an explicit choice.
+ mode: raw.attendance_mode === "Device" ? "Device" : "Manual",
+ device: raw.biometric_device ?? null,
+});
+
+export const attendancePolicyApi = {
+ get: () => apiRequest<ApiCompanySettings>("/company-settings").then(fromApiAttendancePolicy),
+
+ // The mode always has a value, so it is always sent. biometric_device is sent
+ // only when configured: the backend DTO requires ip+port on the nested object,
+ // so an unset device is omitted (undefined) rather than sent as null.
+ update: (payload: AttendancePolicy) =>
+ apiRequest<ApiCompanySettings>("/company-settings", {
+ method: "PATCH",
+ body: {
+ attendance_mode: payload.mode,
+ biometric_device: payload.device ?? undefined,
+ },
+ }).then(fromApiAttendancePolicy),
 };
 
 // ---- Leave Types — GET/POST/GET :id/PATCH/DELETE /leave-types --------------

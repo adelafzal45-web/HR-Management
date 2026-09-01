@@ -13,6 +13,7 @@ import {
   SalaryStructureComponent,
   EmployeeComponentOverride,
 } from '../salary-structures/salary-structures.entity';
+import { PayrollBonusOverride } from '../payroll-bonus-overrides/payroll-bonus-overrides.entity';
 import { HolidaysService } from '../holidays/holidays.service';
 import {
   CalculationType,
@@ -118,6 +119,8 @@ export class PayrollCalculationService {
     private readonly structureComponentRepository: Repository<SalaryStructureComponent>,
     @InjectRepository(EmployeeComponentOverride)
     private readonly overrideRepository: Repository<EmployeeComponentOverride>,
+    @InjectRepository(PayrollBonusOverride)
+    private readonly bonusOverrideRepository: Repository<PayrollBonusOverride>,
     @InjectRepository(Payslip)
     private readonly payslipRepository: Repository<Payslip>,
     @InjectRepository(PayslipLine)
@@ -233,6 +236,13 @@ export class PayrollCalculationService {
       user.user_id,
       period.period_id,
     );
+    // A manual, per-(employee, period) bonus set from the Run Payroll grid. When
+    // present it takes precedence over the configured bonus rule (an explicit 0
+    // cancels the bonus); when absent the rule applies unchanged.
+    const bonusOverride = await this.resolveBonusOverride(
+      user.user_id,
+      period.period_id,
+    );
 
     // Phase 3: approved expense claims dated inside the period. Read-only here —
     // nothing is marked paid until `persist` commits a payslip.
@@ -266,6 +276,7 @@ export class PayrollCalculationService {
       applyDefaultAbsentDeduction: true,
       overtimeRule,
       bonusRule: this.resolveBonusRule(rules),
+      bonusOverride,
       lateRule: this.resolveLateRule(rules),
       repeatedLateRule: this.resolveRepeatedLateRule(rules),
       absentRule: this.resolveAbsentRule(rules),
@@ -766,6 +777,28 @@ export class PayrollCalculationService {
       )
       .join('; ');
     return { amount: result.amount, note: note || 'Loan installment.' };
+  }
+
+  /**
+   * The manual bonus HR set for this employee in this period from the Run
+   * Payroll grid, or null when none exists. Shaped like `resolveLoanDeduction`:
+   * a read-only per-(employee, period) lookup the engine layers on top of the
+   * configured bonus rule.
+   *
+   * Unlike the loan lookup, a stored amount of 0 is NOT treated as "nothing" —
+   * it is an explicit instruction to cancel the bonus for this employee this
+   * run, so the override is returned whenever a row exists. Absence of a row
+   * (null) is what lets the configured bonus rule apply unchanged.
+   */
+  private async resolveBonusOverride(
+    userId: string,
+    periodId: string,
+  ): Promise<{ amount: number; note: string } | null> {
+    const override = await this.bonusOverrideRepository.findOne({
+      where: { user_id: userId, period_id: periodId },
+    });
+    if (!override) return null;
+    return { amount: override.amount ?? 0, note: override.note ?? '' };
   }
 
   // ---- Persistence ---------------------------------------------------------

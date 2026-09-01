@@ -11,6 +11,7 @@ import { PerformanceReviewModule } from '../performance-review/performance-revie
 
 import { AuthorizationModule } from '../authorization/authorization.module';
 import { WorkingDaySchedulesModule } from '../working-day-schedules/working-day-schedules.module';
+import { CompanySettingsModule } from '../company-settings/company-settings.module';
 
 @Module({
   imports: [
@@ -23,6 +24,9 @@ import { WorkingDaySchedulesModule } from '../working-day-schedules/working-day-
     // Attendance must know which days are working days before it can decide
     // what counts as an absence.
     WorkingDaySchedulesModule,
+
+    // The company-wide attendance mode (Device vs Manual) gates self check-in.
+    CompanySettingsModule,
   ],
 
   controllers: [AttendanceController],

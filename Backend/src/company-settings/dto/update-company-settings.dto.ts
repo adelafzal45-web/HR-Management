@@ -1,15 +1,22 @@
 import {
+  IsIn,
   IsString,
   IsNotEmpty,
   IsOptional,
   MaxLength,
   Matches,
+  ValidateNested,
   registerDecorator,
   type ValidationOptions,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 import { SIGNATURE_UPLOAD } from '../../common/upload/image-upload';
+import { ThemeConfigDto } from './theme-config.dto';
+import { BiometricDeviceDto } from './biometric-device.dto';
+import { CelebrationConfigDto } from './celebration-config.dto';
+import { ATTENDANCE_MODES, type AttendanceMode } from '../biometric-device.type';
 
 /**
  * "This is a path the signature upload endpoint issued."
@@ -189,6 +196,46 @@ export class UpdateCompanySettingsDto {
     message: 'primary_color must be a valid hex color (e.g. #F1B344)',
   })
   primary_color?: string;
+
+  @ApiPropertyOptional({
+    type: ThemeConfigDto,
+    description:
+      'Full design theme (semantic colours, radii, shadows, typography, layout, mode/density). Stored as one jsonb blob and replaced wholesale — send the complete object.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ThemeConfigDto)
+  theme_config?: ThemeConfigDto;
+
+  @ApiPropertyOptional({
+    enum: ATTENDANCE_MODES,
+    example: 'Manual',
+    description:
+      "Company-wide attendance policy. 'Manual' = employees clock in/out themselves and the device is ignored; 'Device' = a biometric terminal records attendance and self check-in is disabled.",
+  })
+  @IsOptional()
+  @IsIn([...ATTENDANCE_MODES])
+  attendance_mode?: AttendanceMode;
+
+  @ApiPropertyOptional({
+    type: BiometricDeviceDto,
+    description:
+      'Biometric device connection (IP, port, optional timeout). Stored as one jsonb blob and replaced wholesale — send the complete object. Never returned on the public branding payload.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BiometricDeviceDto)
+  biometric_device?: BiometricDeviceDto;
+
+  @ApiPropertyOptional({
+    type: CelebrationConfigDto,
+    description:
+      'Birthday & work-anniversary announcement config (enabled, send time, heading and per-celebrant wish templates). Stored as one jsonb blob and replaced wholesale — send the complete object.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CelebrationConfigDto)
+  celebration_config?: CelebrationConfigDto;
 
   // ---- Certificate signatories ----------------------------------------
   //

@@ -4,11 +4,12 @@
 import './config/env';
 
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import { DataSource } from 'typeorm';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { UPLOADS_ROOT, UPLOADS_URL_PREFIX } from './config/upload-paths';
 
@@ -29,8 +30,47 @@ function allowedOrigins(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * `synchronize` and `migrationsRun` are both off by design (see
+ * database.config.ts / app.module.ts) — schema changes only take effect when
+ * someone runs `npm run migration:run`. If that step gets missed, the app
+ * still boots fine on the tables/columns that *do* exist, and anything that
+ * touches a newer one (e.g. a service querying a table a migration was
+ * supposed to create) fails inside a try/catch and only ever reaches a
+ * server log line. That's exactly how the biometric outage went unnoticed:
+ * the device kept beeping, punches kept getting swallowed, and nothing
+ * outside `logger.error` ever knew.
+ *
+ * This makes that state impossible to miss: it fails fast and loud at boot
+ * instead of failing quietly per-request later.
+ */
+async function assertNoPendingMigrations(
+  app: NestExpressApplication,
+): Promise<void> {
+  const logger = new Logger('Migrations');
+  const dataSource = app.get(DataSource);
+
+  const pending = await dataSource.showMigrations();
+
+  if (pending) {
+    logger.error(
+      '============================================================\n' +
+        '  PENDING DATABASE MIGRATIONS DETECTED\n' +
+        '  The application code expects schema changes that have not\n' +
+        '  been applied to this database. Features that depend on them\n' +
+        '  (e.g. biometric attendance) will silently no-op or fail.\n' +
+        '\n' +
+        '  Fix: run `npm run migration:run` against this database,\n' +
+        '  then restart the server.\n' +
+        '============================================================',
+    );
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  await assertNoPendingMigrations(app);
 
   // Must run before the routes so the refresh-token cookie is parsed into
   // `request.cookies` for RefreshTokenGuard to read.

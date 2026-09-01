@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { brandingApi, type BrandingSettings } from "@/modules/settings/api/settingsApi";
 import { useAuth } from "@/app/providers/AuthContext";
-import { applyPrimaryColor, DEFAULT_PRIMARY_COLOR } from "@/lib/theme";
+import { DEFAULT_PRIMARY_COLOR } from "@/lib/theme";
 
 type BrandingContextValue = {
  branding: BrandingSettings;
@@ -20,9 +20,11 @@ const EMPTY_BRANDING: BrandingSettings = {
  phone: "",
  address: "",
  website: "",
- // Matches the :root fallback in index.css, so the placeholder state and the
- // first paint agree instead of briefly disagreeing on the brand colour.
+ // Matches the :root fallback in styles/index.css, so the placeholder state and
+ // the first paint agree instead of briefly disagreeing on the brand colour.
  primaryColor: DEFAULT_PRIMARY_COLOR,
+ // null = no admin override; ThemeProvider falls back to DEFAULT_THEME.
+ themeConfig: null,
 };
 
 const BrandingContext = createContext<BrandingContextValue | null>(null);
@@ -80,15 +82,6 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
  document.title = `${branding.companyName} — HR Management`;
  }
  }, [branding.faviconUrl, branding.companyName]);
-
- // Push the primary colour into the CSS custom properties every `bg-brand`,
- // `text-brand-dark` and `focus:ring-brand/60` utility in the app resolves
- // against. Doing it here rather than in the Branding page is what makes the
- // colour global: saving on Settings updates `branding`, this effect re-runs,
- // and the whole tree re-themes without a reload or a single component change.
- useEffect(() => {
- applyPrimaryColor(branding.primaryColor);
- }, [branding.primaryColor]);
 
  const updateBranding = async (payload: BrandingSettings) => {
  const saved = await brandingApi.update(payload);

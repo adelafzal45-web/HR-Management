@@ -2,10 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
  Search,
- ChevronLeft,
- ChevronRight,
- ChevronsLeft,
- ChevronsRight,
  ChevronUp,
  ChevronDown,
  ChevronsUpDown,
@@ -15,6 +11,7 @@ import {
  RefreshCw,
 } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
+import { Pagination } from "@/components/ui";
 
 /** Options for a column's dropdown filter. */
 export type DataTableFilterOption = {
@@ -146,109 +143,23 @@ const ALIGN_CLASS: Record<NonNullable<DataTableColumn<unknown>["align"]>, string
  center: "text-center",
 };
 
-// Windowed page-number list with ellipsis — e.g. for page 7 of 20:
-// [1, "…", 6, 7, 8, "…", 20]. Keeps pagination usable (and narrow) even
-// with a lot of pages, on any screen size.
-function buildPageWindow(current: number, total: number): (number | "ellipsis")[] {
- if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-
- const pages = new Set<number>([1, total, current, current - 1, current + 1]);
- const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
-
- const result: (number | "ellipsis")[] = [];
- sorted.forEach((p, i) => {
- if (i > 0 && p - sorted[i - 1] > 1) result.push("ellipsis");
- result.push(p);
- });
- return result;
-}
-
-function Pagination({
- page,
- totalPages,
- onPageChange,
-}: {
- page: number;
- totalPages: number;
- onPageChange: (page: number) => void;
-}) {
- const pageWindow = useMemo(() => buildPageWindow(page, totalPages), [page, totalPages]);
-
- const navBtn = "flex min-h-9 min-w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:border-brand/60 hover:bg-brand-light/40 hover:text-brand-dark disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-gray-200 disabled:hover:bg-transparent disabled:hover:text-gray-500";
-
- return (
- <div className="flex items-center gap-1.5">
- <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} aria-label="First page" className={`${navBtn} hidden xs:flex`}>
- <ChevronsLeft size={15} />
- </button>
- <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label="Previous page" className={navBtn}>
- <ChevronLeft size={15} />
- </button>
-
- {/* Numbered pages — hidden on the smallest screens in favor of "Page X of Y" below */}
- <div className="hidden items-center gap-1 sm:flex">
- {pageWindow.map((p, i) =>
- p === "ellipsis" ? (
- <span key={`e-${i}`} className="flex min-h-9 min-w-9 items-center justify-center text-sm text-gray-300">
- …
- </span>
- ) : (
- <button
- key={p}
- type="button"
- onClick={() => onPageChange(p)}
- aria-label={`Page ${p}`}
- aria-current={p === page ? "page" : undefined}
- className={`flex min-h-9 min-w-9 items-center justify-center rounded-lg text-sm font-medium transition ${
- p === page
- ? "bg-gradient-to-r from-brand to-brand-dark text-gray-900 shadow-sm"
- : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
- }`}
- >
- {p}
- </button>
- ),
- )}
- </div>
-
- {/* Compact indicator for mobile */}
- <span className="min-w-[64px] text-center text-sm font-medium text-gray-700 sm:hidden">
- {page} / {totalPages}
- </span>
-
- <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} aria-label="Next page" className={navBtn}>
- <ChevronRight size={15} />
- </button>
- <button
- type="button"
- disabled={page >= totalPages}
- onClick={() => onPageChange(totalPages)}
- aria-label="Last page"
- className={`${navBtn} hidden xs:flex`}
- >
- <ChevronsRight size={15} />
- </button>
- </div>
- );
-}
-
 // Shown in place of rows when a fetch fails. Same footprint as EmptyState so
 // the table doesn't jump, but a rose tone and a Retry make clear this is a
 // failure to recover from — not "no data". The message comes from the caller
 // (typically describeError), so it reflects the real status, never a guess.
 function TableErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
  return (
- <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-white px-6 py-14 text-center shadow-sm ring-1 ring-gray-100">
- <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-500">
+ <div className="flex flex-col items-center justify-center gap-3 rounded-card bg-surface px-6 py-14 text-center shadow-card ring-1 ring-border-muted">
+ <span className="flex h-14 w-14 items-center justify-center rounded-card bg-error-tint text-error">
  <AlertTriangle size={24} />
  </span>
- <p className="text-sm font-semibold text-gray-900">Couldn't load this data</p>
- <p className="max-w-sm text-sm text-gray-500">{message}</p>
+ <p className="text-sm font-semibold text-foreground">Couldn't load this data</p>
+ <p className="max-w-sm text-sm text-muted">{message}</p>
  {onRetry && (
  <button
  type="button"
  onClick={onRetry}
- className="mt-1 flex items-center gap-2 rounded-full bg-gradient-to-r from-brand to-brand-dark px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+ className="mt-1 flex items-center gap-2 rounded-full bg-gradient-to-r from-brand to-brand-dark px-5 py-2.5 text-sm font-semibold text-brand-contrast shadow-card transition hover:brightness-95"
  >
  <RefreshCw size={15} />
  Try again
@@ -387,7 +298,7 @@ export default function DataTable<T>({
  const renderSortIcon = (col: DataTableColumn<T>) => {
   if (!col.sortable || !onSortChange) return null;
   const active = sortKey === sortFieldFor(col);
-  if (!active) return <ChevronsUpDown size={13} className="text-gray-300" />;
+  if (!active) return <ChevronsUpDown size={13} className="text-muted-foreground" />;
   return sortDir === "ASC" ? (
    <ChevronUp size={13} className="text-brand-dark" />
   ) : (
@@ -396,9 +307,9 @@ export default function DataTable<T>({
  };
 
  return (
- <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+ <div className="overflow-hidden rounded-card bg-surface shadow-card ring-1 ring-border-muted">
  {/* Toolbar */}
- <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+ <div className="flex flex-col gap-3 border-b border-border-muted p-4 sm:flex-row sm:items-center sm:justify-between">
  {unifiedFilter ? (
  <div className="flex items-center gap-2">
  <div ref={panelAnchorRef} className="relative">
@@ -410,7 +321,7 @@ export default function DataTable<T>({
  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
  unifiedCount > 0
  ? "border-brand/60 bg-brand-light/40 text-brand-dark"
- : "border-gray-200 bg-white text-gray-700 hover:border-brand/60 hover:text-brand-dark"
+ : "border-border bg-surface text-foreground hover:border-brand/60 hover:text-brand-dark"
  }`}
  >
  <Filter size={15} />
@@ -429,14 +340,14 @@ export default function DataTable<T>({
   * scroll keeps the footer reachable on short viewports.
   */}
  {panelOpen && (
- <div className="absolute left-0 top-full z-40 mt-2 max-h-[min(70vh,32rem)] w-[min(92vw,34rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-xl">
+ <div className="absolute left-0 top-full z-40 mt-2 max-h-[min(70vh,32rem)] w-[min(92vw,34rem)] overflow-y-auto rounded-xl border border-border bg-surface p-4 shadow-card-lg">
  <div className="mb-3 flex items-center justify-between gap-3">
- <h4 className="text-sm font-semibold text-gray-900">Filters</h4>
+ <h4 className="text-sm font-semibold text-foreground">Filters</h4>
  <button
  type="button"
  onClick={() => setPanelOpen(false)}
  aria-label="Close filters"
- className="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+ className="rounded-lg p-1 text-muted-foreground transition hover:bg-surface-muted hover:text-foreground"
  >
  <X size={15} />
  </button>
@@ -444,7 +355,7 @@ export default function DataTable<T>({
 
  <div className="space-y-3">
  <label className="block">
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
  Search
  </span>
  <input
@@ -452,7 +363,7 @@ export default function DataTable<T>({
  value={search}
  onChange={(e) => onSearchChange(e.target.value)}
  placeholder={searchPlaceholder}
- className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/60"
  />
  </label>
 
@@ -460,13 +371,13 @@ export default function DataTable<T>({
  {sortOptions && sortOptions.length > 0 && onSortChange && (
  <>
  <label className={`block ${hideSortDirection ? "sm:col-span-2" : ""}`}>
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
  Sort by
  </span>
  <select
  value={sortKey ?? ""}
  onChange={(e) => onSortChange(e.target.value, sortDir ?? "DESC")}
- className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/60"
  >
  {sortOptions.map((opt) => (
  <option key={opt.value} value={opt.value}>
@@ -477,7 +388,7 @@ export default function DataTable<T>({
  </label>
  {!hideSortDirection && (
  <label className="block">
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
  Direction
  </span>
  <select
@@ -485,7 +396,7 @@ export default function DataTable<T>({
  onChange={(e) =>
  onSortChange(sortKey ?? sortOptions[0].value, e.target.value as SortDirection)
  }
- className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/60"
  >
  <option value="DESC">Descending</option>
  <option value="ASC">Ascending</option>
@@ -497,13 +408,13 @@ export default function DataTable<T>({
 
  {filterColumns.map((col) => (
  <label key={col.key} className="block">
- <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-gray-400">
+ <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
  {col.label}
  </span>
  <select
  value={filters?.[col.key] ?? ""}
  onChange={(e) => onFiltersChange?.({ ...(filters ?? {}), [col.key]: e.target.value })}
- className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/60"
  >
  <option value="">{col.filterPlaceholder ?? `All ${col.label.toLowerCase()}`}</option>
  {col.filterOptions?.map((opt) => (
@@ -518,8 +429,8 @@ export default function DataTable<T>({
 
  {extraFilters && <div className="space-y-3">{extraFilters}</div>}
 
- <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
- <span className="text-xs text-gray-500">
+ <div className="flex items-center justify-between gap-3 border-t border-border-muted pt-3">
+ <span className="text-xs text-muted">
  {unifiedCount === 0
  ? "No filters applied"
  : `${unifiedCount} filter${unifiedCount === 1 ? "" : "s"} active`}
@@ -529,7 +440,7 @@ export default function DataTable<T>({
  <button
  type="button"
  onClick={clearAll}
- className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+ className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted transition hover:bg-background"
  >
  Clear all
  </button>
@@ -537,7 +448,7 @@ export default function DataTable<T>({
  <button
  type="button"
  onClick={() => setPanelOpen(false)}
- className="rounded-lg bg-gradient-to-r from-brand to-brand-dark px-3 py-2 text-xs font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+ className="rounded-lg bg-gradient-to-r from-brand to-brand-dark px-3 py-2 text-xs font-semibold text-brand-contrast shadow-card transition hover:brightness-95"
  >
  Done
  </button>
@@ -551,7 +462,7 @@ export default function DataTable<T>({
  <button
  type="button"
  onClick={clearAll}
- className="text-xs font-medium text-gray-500 transition hover:text-red-600"
+ className="text-xs font-medium text-muted transition hover:text-error"
  >
  Clear all
  </button>
@@ -559,14 +470,14 @@ export default function DataTable<T>({
  </div>
  ) : (
  <label className="relative block w-full sm:max-w-xs">
- <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+ <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
  <input
  type="search"
  value={search}
  onChange={(e) => onSearchChange(e.target.value)}
  placeholder={searchPlaceholder}
  aria-label={searchPlaceholder}
- className="w-full rounded-lg bg-gray-100 py-2.5 pl-9 pr-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/60"
+ className="w-full rounded-lg bg-surface-muted py-2.5 pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-brand/60"
  />
  </label>
  )}
@@ -575,14 +486,14 @@ export default function DataTable<T>({
 
  {/* Column filters — parent-driven, so they compose with server-side paging */}
  {canFilter && !unifiedFilter && (
- <div className="flex flex-wrap items-end gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-3">
+ <div className="flex flex-wrap items-end gap-3 border-b border-border-muted bg-background/50 px-4 py-3">
  {filterColumns.map((col) => (
  <label key={col.key} className="flex min-w-[150px] flex-col gap-1">
- <span className="text-xs font-medium uppercase tracking-wide text-gray-400">{col.label}</span>
+ <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{col.label}</span>
  <select
  value={filters?.[col.key] ?? ""}
  onChange={(e) => onFiltersChange?.({ ...(filters ?? {}), [col.key]: e.target.value })}
- className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ className="rounded-lg border border-border bg-surface px-2.5 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/60"
  >
  <option value="">{col.filterPlaceholder ?? `All ${col.label.toLowerCase()}`}</option>
  {col.filterOptions?.map((opt) => (
@@ -598,7 +509,7 @@ export default function DataTable<T>({
  <button
  type="button"
  onClick={() => onFiltersChange?.({})}
- className="mb-0.5 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-brand/60 hover:text-brand-dark"
+ className="mb-0.5 flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-muted transition hover:border-brand/60 hover:text-brand-dark"
  >
  <X size={14} />
  Clear {activeFilters.length === 1 ? "filter" : `filters (${activeFilters.length})`}
@@ -611,7 +522,7 @@ export default function DataTable<T>({
  {loading ? (
  <div className="space-y-3 p-4">
  {[...Array(5)].map((_, i) => (
- <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />
+ <div key={i} className="h-14 animate-pulse rounded-xl bg-surface-muted" />
  ))}
  </div>
  ) : error ? (
@@ -632,7 +543,7 @@ export default function DataTable<T>({
  {/* Opaque bg (not /80) and an inset bottom border rather than `border-b`:
  a translucent sticky header shows the rows sliding under it, and
  borders on a sticky element scroll away with the cell box. */}
- <tr className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500 shadow-[inset_0_-1px_0_0_rgb(243_244_246)]">
+ <tr className="bg-background text-xs font-semibold uppercase tracking-wide text-muted shadow-[inset_0_-1px_0_0_rgb(var(--color-border-muted))]">
  {columns.map((col) => {
  const isSortable = Boolean(col.sortable && onSortChange);
  const isActiveSort = isSortable && sortKey === sortFieldFor(col);
@@ -648,9 +559,9 @@ export default function DataTable<T>({
  <button
  type="button"
  onClick={() => handleSort(col)}
- className={`flex items-center gap-1.5 font-semibold uppercase tracking-wide transition hover:text-gray-700 ${
+ className={`flex items-center gap-1.5 font-semibold uppercase tracking-wide transition hover:text-foreground ${
  col.align === "right" ? "ml-auto" : col.align === "center" ? "mx-auto" : ""
- } ${isActiveSort ? "text-brand-dark" : "text-gray-500"}`}
+ } ${isActiveSort ? "text-brand-dark" : "text-muted"}`}
  >
  {col.label}
  {renderSortIcon(col)}
@@ -671,14 +582,14 @@ export default function DataTable<T>({
  return (
  <tr
  key={rowKey(row)}
- className={`border-b border-gray-50 transition-colors last:border-0 hover:bg-brand-light/20 ${
- groupIndex % 2 === 1 ? "bg-gray-50/40" : "bg-white"
- } ${isNewGroup ? "border-t-2 border-t-gray-200" : ""}`}
+ className={`border-b border-border-muted transition-colors last:border-0 hover:bg-brand-light/20 ${
+ groupIndex % 2 === 1 ? "bg-background/40" : "bg-surface"
+ } ${isNewGroup ? "border-t-2 border-t-border" : ""}`}
  >
  {columns.map((col) => (
  <td
  key={col.key}
- className={`px-4 py-3.5 align-middle text-gray-700 ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ""} ${col.align ? ALIGN_CLASS[col.align] : ""}`}
+ className={`px-4 py-3.5 align-middle text-foreground ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ""} ${col.align ? ALIGN_CLASS[col.align] : ""}`}
  >
  {col.render(row)}
  </td>
@@ -694,20 +605,20 @@ export default function DataTable<T>({
  {/* Mobile — stacked cards (never overflow the viewport). Groups get the
  same divider treatment as the desktop table, via a top border on the
  card instead of the row. */}
- <div className="divide-y divide-gray-50 sm:hidden">
+ <div className="divide-y divide-border-muted sm:hidden">
  {rows.map((row, i) => {
  const isNewGroup = groupIndexes ? i > 0 && groupIndexes[i] !== groupIndexes[i - 1] : false;
  return (
- <div key={rowKey(row)} className={`p-4 ${isNewGroup ? "border-t-2 border-t-gray-200" : ""}`}>
+ <div key={rowKey(row)} className={`p-4 ${isNewGroup ? "border-t-2 border-t-border" : ""}`}>
  <div className="space-y-1.5">
  {columns.map((col) => (
  <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
- <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">{col.label}</span>
- <span className="min-w-0 text-right text-gray-700">{col.render(row)}</span>
+ <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">{col.label}</span>
+ <span className="min-w-0 text-right text-foreground">{col.render(row)}</span>
  </div>
  ))}
  </div>
- {actions && <div className="mt-3 flex justify-end gap-2 border-t border-gray-50 pt-3">{actions(row)}</div>}
+ {actions && <div className="mt-3 flex justify-end gap-2 border-t border-border-muted pt-3">{actions(row)}</div>}
  </div>
  );
  })}
@@ -717,19 +628,19 @@ export default function DataTable<T>({
 
  {/* Pagination */}
  {!loading && !error && total > 0 && (
- <div className="flex flex-col items-center justify-between gap-3 border-t border-gray-100 p-4 text-sm text-gray-500 lg:flex-row">
+ <div className="flex flex-col items-center justify-between gap-3 border-t border-border-muted p-4 text-sm text-muted lg:flex-row">
  <div className="flex w-full flex-col items-center gap-3 xs:flex-row xs:justify-between lg:w-auto lg:justify-start lg:gap-5">
  <p>
- Showing <span className="font-medium text-gray-700">{rangeStart}–{rangeEnd}</span> of{" "}
- <span className="font-medium text-gray-700">{total}</span>
+ Showing <span className="font-medium text-foreground">{rangeStart}–{rangeEnd}</span> of{" "}
+ <span className="font-medium text-foreground">{total}</span>
  </p>
  {onPageSizeChange && (
- <label className="flex items-center gap-2 text-sm text-gray-500">
+ <label className="flex items-center gap-2 text-sm text-muted">
  Rows per page
  <select
  value={pageSize}
  onChange={(e) => onPageSizeChange(Number(e.target.value))}
- className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-brand/60"
+ className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/60"
  >
  {pageSizeOptions.map((size) => (
  <option key={size} value={size}>

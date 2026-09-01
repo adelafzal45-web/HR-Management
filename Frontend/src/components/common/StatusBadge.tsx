@@ -3,31 +3,38 @@
 // Centralized here so every module gets consistent colors instead of each
 // page inventing its own tone mapping.
 
-// Single accent color (brand) for "good"/active states, a solid brand chip
-// for anything that needs attention, and neutral gray for everything else —
-// rather than a different hue per status. Meaning still comes through via
-// the label text and the solid-vs-tint weight, not through hue variety.
-const TONE_BY_STATUS: Record<string, string> = {
- present: "bg-brand-light text-brand-dark",
- approved: "bg-brand-light text-brand-dark",
- completed: "bg-brand-light text-brand-dark",
- generated: "bg-brand-light text-brand-dark",
- paid: "bg-brand-light text-brand-dark",
- active: "bg-brand-light text-brand-dark",
+// Composes the kit `Badge`. The restrained palette is intentional: a single
+// accent (brand) for "good"/active states, a solid brand chip for anything that
+// needs attention, a strong inverted chip for negatives, and neutral for the
+// rest — meaning comes from the label + solid-vs-soft weight, not hue variety.
+// Retargeted from literal grays to Badge tones so it themes (incl. dark mode).
+import { Badge, type BadgeTone, type BadgeVariant } from "@/components/ui";
 
- late: "bg-brand text-white",
- pending: "bg-brand text-white",
+type BadgeStyle = { tone: BadgeTone; variant: BadgeVariant };
 
- absent: "bg-gray-800 text-white",
- rejected: "bg-gray-800 text-white",
- unpaid: "bg-gray-800 text-white",
- inactive: "bg-gray-800 text-white",
+const STYLE_BY_STATUS: Record<string, BadgeStyle> = {
+ present: { tone: "brand", variant: "soft" },
+ approved: { tone: "brand", variant: "soft" },
+ completed: { tone: "brand", variant: "soft" },
+ generated: { tone: "brand", variant: "soft" },
+ paid: { tone: "brand", variant: "soft" },
+ active: { tone: "brand", variant: "soft" },
 
- leave: "bg-gray-100 text-gray-600",
- "on leave": "bg-gray-100 text-gray-600",
- holiday: "bg-gray-100 text-gray-600",
- "half-day": "bg-gray-100 text-gray-600",
+ late: { tone: "brand", variant: "solid" },
+ pending: { tone: "brand", variant: "solid" },
+
+ absent: { tone: "neutral", variant: "solid" },
+ rejected: { tone: "neutral", variant: "solid" },
+ unpaid: { tone: "neutral", variant: "solid" },
+ inactive: { tone: "neutral", variant: "solid" },
+
+ leave: { tone: "neutral", variant: "soft" },
+ "on leave": { tone: "neutral", variant: "soft" },
+ holiday: { tone: "neutral", variant: "soft" },
+ "half-day": { tone: "neutral", variant: "soft" },
 };
+
+const DEFAULT_STYLE: BadgeStyle = { tone: "neutral", variant: "soft" };
 
 // "on leave" / "in progress"-style statuses arrive with spaces or mixed
 // case; normalize to Title Case so the label always looks intentional
@@ -40,12 +47,10 @@ function toTitleCase(value: string) {
 }
 
 export default function StatusBadge({ status }: { status: string }) {
- const tone = TONE_BY_STATUS[status.toLowerCase()] ?? "bg-gray-100 text-gray-600";
+ const style = STYLE_BY_STATUS[status.toLowerCase()] ?? DEFAULT_STYLE;
  return (
- <span
- className={`inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-center text-xs font-semibold leading-none ${tone}`}
- >
+ <Badge tone={style.tone} variant={style.variant}>
  {toTitleCase(status)}
- </span>
+ </Badge>
  );
 }

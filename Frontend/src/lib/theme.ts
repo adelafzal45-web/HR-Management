@@ -181,3 +181,276 @@ export function applyPrimaryColor(primaryColor: string | null | undefined): void
   root.style.setProperty("--color-brand-light", channels(palette.brandLight));
   root.style.setProperty("--color-brand-contrast", channels(palette.brandContrast));
 }
+
+// ============================================================================
+// Design theme — the admin-configurable layer on top of the brand colour.
+//
+// Everything below drives the CSS custom properties declared in
+// styles/index.css from a single JSON blob (company_settings.theme_config).
+// The TS shape mirrors Backend/src/company-settings/theme-config.type.ts; the
+// two are kept in sync by hand (the frontend can't import from the backend).
+//
+// The 13 colours per scheme are the ONLY colours stored. Their tint/contrast
+// companions (`--color-success-tint`, `--color-accent-contrast`, …) are DERIVED
+// here from luminance/lightness, so the admin never has to hand-tune a readable
+// badge background or decide black-vs-white button text.
+// ============================================================================
+
+export type ThemeMode = "light" | "dark" | "system";
+export type ThemeDensity = "comfortable" | "compact";
+export type ShadowLevel = "none" | "sm" | "md" | "lg";
+export type SidebarStyle = "solid" | "floating";
+
+/** One full semantic colour set (hex), applied for a single light/dark scheme. */
+export type ThemeColorSet = {
+  accent: string;
+  background: string;
+  surface: string;
+  surfaceMuted: string;
+  foreground: string;
+  muted: string;
+  mutedForeground: string;
+  border: string;
+  borderMuted: string;
+  success: string;
+  warning: string;
+  error: string;
+  info: string;
+};
+
+export type ThemeRadius = { control: number; card: number; modal: number };
+export type ThemeTypography = { fontFamily: string; baseSize: number; scale: number };
+export type ThemeLayout = {
+  sidebarWidth: number;
+  sidebarCollapsedWidth: number;
+  contentMaxWidth: number;
+  headerHeight: number;
+  sidebarStyle: SidebarStyle;
+};
+
+export type ThemeConfig = {
+  mode: ThemeMode;
+  density: ThemeDensity;
+  colors: { light: ThemeColorSet; dark: ThemeColorSet };
+  radius: ThemeRadius;
+  shadow: ShadowLevel;
+  typography: ThemeTypography;
+  layout: ThemeLayout;
+};
+
+/**
+ * The default theme. Every value here is the exact counterpart of a `:root` /
+ * `.dark` default in styles/index.css, so a null `theme_config` (no admin
+ * override) renders identically whether the CSS defaults or this object drive
+ * it. This is also what "Reset to Default" on the Appearance screen restores.
+ */
+export const DEFAULT_THEME: ThemeConfig = {
+  mode: "light",
+  density: "comfortable",
+  colors: {
+    light: {
+      accent: "#475569",
+      background: "#F9FAFB",
+      surface: "#FFFFFF",
+      surfaceMuted: "#F3F4F6",
+      foreground: "#111827",
+      muted: "#6B7280",
+      mutedForeground: "#9CA3AF",
+      border: "#E5E7EB",
+      borderMuted: "#F3F4F6",
+      success: "#10B981",
+      warning: "#F59E0B",
+      error: "#EF4444",
+      info: "#3B82F6",
+    },
+    dark: {
+      accent: "#94A3B8",
+      background: "#0F172A",
+      surface: "#1E293B",
+      surfaceMuted: "#334155",
+      foreground: "#F1F5F9",
+      muted: "#94A3B8",
+      mutedForeground: "#64748B",
+      border: "#334155",
+      borderMuted: "#1E293B",
+      success: "#34D399",
+      warning: "#FBBF24",
+      error: "#F87171",
+      info: "#60A5FA",
+    },
+  },
+  radius: { control: 12, card: 16, modal: 16 },
+  shadow: "sm",
+  typography: { fontFamily: '"Poppins", system-ui, sans-serif', baseSize: 16, scale: 1.2 },
+  layout: {
+    sidebarWidth: 288,
+    sidebarCollapsedWidth: 80,
+    contentMaxWidth: 1600,
+    headerHeight: 64,
+    sidebarStyle: "solid",
+  },
+};
+
+/**
+ * Fills a stored/partial theme against DEFAULT_THEME so a config written by an
+ * older app version (missing a key added later) never yields `undefined` vars.
+ * A one-level-deep merge per section is enough — the leaves are scalars.
+ */
+export function mergeTheme(
+  base: ThemeConfig,
+  override: Partial<ThemeConfig> | null | undefined,
+): ThemeConfig {
+  if (!override) return base;
+  return {
+    mode: override.mode ?? base.mode,
+    density: override.density ?? base.density,
+    shadow: override.shadow ?? base.shadow,
+    colors: {
+      light: { ...base.colors.light, ...override.colors?.light },
+      dark: { ...base.colors.dark, ...override.colors?.dark },
+    },
+    radius: { ...base.radius, ...override.radius },
+    typography: { ...base.typography, ...override.typography },
+    layout: { ...base.layout, ...override.layout },
+  };
+}
+
+const GRAY_900: Rgb = { r: 17, g: 24, b: 39 };
+const WHITE: Rgb = { r: 255, g: 255, b: 255 };
+
+/**
+ * Near-black or white, whichever reads better *on* the given fill. Same 0.45
+ * threshold as the brand-contrast rule above, for the same reason.
+ */
+function contrastOn(rgb: Rgb): Rgb {
+  return relativeLuminance(rgb) > 0.45 ? GRAY_900 : WHITE;
+}
+
+/**
+ * A subtle background tint of a colour — pale in light mode, deep in dark mode —
+ * so `bg-success-tint text-success` reads as a coherent badge in both schemes
+ * without the admin picking eight extra colours.
+ */
+function tintOf(rgb: Rgb, isDark: boolean): Rgb {
+  const hsl = rgbToHsl(rgb);
+  return hslToRgb({
+    h: hsl.h,
+    s: clamp(hsl.s * (isDark ? 0.55 : 0.85), 0, 1),
+    l: isDark ? 0.18 : 0.94,
+  });
+}
+
+/** Resolves 'system' against the OS preference; passes 'light'/'dark' through. */
+export function resolveThemeMode(mode: ThemeMode): "light" | "dark" {
+  if (mode === "system") {
+    return typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
+  return mode;
+}
+
+// The stored colour keys → their CSS custom property names. Explicit rather than
+// kebab-cased at runtime so a rename can't silently produce a dead variable.
+const COLOR_VARS: Record<keyof ThemeColorSet, string> = {
+  accent: "--color-accent",
+  background: "--color-background",
+  surface: "--color-surface",
+  surfaceMuted: "--color-surface-muted",
+  foreground: "--color-foreground",
+  muted: "--color-muted",
+  mutedForeground: "--color-muted-foreground",
+  border: "--color-border",
+  borderMuted: "--color-border-muted",
+  success: "--color-success",
+  warning: "--color-warning",
+  error: "--color-error",
+  info: "--color-info",
+};
+
+// `--shadow-card` points at the scheme's ramp entry (not a literal), so the
+// deeper dark-mode shadow definitions in styles/index.css still apply.
+const SHADOW_CARD: Record<ShadowLevel, string> = {
+  none: "none",
+  sm: "var(--shadow-sm)",
+  md: "var(--shadow-md)",
+  lg: "var(--shadow-lg)",
+};
+
+/**
+ * Builds the full CSS-variable map for one resolved scheme, without touching the
+ * DOM. Kept pure and separate from `applyTheme` so the provider can compute both
+ * the light and dark maps up front and cache them for the pre-React first paint
+ * (see the FOUC script in index.html), and so 'system' can switch schemes with
+ * no recompute.
+ */
+export function computeThemeVars(
+  theme: ThemeConfig,
+  primaryColor: string | null | undefined,
+  mode: "light" | "dark",
+): Record<string, string> {
+  const isDark = mode === "dark";
+  const vars: Record<string, string> = {};
+
+  // Brand — derived from primary_color, with a mode-aware active-state tint.
+  const brand = parseHexColor(primaryColor || "") ?? parseHexColor(DEFAULT_PRIMARY_COLOR)!;
+  const palette = derivePalette(brand);
+  vars["--color-brand"] = channels(palette.brand);
+  vars["--color-brand-dark"] = channels(palette.brandDark);
+  vars["--color-brand-contrast"] = channels(palette.brandContrast);
+  vars["--color-brand-light"] = channels(isDark ? tintOf(brand, true) : palette.brandLight);
+
+  // Stored semantic + status colours for this scheme.
+  const set = theme.colors[mode];
+  (Object.keys(COLOR_VARS) as (keyof ThemeColorSet)[]).forEach((key) => {
+    const rgb = parseHexColor(set[key]);
+    if (rgb) vars[COLOR_VARS[key]] = channels(rgb);
+  });
+
+  // Derived companions: accent foreground + a tint/contrast per status colour.
+  const accent = parseHexColor(set.accent);
+  if (accent) vars["--color-accent-contrast"] = channels(contrastOn(accent));
+  (["success", "warning", "error", "info"] as const).forEach((key) => {
+    const rgb = parseHexColor(set[key]);
+    if (!rgb) return;
+    vars[`--color-${key}-tint`] = channels(tintOf(rgb, isDark));
+    vars[`--color-${key}-contrast`] = channels(contrastOn(rgb));
+  });
+
+  // Radii, elevation, typography, layout (scheme-independent, emitted in both).
+  vars["--radius-control"] = `${theme.radius.control}px`;
+  vars["--radius-card"] = `${theme.radius.card}px`;
+  vars["--radius-modal"] = `${theme.radius.modal}px`;
+  vars["--shadow-card"] = SHADOW_CARD[theme.shadow] ?? SHADOW_CARD.sm;
+  vars["--font-sans"] = theme.typography.fontFamily;
+  vars["--font-size-base"] = `${theme.typography.baseSize}px`;
+  vars["--font-scale"] = String(theme.typography.scale);
+  vars["--sidebar-width"] = `${theme.layout.sidebarWidth}px`;
+  vars["--sidebar-width-collapsed"] = `${theme.layout.sidebarCollapsedWidth}px`;
+  vars["--content-max-width"] = `${theme.layout.contentMaxWidth}px`;
+  vars["--header-height"] = `${theme.layout.headerHeight}px`;
+
+  return vars;
+}
+
+/**
+ * Writes a theme onto <html>: the resolved scheme's variables, the `dark` class,
+ * and the density attribute. This is the single runtime entry point the
+ * ThemeProvider calls — for the saved theme, for a live preview draft, and again
+ * whenever the OS scheme changes under 'system'. Idempotent and safe to re-run.
+ */
+export function applyTheme(
+  theme: ThemeConfig,
+  primaryColor: string | null | undefined,
+): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const mode = resolveThemeMode(theme.mode);
+  const vars = computeThemeVars(theme, primaryColor, mode);
+  for (const [name, value] of Object.entries(vars)) {
+    root.style.setProperty(name, value);
+  }
+  root.classList.toggle("dark", mode === "dark");
+  root.setAttribute("data-density", theme.density);
+}

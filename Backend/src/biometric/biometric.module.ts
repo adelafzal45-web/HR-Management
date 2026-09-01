@@ -9,6 +9,7 @@ import { User } from '../users/user.entity';
 
 import { AuthorizationModule } from '../authorization/authorization.module';
 import { AttendanceModule } from '../attendance/attendance.module';
+import { CompanySettingsModule } from '../company-settings/company-settings.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -18,6 +19,10 @@ import { AttendanceModule } from '../attendance/attendance.module';
 
     AuthorizationModule,
     AttendanceModule,
+
+    // Device connection (IP/port) and the company-wide attendance mode live on
+    // company_settings; the service reads them through CompanySettingsService.
+    CompanySettingsModule,
   ],
 
   controllers: [

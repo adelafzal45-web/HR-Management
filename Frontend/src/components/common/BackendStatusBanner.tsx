@@ -1,25 +1,28 @@
-import { Info, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Alert } from "@/components/ui";
 import type { BackendStatus } from "@/hooks/useBackendStatus";
 
+// Token-driven via the kit `Alert`, so the offline/checking states pick up the
+// themed status colours (and dark mode) instead of hardcoded amber/gray.
 export default function BackendStatusBanner({ status }: { status: BackendStatus }) {
  if (status === "online") return null;
 
  if (status === "checking") {
  return (
- <div className="mb-5 flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-500">
- <Loader2 size={16} className="animate-spin" />
+ <Alert
+ tone="info"
+ className="mb-5"
+ icon={<Loader2 size={18} className="animate-spin" aria-hidden />}
+ >
  Checking connection to server…
- </div>
+ </Alert>
  );
  }
 
  return (
- <div className="mb-5 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
- <Info size={16} className="mt-0.5 shrink-0 text-amber-600" />
- <span>
+ <Alert tone="warning" className="mb-5">
  Can't reach the server right now — some data may be unavailable. Check your
  connection and try again in a moment.
- </span>
- </div>
+ </Alert>
  );
 }

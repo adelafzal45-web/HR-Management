@@ -88,20 +88,20 @@ function SidebarLeafButton({
             ? collapsed
               ? "bg-transparent"
               : "bg-brand-light text-brand"
-            : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+            : "text-muted-foreground hover:bg-background hover:text-foreground"
         }`}
       >
         {!nested && (
           <span
             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 ${
-              isActive ? "bg-brand text-white" : "bg-transparent text-gray-400"
+              isActive ? "bg-brand text-brand-contrast" : "bg-transparent text-muted-foreground"
             }`}
           >
             <Icon size={18} />
           </span>
         )}
         {nested && !collapsed && (
-          <span className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? "bg-brand" : "bg-gray-300"}`} />
+          <span className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? "bg-brand" : "bg-muted-foreground"}`} />
         )}
         {!collapsed && (
           <span
@@ -120,13 +120,13 @@ function SidebarLeafButton({
           <span
             role="tooltip"
             style={{ top: tooltipPos.top, left: tooltipPos.left }}
-            className="pointer-events-none fixed z-50 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-lg bg-gray-900 py-1.5 pl-2 pr-3.5 text-xs font-medium text-white shadow-lg"
+            className="pointer-events-none fixed z-50 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-lg bg-foreground py-1.5 pl-2 pr-3.5 text-xs font-medium text-background shadow-card-lg"
           >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/10 text-white">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-background/10 text-background">
               <Icon size={14} />
             </span>
             {label}
-            <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-gray-900" />
+            <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-foreground" />
           </span>,
           document.body,
         )}
@@ -171,11 +171,11 @@ function SidebarGroup({
         aria-expanded={isOpen}
         className={`flex items-center rounded-xl text-left text-[15px] font-medium transition-colors duration-150 ${
           collapsed ? "mx-auto w-11 justify-center py-2.5" : "w-full px-4 py-3"
-        } ${active ? "text-brand" : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"}`}
+        } ${active ? "text-brand" : "text-muted-foreground hover:bg-background hover:text-foreground"}`}
       >
         <span
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 ${
-            active ? "bg-brand text-white" : "bg-transparent text-gray-400"
+            active ? "bg-brand text-brand-contrast" : "bg-transparent text-muted-foreground"
           }`}
         >
           <node.icon size={18} />
@@ -187,7 +187,7 @@ function SidebarGroup({
             </span>
             <ChevronDown
               size={15}
-              className={`shrink-0 text-gray-400 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+              className={`shrink-0 text-muted-foreground transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
             />
           </>
         )}
@@ -308,13 +308,13 @@ function SidebarContent({
         type="button"
         onClick={handleLogoClick}
         className="mb-10 flex h-10 shrink-0 items-center self-start rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
-        aria-label="Go to TechnoCues home"
+        aria-label={`Go to ${branding.companyName || "TechnoCues"} home`}
       >
         {collapsed ? (
           <img
             src={badgeSrc}
             alt={branding.companyName || "TechnoCues"}
-            className="h-9 w-9 rounded-full object-contain shadow-sm ring-2 ring-white xs:h-10 xs:w-10"
+            className="h-9 w-9 rounded-full object-contain shadow-card ring-2 ring-surface xs:h-10 xs:w-10"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src = badge;
             }}
@@ -394,8 +394,8 @@ export default function Sidebar({ activeKey, mobileOpen, onClose, onRequestLogou
     <>
       {/* Desktop sidebar */}
       <aside
-        className={`relative z-30 hidden h-[100dvh] shrink-0 flex-col border-r border-gray-100 bg-white transition-[width] duration-200 ease-in-out lg:flex ${
-          collapsed ? "w-20" : "w-72"
+        className={`relative z-30 hidden h-[100dvh] shrink-0 flex-col border-r border-border-muted bg-surface transition-[width] duration-200 ease-in-out lg:flex ${
+          collapsed ? "w-sidebar-collapsed" : "w-sidebar"
         }`}
       >
         <div className="scroll-touch scrollbar-hide flex h-full flex-col overflow-y-auto overflow-x-hidden px-4 py-6">
@@ -411,7 +411,7 @@ export default function Sidebar({ activeKey, mobileOpen, onClose, onRequestLogou
           type="button"
           onClick={() => setCollapsed((c) => !c)}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="absolute -right-3 top-20 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm transition hover:border-brand hover:text-brand-dark"
+          className="absolute -right-3 top-20 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground shadow-card transition hover:border-brand hover:text-brand-dark"
         >
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
@@ -427,7 +427,7 @@ export default function Sidebar({ activeKey, mobileOpen, onClose, onRequestLogou
           onClick={onClose}
         />
         <aside
-          className={`scroll-touch scrollbar-hide absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-white px-4 py-6 shadow-xl transition-transform duration-200 ${
+          className={`scroll-touch scrollbar-hide absolute inset-y-0 left-0 flex w-sidebar max-w-[85%] flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-surface px-4 py-6 shadow-card-lg transition-transform duration-200 ${
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -435,7 +435,7 @@ export default function Sidebar({ activeKey, mobileOpen, onClose, onRequestLogou
             <button
               type="button"
               onClick={onClose}
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-1.5 text-muted-foreground hover:bg-surface-muted hover:text-foreground"
               aria-label="Close menu"
             >
               <X size={20} />

@@ -97,15 +97,19 @@ const ShiftsPage = lazy(() => import("@/modules/settings/pages/Shifts"));
 const LeaveTypesPage = lazy(() => import("@/modules/settings/pages/LeaveTypes"));
 const WorkingDaysPage = lazy(() => import("@/modules/settings/pages/WorkingDays"));
 const EmployeeFieldsPage = lazy(() => import("@/modules/settings/pages/EmployeeFields"));
+const BiometricSettingsPage = lazy(() => import("@/modules/settings/pages/BiometricSettings"));
 const RolesPage = lazy(() => import("@/modules/settings/pages/Roles"));
 const RoleDetailPage = lazy(() => import("@/modules/settings/pages/RoleDetail"));
 const PermissionsPage = lazy(() => import("@/modules/settings/pages/Permissions"));
 const BrandingPage = lazy(() => import("@/modules/settings/pages/Branding"));
+const AppearancePage = lazy(() => import("@/modules/settings/pages/Appearance"));
 const CertificateSignaturesPage = lazy(
  () => import("@/modules/settings/pages/CertificateSignatures"),
 );
 const SmtpSettingsPage = lazy(() => import("@/modules/settings/pages/SmtpSettings"));
 const EmailTemplatesPage = lazy(() => import("@/modules/settings/pages/EmailTemplates"));
+const SlackSettingsPage = lazy(() => import("@/modules/settings/pages/SlackSettings"));
+const CelebrationSettingsPage = lazy(() => import("@/modules/settings/pages/CelebrationSettings"));
 
 // Administration: Performance Management
 const AppraisalManagementPage = lazy(() => import("@/modules/performance/pages/AppraisalManagement"));
@@ -642,6 +646,14 @@ export function AppRouter() {
  )}
  />
  <Route
+ path="/settings/biometric"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <BiometricSettingsPage />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
  path="/settings/roles"
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
@@ -693,6 +705,14 @@ export function AppRouter() {
  )}
  />
  <Route
+ path="/settings/appearance"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <AppearancePage />
+ </ProtectedRoute>,
+ )}
+ />
+ <Route
  path="/settings/certificate-signatures"
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
@@ -717,6 +737,26 @@ export function AppRouter() {
  element={withSuspense(
  <ProtectedRoute roles={HR_ADMIN_ROLES}>
  <EmailTemplatesPage />
+ </ProtectedRoute>,
+ )}
+ />
+ {/* Slack integration. Same coarse role gate; the page itself gates each
+ control on slack-settings.view/.update/.test. */}
+ <Route
+ path="/settings/slack"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <SlackSettingsPage />
+ </ProtectedRoute>,
+ )}
+ />
+ {/* Birthday & work-anniversary announcements. Same coarse role gate;
+ the page gates its controls on company-settings.view/.update. */}
+ <Route
+ path="/settings/celebrations"
+ element={withSuspense(
+ <ProtectedRoute roles={HR_ADMIN_ROLES}>
+ <CelebrationSettingsPage />
  </ProtectedRoute>,
  )}
  />

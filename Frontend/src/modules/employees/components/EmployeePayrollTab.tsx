@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Plus, Wallet, Trash2, Download } from "lucide-react";
+import { Plus, Wallet, Trash2, Download, TrendingUp, TrendingDown, History } from "lucide-react";
 import StatusBadge from "@/components/common/StatusBadge";
 import EmptyState from "@/components/common/EmptyState";
 import Modal from "@/components/dialogs/Modal";
@@ -13,6 +13,7 @@ import { standardPayrollComponents } from "@/modules/payroll/api/payrollAdapter"
 import { monthLabel } from "@/api/hrApi";
 import type { Employee } from "@/modules/employees/api/employeeApi";
 import { downloadPayslipPdf, resolveLogoDataUrl, formatEmploymentType, formatJoiningDate } from "@/modules/payroll/utils/payslipPdf";
+import { salaryRevisionsApi, SALARY_CHANGE_TYPES, SALARY_INPUT_MODES, type SalaryRevision, type SalaryChangeType, type SalaryInputMode } from "@/modules/employees/api/salaryRevisionsApi";
 
 function money(n: number) {
  return `PKR ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -23,7 +24,7 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
 export default function EmployeePayrollTab({ employee }: { employee: Employee }) {
  const toast = useToast();
  const { branding } = useBranding();
- const { user } = useAuth();
+ const { user, hasPermission } = useAuth();
  const { employeeId, salary: basicSalary } = employee;
 
  const [logoDataUrl, setLogoDataUrl] = useState<string | undefined>();
@@ -98,6 +99,22 @@ export default function EmployeePayrollTab({ employee }: { employee: Employee })
  const [toDelete, setToDelete] = useState<AdminPayrollRecord | null>(null);
  const [deleting, setDeleting] = useState(false);
 
+ const canViewSalary = hasPermission("employees.salary.view");
+ const canEditSalary = hasPermission("employees.salary.edit");
+ const [revisions, setRevisions] = useState<SalaryRevision[]>([]);
+ const [revisionsLoading, setRevisionsLoading] = useState(canViewSalary);
+ const currentSalary = revisions.length > 0 ? revisions[0].new_salary : basicSalary;
+ const [adjustOpen, setAdjustOpen] = useState(false);
+ const [changeType, setChangeType] = useState<SalaryChangeType>("increment");
+ const [inputMode, setInputMode] = useState<SalaryInputMode>("amount");
+ const [inputValue, setInputValue] = useState(0);
+ const [effectiveDate, setEffectiveDate] = useState("");
+ const [reason, setReason] = useState("");
+ const [adjustError, setAdjustError] = useState<string | null>(null);
+ const [adjustSubmitting, setAdjustSubmitting] = useState(false);
+ const adjustMagnitude = inputMode === "percent" ? (currentSalary * inputValue) / 100 : inputValue;
+ const projectedSalary = changeType === "increment" ? currentSalary + adjustMagnitude : currentSalary - adjustMagnitude;
+
  const netPreview = basic + allowance + bonus - deduction - tax;
 
  const load = () => {
@@ -109,8 +126,22 @@ export default function EmployeePayrollTab({ employee }: { employee: Employee })
  .finally(() => setLoading(false));
  };
 
+ const loadRevisions = () => {
+ if (!canViewSalary) {
+ setRevisionsLoading(false);
+ return;
+ }
+ setRevisionsLoading(true);
+ salaryRevisionsApi
+ .list(employeeId)
+ .then((res) => setRevisions(res))
+ .catch(() => toast.showError("Couldn't load salary revisions."))
+ .finally(() => setRevisionsLoading(false));
+ };
+
  useEffect(() => {
  load();
+ loadRevisions();
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [employeeId]);
 
@@ -168,7 +199,206 @@ export default function EmployeePayrollTab({ employee }: { employee: Employee })
  }
  };
 
+ const openAdjust = () => {
+ setChangeType("increment");
+ setInputMode("amount");
+ setInputValue(0);
+ setEffectiveDate(new Date().toISOString().slice(0, 10));
+ setReason("");
+ setAdjustError(null);
+ setAdjustOpen(true);
+ };
+
+ const handleAdjust = async (e: FormEvent) => {
+ e.preventDefault();
+ setAdjustError(null);
+ if (!(inputValue > 0)) {
+ setAdjustError("Enter a value greater than zero.");
+ return;
+ }
+ if (projectedSalary < 0) {
+ setAdjustError("This decrement would drop the salary below zero.");
+ return;
+ }
+ setAdjustSubmitting(true);
+ try {
+ const result = await salaryRevisionsApi.apply({
+ user_id: employeeId,
+ change_type: changeType,
+ input_mode: inputMode,
+ input_value: inputValue,
+ reason: reason.trim() || undefined,
+ effective_date: effectiveDate || undefined,
+ });
+ toast.showSuccess("Salary updated.");
+ if (result.warning) toast.showWarning("Revision recorded", result.warning);
+ setAdjustOpen(false);
+ loadRevisions();
+ } catch (err) {
+ setAdjustError(err instanceof Error ? err.message : "Couldn't apply the salary change.");
+ } finally {
+ setAdjustSubmitting(false);
+ }
+ };
+
  return (
+ <div className="space-y-6">
+ {canViewSalary && (
+ <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+ <div className="flex flex-wrap items-center justify-between gap-3">
+ <div>
+ <h3 className="text-sm font-semibold text-gray-900">Salary Revisions</h3>
+ <p className="mt-0.5 text-xs text-gray-500">Current base salary · {money(currentSalary)}</p>
+ </div>
+ {canEditSalary && (
+ <button
+ type="button"
+ onClick={openAdjust}
+ className="flex min-h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-brand to-brand-dark px-4 text-sm font-semibold text-gray-900 shadow-sm transition hover:brightness-95"
+ >
+ <Plus size={14} /> Adjust Salary
+ </button>
+ )}
+ </div>
+
+ <div className="mt-5 overflow-x-auto">
+ {revisionsLoading ? (
+ <div className="space-y-2">
+ {[...Array(3)].map((_, i) => (
+ <div key={i} className="h-11 animate-pulse rounded-lg bg-gray-100" />
+ ))}
+ </div>
+ ) : revisions.length === 0 ? (
+ <EmptyState icon={History} title="No salary changes yet" description="Increments and decrements applied here will show up as an audited history." />
+ ) : (
+ <table className="w-full min-w-[640px] text-left text-sm">
+ <thead>
+ <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+ <th className="pb-3 font-medium">Effective</th>
+ <th className="pb-3 font-medium">Change</th>
+ <th className="pb-3 font-medium">Previous → New</th>
+ <th className="pb-3 font-medium">Delta</th>
+ <th className="pb-3 font-medium">Reason</th>
+ <th className="pb-3 font-medium">By</th>
+ </tr>
+ </thead>
+ <tbody>
+ {revisions.map((rev) => {
+ const isIncrement = rev.change_type === "increment";
+ return (
+ <tr key={rev.revision_id} className="border-b border-gray-50 align-top last:border-0">
+ <td className="py-3 text-gray-600">{rev.effective_date}</td>
+ <td className="py-3">
+ <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${isIncrement ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+ {isIncrement ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+ {isIncrement ? "Increment" : "Decrement"}
+ {rev.input_mode === "percent" ? ` · ${rev.input_value}%` : ""}
+ </span>
+ </td>
+ <td className="py-3 text-gray-600">
+ {rev.previous_salary === null ? "—" : money(rev.previous_salary)} → <span className="font-medium text-gray-900">{money(rev.new_salary)}</span>
+ </td>
+ <td className={`py-3 font-medium ${rev.delta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+ {rev.delta >= 0 ? "+" : "-"}
+ {money(Math.abs(rev.delta))}
+ </td>
+ <td className="py-3 text-gray-600">{rev.reason || "—"}</td>
+ <td className="py-3 text-gray-600">{rev.created_by_name || "—"}</td>
+ </tr>
+ );
+ })}
+ </tbody>
+ </table>
+ )}
+ </div>
+
+ <Modal open={adjustOpen} title="Adjust Salary" onClose={() => setAdjustOpen(false)}>
+ <form onSubmit={handleAdjust}>
+ <div className="mb-4 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
+ Current base salary · <span className="font-semibold text-gray-900">{money(currentSalary)}</span>
+ </div>
+
+ <div className="mb-4 grid grid-cols-2 gap-3">
+ <label className="block">
+ <span className="mb-2 block text-sm font-medium text-gray-900">Change type</span>
+ <select
+ value={changeType}
+ onChange={(e) => setChangeType(e.target.value as SalaryChangeType)}
+ className="w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
+ >
+ {SALARY_CHANGE_TYPES.map((t) => (
+ <option key={t} value={t}>
+ {t === "increment" ? "Increment" : "Decrement"}
+ </option>
+ ))}
+ </select>
+ </label>
+ <label className="block">
+ <span className="mb-2 block text-sm font-medium text-gray-900">Mode</span>
+ <select
+ value={inputMode}
+ onChange={(e) => setInputMode(e.target.value as SalaryInputMode)}
+ className="w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
+ >
+ {SALARY_INPUT_MODES.map((m) => (
+ <option key={m} value={m}>
+ {m === "amount" ? "Fixed amount" : "Percentage"}
+ </option>
+ ))}
+ </select>
+ </label>
+ </div>
+
+ <div className="mb-4 grid grid-cols-2 gap-3">
+ <label className="block">
+ <span className="mb-2 block text-sm font-medium text-gray-900">{inputMode === "percent" ? "Percentage (%)" : "Amount"}</span>
+ <input
+ type="number"
+ min={0}
+ step="0.01"
+ value={inputValue}
+ onChange={(e) => setInputValue(Number(e.target.value))}
+ className="w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
+ />
+ </label>
+ <label className="block">
+ <span className="mb-2 block text-sm font-medium text-gray-900">Effective date</span>
+ <input
+ type="date"
+ value={effectiveDate}
+ max={new Date().toISOString().slice(0, 10)}
+ onChange={(e) => setEffectiveDate(e.target.value)}
+ className="w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
+ />
+ </label>
+ </div>
+
+ <label className="mb-4 block">
+ <span className="mb-2 block text-sm font-medium text-gray-900">Reason</span>
+ <textarea
+ value={reason}
+ onChange={(e) => setReason(e.target.value)}
+ rows={2}
+ placeholder="e.g. Annual merit increase"
+ className="w-full rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-brand/60"
+ />
+ </label>
+
+ <div className="mb-5 flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+ <span className="text-sm font-semibold text-gray-900">New salary</span>
+ <span className={`text-base font-semibold ${projectedSalary < 0 ? "text-rose-600" : "text-brand-dark"}`}>{money(projectedSalary)}</span>
+ </div>
+
+ {adjustError && <p className="mb-4 text-sm text-rose-600">{adjustError}</p>}
+
+ <PrimaryButton type="submit" loading={adjustSubmitting}>
+ Apply Change
+ </PrimaryButton>
+ </form>
+ </Modal>
+ </div>
+ )}
+
  <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
  <div className="flex flex-wrap items-center justify-between gap-3">
  <h3 className="text-sm font-semibold text-gray-900">Payroll History</h3>
@@ -345,6 +575,7 @@ export default function EmployeePayrollTab({ employee }: { employee: Employee })
  onConfirm={handleDelete}
  onCancel={() => setToDelete(null)}
  />
+ </div>
  </div>
  );
 }

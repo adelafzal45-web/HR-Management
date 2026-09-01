@@ -7,6 +7,7 @@ import {
  ShieldCheck,
  KeyRound,
  Palette,
+ Paintbrush,
  PenLine,
  Tags,
  Clock,
@@ -20,6 +21,9 @@ import {
  Mail,
  ServerCog,
  MailCheck,
+ Fingerprint,
+ MessageSquare,
+ PartyPopper,
 } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 
@@ -44,6 +48,7 @@ const GROUPS: SettingsGroup[] = [
  items: [
  { to: "/settings/company", label: "Company Details", icon: Building2 },
  { to: "/settings/branding", label: "Branding", icon: Palette },
+ { to: "/settings/appearance", label: "Appearance", icon: Paintbrush },
  {
  to: "/settings/certificate-signatures",
  label: "Certificate Signatures",
@@ -63,6 +68,7 @@ const GROUPS: SettingsGroup[] = [
  { to: "/settings/leave-types", label: "Leave Types", icon: CalendarRange },
  { to: "/settings/working-days", label: "Working Days", icon: CalendarDays },
  { to: "/settings/employee-fields", label: "Employee Fields", icon: ListChecks },
+ { to: "/settings/biometric", label: "Biometric", icon: Fingerprint },
  ],
  },
  {
@@ -72,6 +78,15 @@ const GROUPS: SettingsGroup[] = [
  items: [
  { to: "/settings/smtp", label: "SMTP & Delivery", icon: ServerCog },
  { to: "/settings/email-templates", label: "Email Templates", icon: MailCheck },
+ ],
+ },
+ {
+ key: "integrations",
+ label: "Integrations",
+ icon: MessageSquare,
+ items: [
+ { to: "/settings/slack", label: "Slack", icon: MessageSquare },
+ { to: "/settings/celebrations", label: "Celebrations", icon: PartyPopper },
  ],
  },
  {

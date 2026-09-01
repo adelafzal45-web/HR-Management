@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AuthProvider } from "@/app/providers/AuthContext";
 import { DevAuthProvider } from "@/app/providers/DevAuthContext";
 import { BrandingProvider } from "@/app/providers/BrandingContext";
+import { ThemeProvider } from "@/app/providers/ThemeContext";
 import { NotificationsProvider } from "@/app/providers/NotificationsContext";
 import { ToastProvider } from "@/app/providers/ToastContext";
 
@@ -22,15 +23,20 @@ import { ToastProvider } from "@/app/providers/ToastContext";
  * concerns have not been merged yet: AuthContext answers "who is this and
  * what role slug do they have", DevAuthContext answers "which permission
  * strings do they hold".
+ *
+ * ThemeProvider sits INSIDE BrandingProvider because it reads themeConfig +
+ * primaryColor from it and is the sole applier of the design CSS variables.
  */
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <DevAuthProvider>
         <BrandingProvider>
-          <NotificationsProvider>
-            <ToastProvider>{children}</ToastProvider>
-          </NotificationsProvider>
+          <ThemeProvider>
+            <NotificationsProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </NotificationsProvider>
+          </ThemeProvider>
         </BrandingProvider>
       </DevAuthProvider>
     </AuthProvider>

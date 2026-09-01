@@ -691,6 +691,12 @@ export const ENDPOINTS = {
   // Kept read-only for history; superseded by `payrollEngine` below.
   payroll: { base: "/payroll", byId: (id: string) => `/payroll/${id}` },
 
+  // Base-salary increment/decrement with an audited, append-only history.
+  // GET ?userId= lists an employee's revisions (employees.salary.view); POST
+  // applies one (employees.salary.edit). Same keys that gate the employee-form
+  // salary field, so no new permissions.
+  salaryRevisions: { base: "/salary-revisions" },
+
   // The flexible payroll engine (spec: Payroll Rule Builder + Config Center).
   // Every path verified against a controller under Backend/src/{payroll-settings,
   // salary-components,salary-structures,payroll-periods,payslips}. Route order
@@ -816,6 +822,15 @@ export const ENDPOINTS = {
       me: "/reimbursements/me",
       meById: (id: string) => `/reimbursements/me/${id}`,
     },
+
+    // Per-(employee, period) manual bonus for a payroll run. GET lists a
+    // period's overrides (payroll.preview); POST upserts and DELETE removes one
+    // (payroll.process). The engine honors an override with precedence over the
+    // configured bonus rule; an amount of 0 cancels the bonus for that employee.
+    bonusOverrides: {
+      base: "/payroll-bonus-overrides",
+      byId: (id: string) => `/payroll-bonus-overrides/${id}`,
+    },
   },
   // Role-scoped dashboard aggregates. One request per dashboard instead of
   // stitching five list calls together in the browser — and, more importantly,
@@ -827,6 +842,17 @@ export const ENDPOINTS = {
     me: "/dashboard/me",
     team: "/dashboard/team",
     admin: "/dashboard/admin",
+  },
+
+  // Today's birthdays & work anniversaries for the dashboard widget. JWT-only
+  // like `/dashboard/me` — non-sensitive (no birth year or age is returned).
+  // `announce` fires the daily announcement on demand (the "Send now" button);
+  // it writes bell rows for everyone and posts to Slack, so it is gated on
+  // company-settings.update (backlog #2b reuses the company-settings
+  // permissions rather than seeding its own).
+  celebrations: {
+    today: "/celebrations/today",
+    announce: "/celebrations/announce",
   },
 
   notifications: {
@@ -928,6 +954,15 @@ export const ENDPOINTS = {
     base: "/smtp-settings",
     status: "/smtp-settings/status",
     test: "/smtp-settings/test",
+  },
+
+  // Slack integration. Single global row (no :id, same pattern as
+  // company-settings and smtp-settings). The bot token is write-only — the API
+  // returns `token_set`, never the token itself.
+  slackSettings: {
+    base: "/slack-settings",
+    status: "/slack-settings/status",
+    test: "/slack-settings/test",
   },
   // `placeholders` is declared before `:key` on the controller, so it is never
   // captured as a template key. Keep that order in mind if adding literals here.

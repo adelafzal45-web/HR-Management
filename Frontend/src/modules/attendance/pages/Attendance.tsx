@@ -10,6 +10,7 @@ import {
  XCircle,
  Timer,
  Zap,
+ Fingerprint,
  type LucideIcon,
 } from "lucide-react";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
@@ -360,6 +361,18 @@ export default function Attendance() {
 
  {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
 
+ {/* In Device mode the terminal is the sanctioned way in: the server has
+ already forced canCheckIn/canCheckOut false, so replace the buttons with a
+ banner carrying its verbatim reason rather than showing two dead controls. */}
+ {todayStatus?.selfServiceDisabledReason ? (
+ <div className="mt-6 flex items-start gap-3 rounded-xl bg-sky-50 px-4 py-3.5 text-sm">
+ <Fingerprint size={18} className="mt-0.5 shrink-0 text-sky-600" />
+ <div>
+ <p className="font-semibold text-sky-800">Attendance is recorded on the biometric device</p>
+ <p className="mt-0.5 text-sky-700">{todayStatus.selfServiceDisabledReason}</p>
+ </div>
+ </div>
+ ) : (
  <div className="mt-6 flex gap-3">
  <button
  type="button"
@@ -378,6 +391,7 @@ export default function Attendance() {
  {actionLoading === "out" ? "Checking out…" : "Check Out"}
  </button>
  </div>
+ )}
  </div>
 
  {/* History */}

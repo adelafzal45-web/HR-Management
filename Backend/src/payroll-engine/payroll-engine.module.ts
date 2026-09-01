@@ -13,6 +13,7 @@ import {
   SalaryStructureComponent,
   EmployeeComponentOverride,
 } from '../salary-structures/salary-structures.entity';
+import { PayrollBonusOverride } from '../payroll-bonus-overrides/payroll-bonus-overrides.entity';
 import { HolidaysModule } from '../holidays/holidays.module';
 import { PayrollRulesModule } from '../payroll-rules/payroll-rules.module';
 import { PayrollTaxModule } from '../payroll-tax/payroll-tax.module';
@@ -43,6 +44,7 @@ import { ReimbursementsModule } from '../reimbursements/reimbursements.module';
       EmployeeComponentOverride,
       Payslip,
       PayslipLine,
+      PayrollBonusOverride,
     ]),
     HolidaysModule,
     PayrollRulesModule,

@@ -395,9 +395,9 @@ export class User {
   @UpdateDateColumn()
   updated_at!: Date;
 
-   @OneToOne(
-  () => BiometricUser,
-  (biometricUser) => biometricUser.user,
-)
-biometricUser!: BiometricUser[];
+  @OneToOne(
+    () => BiometricUser,
+    (biometricUser) => biometricUser.user,
+  )
+  biometricUser!: BiometricUser;
 }

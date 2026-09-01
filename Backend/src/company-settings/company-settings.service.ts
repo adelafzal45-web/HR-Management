@@ -4,6 +4,11 @@ import { Repository } from 'typeorm';
 
 import { CompanySettings } from './company-settings.entity';
 import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
+import type { ThemeConfig } from './theme-config.type';
+import type {
+  AttendanceMode,
+  BiometricDeviceConfig,
+} from './biometric-device.type';
 import {
   BRANDING_UPLOAD,
   SIGNATURE_UPLOAD,
@@ -97,6 +102,10 @@ export class CompanySettingsService {
    * The signatory fields are deliberately not here. This payload is reachable
    * without a token, and a signature image is not something to hand to an
    * anonymous caller — `getSignatories` serves them to logged-in users instead.
+   *
+   * `theme_config` IS here on purpose: the whole app (not just the brand colour)
+   * themes itself before login, so the design theme has to travel on the same
+   * unauthenticated payload. It carries no secrets — only colours and sizing.
    */
   async getBranding(): Promise<{
     company_name: string;
@@ -104,6 +113,7 @@ export class CompanySettingsService {
     logo_collapsed_url?: string;
     favicon_url?: string;
     primary_color: string;
+    theme_config: ThemeConfig | null;
     email?: string;
     phone?: string;
     address?: string;
@@ -117,6 +127,7 @@ export class CompanySettingsService {
       logo_collapsed_url: settings.logo_collapsed_url,
       favicon_url: settings.favicon_url,
       primary_color: settings.primary_color,
+      theme_config: settings.theme_config,
       email: settings.email,
       phone: settings.phone,
       address: settings.address,
@@ -145,6 +156,28 @@ export class CompanySettingsService {
       ceo_signature_url: settings.ceo_signature_url,
       cofounder_name: settings.cofounder_name,
       cofounder_signature_url: settings.cofounder_signature_url,
+    };
+  }
+
+  /**
+   * Attendance policy + biometric device connection, for the biometric and
+   * attendance services to consume internally. Not an HTTP surface of its own —
+   * these are ordinary `company_settings` columns that ride the authenticated
+   * GET/PATCH like every other field; this getter just narrows the read to what
+   * the two services need without exposing the whole row to them.
+   *
+   * `device` is null until HR configures it on the Biometric settings screen;
+   * the biometric service applies its built-in connection defaults in that case.
+   */
+  async getBiometricConfig(): Promise<{
+    mode: AttendanceMode;
+    device: BiometricDeviceConfig | null;
+  }> {
+    const settings = await this.get();
+
+    return {
+      mode: settings.attendance_mode,
+      device: settings.biometric_device,
     };
   }
 

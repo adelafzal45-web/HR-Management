@@ -5,6 +5,7 @@ import DashboardLayout from "@/app/layouts/DashboardLayout";
 import PeriodStatCards from "@/modules/dashboard/components/PeriodStatCards";
 import DashboardCalendar from "@/modules/dashboard/components/DashboardCalendar";
 import UpcomingEvents from "@/modules/dashboard/components/UpcomingEvents";
+import TodaysCelebrations from "@/modules/dashboard/components/TodaysCelebrations";
 import TeamAnalyticsCard from "@/modules/dashboard/components/TeamAnalyticsCard";
 import TodayAttendanceTable from "@/modules/dashboard/components/TodayAttendanceTable";
 import SelfAttendanceTable from "@/modules/dashboard/components/SelfAttendanceTable";
@@ -77,6 +78,10 @@ export default function RbacDashboard() {
                   reads the org's Holidays & Events calendar (Leave →
                   Holidays & Events), so nothing here is role-gated. */}
               <UpcomingEvents />
+              {/* Today's birthdays & work anniversaries — the same read the
+                  daily 08:00 job announces to the bell and Slack (backlog #2).
+                  Shown to every role; the payload carries no birth year/age. */}
+              <TodaysCelebrations />
             </div>
           </div>
         </div>

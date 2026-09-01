@@ -5,6 +5,44 @@
  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
  <title>TechnoCues HRMS</title>
+ <script>
+ /*
+ First-paint theme. Runs synchronously before the CSS bundle or React load,
+ so a return visitor's saved theme (including dark mode) paints immediately
+ with no flash of the wrong scheme. ThemeContext.tsx writes the cache under
+ the same "hrms:theme" key after every successful branding fetch; it holds
+ the resolved CSS-variable maps for both schemes plus the mode/density, so
+ this script only picks a scheme and sets variables — no colour maths here.
+ A missing/oversized/corrupt cache is a silent no-op: the static :root/.dark
+ defaults in styles/index.css then cover the (uncached) first paint.
+ */
+ (function () {
+ try {
+ var raw = localStorage.getItem("hrms:theme");
+ if (!raw) return;
+ var t = JSON.parse(raw);
+ var mode = t.mode || "light";
+ var isDark =
+ mode === "dark" ||
+ (mode === "system" &&
+ !!window.matchMedia &&
+ window.matchMedia("(prefers-color-scheme: dark)").matches);
+ var vars = isDark ? t.dark : t.light;
+ var root = document.documentElement;
+ if (vars) {
+ for (var k in vars) {
+ if (Object.prototype.hasOwnProperty.call(vars, k)) {
+ root.style.setProperty(k, vars[k]);
+ }
+ }
+ }
+ root.classList.toggle("dark", isDark);
+ if (t.density) root.setAttribute("data-density", t.density);
+ } catch (e) {
+ /* no-op: static CSS defaults cover the first paint */
+ }
+ })();
+ </script>
  <style>
  /* Preloader shown on every hard refresh, for any page/route, until the
  app has mounted. Pure CSS so it renders instantly, before React or
@@ -18,8 +56,8 @@
  align-items: center;
  justify-content: center;
  gap: 18px;
- background: #ffffff;
- font-family: "Poppins", system-ui, sans-serif;
+ background: rgb(var(--color-background, 255 255 255));
+ font-family: var(--font-sans, "Poppins", system-ui, sans-serif);
  transition: opacity 0.35s ease;
  }
  #app-preloader.app-preloader--hidden {
@@ -35,15 +73,15 @@
  position: absolute;
  inset: 0;
  border-radius: 9999px;
- border: 3px solid #fde9c8;
+ border: 3px solid rgb(var(--color-brand-light, 253 233 200));
  }
  #app-preloader .app-preloader__arc {
  position: absolute;
  inset: 0;
  border-radius: 9999px;
  border: 3px solid transparent;
- border-top-color: #f1b344;
- border-right-color: #e08a3e;
+ border-top-color: rgb(var(--color-brand, 241 179 68));
+ border-right-color: rgb(var(--color-brand-dark, 224 138 62));
  animation: app-preloader-spin 0.8s linear infinite;
  }
  #app-preloader .app-preloader__badge {
@@ -60,7 +98,7 @@
  #app-preloader .app-preloader__label {
  font-size: 13px;
  font-weight: 500;
- color: #6b7280;
+ color: rgb(var(--color-muted, 107 114 128));
  }
  @keyframes app-preloader-spin {
  to {

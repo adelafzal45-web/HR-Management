@@ -24,17 +24,17 @@ export default function Modal({ open, title, description, onClose, children, max
  <div
  role="dialog"
  aria-modal="true"
- className={`relative flex max-h-[90vh] w-full ${maxWidth} flex-col overflow-hidden rounded-2xl bg-white shadow-xl`}
+ className={`relative flex max-h-[90vh] w-full ${maxWidth} flex-col overflow-hidden rounded-modal bg-surface shadow-card-lg`}
  >
- <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+ <div className="flex items-start justify-between gap-4 border-b border-border-muted px-6 py-5">
  <div>
- <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
- {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+ <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+ {description && <p className="mt-1 text-sm text-muted">{description}</p>}
  </div>
  <button
  type="button"
  onClick={onClose}
- className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+ className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-1.5 text-muted-foreground hover:bg-surface-muted hover:text-foreground"
  aria-label="Close"
  >
  <X size={18} />

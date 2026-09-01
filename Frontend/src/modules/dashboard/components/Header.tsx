@@ -120,17 +120,17 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
 
  return (
  <>
- <header className="flex flex-wrap items-center gap-3 border-b border-gray-100 bg-white px-3 py-3 xs:gap-4 xs:px-4 xs:py-4 sm:px-6 lg:px-8">
+ <header className="flex flex-wrap items-center gap-3 border-b border-border-muted bg-surface px-3 py-3 xs:gap-4 xs:px-4 xs:py-4 sm:px-6 lg:px-8">
  <button
  type="button"
  onClick={onMenuClick}
- className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-2 text-gray-700 hover:bg-gray-100 lg:hidden"
+ className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-2 text-foreground hover:bg-surface-muted lg:hidden"
  aria-label="Open menu"
  >
  <Menu size={22} />
  </button>
 
- <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight text-gray-900 xs:text-xl sm:flex-none sm:text-2xl">
+ <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight text-foreground xs:text-xl sm:flex-none sm:text-2xl">
  {title}
  </h1>
 
@@ -150,25 +150,25 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  }}
  placeholder="Jump to a page..."
  aria-label="Jump to a page"
- className="w-full rounded-full bg-gray-100 py-2.5 pl-4 pr-11 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand/50"
+ className="w-full rounded-full bg-surface-muted py-2.5 pl-4 pr-11 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-brand/50"
  />
- <span className="pointer-events-none absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-500">
+ <span className="pointer-events-none absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-border text-muted">
  <Search size={15} />
  </span>
 
  {searchOpen && searchQuery.trim() && (
- <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-gray-100">
+ <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-card bg-surface shadow-card-lg ring-1 ring-border-muted">
  {searchMatches.length === 0 ? (
- <p className="px-4 py-4 text-center text-sm text-gray-400">No pages match "{searchQuery}".</p>
+ <p className="px-4 py-4 text-center text-sm text-muted-foreground">No pages match "{searchQuery}".</p>
  ) : (
  searchMatches.map((p) => (
  <button
  key={p.route}
  type="button"
  onClick={() => goToSearchResult(p.route)}
- className="flex w-full items-center gap-2 border-b border-gray-50 px-4 py-2.5 text-left text-sm text-gray-700 last:border-0 hover:bg-brand-light/30"
+ className="flex w-full items-center gap-2 border-b border-border-muted px-4 py-2.5 text-left text-sm text-foreground last:border-0 hover:bg-brand-light/30"
  >
- <Search size={13} className="shrink-0 text-gray-400" />
+ <Search size={13} className="shrink-0 text-muted-foreground" />
  {p.label}
  </button>
  ))
@@ -183,21 +183,21 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  <button
  type="button"
  onClick={() => setBellOpen((o) => !o)}
- className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-2 text-gray-700 hover:bg-gray-100"
+ className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-2 text-foreground hover:bg-surface-muted"
  aria-label="Notifications"
  >
  <Bell size={20} />
  {unreadCount > 0 && (
- <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-dark px-1 text-[11px] font-semibold text-white">
+ <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-dark px-1 text-[11px] font-semibold text-brand-contrast">
  {unreadCount > 9 ? "9+" : unreadCount}
  </span>
  )}
  </button>
 
  {bellOpen && (
- <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[90vw] overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-gray-100">
- <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
- <p className="text-sm font-semibold text-gray-900">Notifications</p>
+ <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[90vw] overflow-hidden rounded-card bg-surface shadow-card-lg ring-1 ring-border-muted">
+ <div className="flex items-center justify-between border-b border-border-muted px-4 py-3">
+ <p className="text-sm font-semibold text-foreground">Notifications</p>
  {unreadCount > 0 && (
  <button
  type="button"
@@ -211,23 +211,23 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
 
  <div className="max-h-80 overflow-y-auto">
  {recent.length === 0 ? (
- <p className="px-4 py-8 text-center text-sm text-gray-400">No notifications yet.</p>
+ <p className="px-4 py-8 text-center text-sm text-muted-foreground">No notifications yet.</p>
  ) : (
  recent.map((n) => (
  <button
  key={n.notificationId}
  type="button"
  onClick={() => openNotification(n)}
- className={`flex w-full flex-col items-start gap-0.5 border-b border-gray-50 px-4 py-3 text-left last:border-0 hover:bg-gray-50 ${
+ className={`flex w-full flex-col items-start gap-0.5 border-b border-border-muted px-4 py-3 text-left last:border-0 hover:bg-background ${
  n.isRead ? "" : "bg-brand-light/30"
  }`}
  >
  <span className="flex w-full items-center gap-2">
  {!n.isRead && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-dark" />}
- <span className="truncate text-sm font-medium text-gray-900">{n.title}</span>
+ <span className="truncate text-sm font-medium text-foreground">{n.title}</span>
  </span>
- <span className="break-words text-xs text-gray-500">{truncateMessage(n.message, BELL_MESSAGE_PREVIEW_LIMIT)}</span>
- <span className="text-[11px] text-gray-400">{timeAgo(n.createdAt)}</span>
+ <span className="break-words text-xs text-muted">{truncateMessage(n.message, BELL_MESSAGE_PREVIEW_LIMIT)}</span>
+ <span className="text-[11px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
  </button>
  ))
  )}
@@ -239,7 +239,7 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  setBellOpen(false);
  navigate("/notifications");
  }}
- className="block w-full border-t border-gray-100 px-4 py-3 text-center text-sm font-medium text-brand-dark hover:bg-gray-50"
+ className="block w-full border-t border-border-muted px-4 py-3 text-center text-sm font-medium text-brand-dark hover:bg-background"
  >
  View all
  </button>
@@ -254,11 +254,11 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  aria-haspopup="menu"
  aria-expanded={profileOpen}
  aria-label="Open profile menu"
- className="flex min-h-11 items-center gap-2 rounded-full py-1 pl-1 pr-1.5 transition hover:bg-gray-100 xs:pr-2 sm:pr-3"
+ className="flex min-h-11 items-center gap-2 rounded-full py-1 pl-1 pr-1.5 transition hover:bg-surface-muted xs:pr-2 sm:pr-3"
  >
  <span className="hidden text-right sm:block">
- <span className="block text-sm font-medium leading-tight text-gray-900">{displayName}</span>
- <span className="block text-xs font-normal leading-relaxed text-gray-400">
+ <span className="block text-sm font-medium leading-tight text-foreground">{displayName}</span>
+ <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
  {user?.jobTitle || "Team Member"}
  </span>
  </span>
@@ -278,15 +278,15 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
 
  <ChevronDown
  size={16}
- className={`hidden shrink-0 text-gray-400 transition-transform sm:block ${profileOpen ? "rotate-180" : ""}`}
+ className={`hidden shrink-0 text-muted-foreground transition-transform sm:block ${profileOpen ? "rotate-180" : ""}`}
  />
  </button>
 
  {profileOpen && (
- <div className="absolute right-0 top-full z-50 mt-2 w-56 max-w-[90vw] overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-gray-100">
- <div className="border-b border-gray-100 px-4 py-3 sm:hidden">
- <p className="truncate text-sm font-semibold text-gray-900">{displayName}</p>
- <p className="truncate text-xs text-gray-400">{user?.jobTitle || "Team Member"}</p>
+ <div className="absolute right-0 top-full z-50 mt-2 w-56 max-w-[90vw] overflow-hidden rounded-card bg-surface shadow-card-lg ring-1 ring-border-muted">
+ <div className="border-b border-border-muted px-4 py-3 sm:hidden">
+ <p className="truncate text-sm font-semibold text-foreground">{displayName}</p>
+ <p className="truncate text-xs text-muted-foreground">{user?.jobTitle || "Team Member"}</p>
  </div>
 
  <button
@@ -295,9 +295,9 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  setProfileOpen(false);
  navigate("/profile");
  }}
- className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+ className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-background"
  >
- <UserRound size={16} className="shrink-0 text-gray-400" />
+ <UserRound size={16} className="shrink-0 text-muted-foreground" />
  My Profile
  </button>
 
@@ -307,9 +307,9 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  setProfileOpen(false);
  navigate("/change-password");
  }}
- className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+ className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-background"
  >
- <KeyRound size={16} className="shrink-0 text-gray-400" />
+ <KeyRound size={16} className="shrink-0 text-muted-foreground" />
  Change Password
  </button>
 
@@ -319,7 +319,7 @@ export default function Header({ title, onMenuClick, onRequestLogout }: HeaderPr
  setProfileOpen(false);
  onRequestLogout();
  }}
- className="flex min-h-11 w-full items-center gap-3 border-t border-gray-100 px-4 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50"
+ className="flex min-h-11 w-full items-center gap-3 border-t border-border-muted px-4 py-2.5 text-left text-sm font-medium text-error hover:bg-error-tint"
  >
  <LogOut size={16} className="shrink-0" />
  Logout

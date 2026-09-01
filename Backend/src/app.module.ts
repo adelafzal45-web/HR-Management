@@ -36,6 +36,7 @@ import { LeaveTypesModule } from './leave-types/leave-types.module';
 import { WorkingDaySchedulesModule } from './working-day-schedules/working-day-schedules.module';
 import { AuditModule } from './audit/audit.module';
 import { MailModule } from './mail/mail.module';
+import { SlackModule } from './slack/slack.module';
 import { AppraisalNotificationsModule } from './appraisal-notifications/appraisal-notifications.module';
 import { EmployeeDocumentsModule } from './employee-documents/employee-documents.module';
 import { HolidaysModule } from './holidays/holidays.module';
@@ -50,9 +51,12 @@ import { PayslipsModule } from './payslips/payslips.module';
 import { PayrollRulesModule } from './payroll-rules/payroll-rules.module';
 import { PayrollTaxModule } from './payroll-tax/payroll-tax.module';
 import { PayrollLoansModule } from './payroll-loans/payroll-loans.module';
+import { PayrollBonusOverridesModule } from './payroll-bonus-overrides/payroll-bonus-overrides.module';
+import { SalaryRevisionsModule } from './salary-revisions/salary-revisions.module';
 import { ReimbursementsModule } from './reimbursements/reimbursements.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { BiometricModule } from './biometric/biometric.module';
+import { CelebrationsModule } from './celebrations/celebrations.module';
 
 @Module({
   imports: [
@@ -144,6 +148,11 @@ import { BiometricModule } from './biometric/biometric.module';
     // drained by a cron. Exports MailService so feature modules can enqueue.
     MailModule,
 
+    // Slack integration: org-wide bot-token configuration and the reusable
+    // SlackService. Exports SlackService so the notification features
+    // (birthday/anniversary, appraisal reminders) can post to Slack.
+    SlackModule,
+
     // Owns the appraisal notification table (shift reminders, approval and
     // reopen notices). Registered so the entity loads; the behaviour lives in
     // the facade and the appraisal scheduler.
@@ -206,6 +215,15 @@ import { BiometricModule } from './biometric/biometric.module';
     // Employee loans / salary advances and their installment schedules.
     PayrollLoansModule,
 
+    // Per-employee, per-period manual bonus for a payroll run. Lets HR see the
+    // configured bonus in the Run Payroll grid and override it for one run; the
+    // engine honors the override with precedence over the bonus rule.
+    PayrollBonusOverridesModule,
+
+    // Base-salary increment/decrement with an audited, append-only history.
+    // Reuses the employees.salary.* permissions; surfaced in the employee drawer.
+    SalaryRevisionsModule,
+
     // ---- Phase 3 (spec §2 employee-initiated flows) ------------------------
     // Expense claims: employee submits, HR/Admin approves, payroll pays it as a
     // non-taxable earning. Also supplies PayrollNotifierService (the bell
@@ -221,6 +239,10 @@ import { BiometricModule } from './biometric/biometric.module';
     DashboardModule,
 
     BiometricModule,
+
+    // Reads users' birthdays/joining dates for the dashboard widget and fires
+    // the daily 08:00 birthday & anniversary announcement (bell + Slack).
+    CelebrationsModule,
   ],
 
   controllers: [AppController],
